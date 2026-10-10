@@ -454,3 +454,20 @@ input[type=range] { width:100%; accent-color:#007b91; }
   .kit-dialog { padding:22px 17px; }.schematic-flow { gap:5px; padding:12px 6px; }.schematic-flow span { padding:8px 5px; font-size:9px; }.schematic-flow svg { flex:none; width:12px; }.kit-dialog-bom { grid-template-columns:1fr; }
 }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; transition-duration:.01ms!important; } }
+
+[dir="rtl"] body,
+[dir="rtl"] input,
+[dir="rtl"] textarea,
+[dir="rtl"] select,
+[dir="rtl"] button {
+  font-family: "Noto Sans Arabic", Tahoma, Arial, sans-serif;
+}
+[dir="rtl"] .search-field input,
+[dir="rtl"] .header-search input,
+[dir="rtl"] .checkout-field-error { text-align:right; }
+[dir="rtl"] .price,
+[dir="rtl"] .demo-order-number strong,
+[dir="rtl"] .product-meta > span:last-child,
+[dir="rtl"] .cart-product > span > span { direction:ltr; unicode-bidi:plaintext; }
+[dir="rtl"] .lucide-arrow-right { transform:rotate(180deg); }
+[dir="rtl"] .mobile-nav { direction:rtl; }
