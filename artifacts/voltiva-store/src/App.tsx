@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { LanguageProvider, t, useLanguage, type Language } from './i18n';
 import {
   ArrowDown, ArrowRight, BatteryCharging, BookOpen, Bot,
   CheckCircle2, CircuitBoard, Cpu, Gauge, GraduationCap, Grid2X2,
@@ -59,16 +60,17 @@ function useDocument(title:string, description:string) {
 }
 
 function Logo() {
+  const {language}=useLanguage();
   return <Link href="/" className="brand" data-testid="link-home" aria-label="Circuits KW home">
     <span className="brand-mark"><Cpu size={22}/></span>
-    <span className="brand-copy"><span className="brand-name">Circuits KW</span><span className="brand-tag">From parts to possibilities.</span></span>
+    <span className="brand-copy"><span className="brand-name">Circuits KW</span><span className="brand-tag">{t('From parts to possibilities.',language)}</span></span>
   </Link>;
 }
 
 function Header({ count, search, onSearch }:{count:number; search:string; onSearch:(v:string)=>void}) {
   const [path,setLocation] = useLocation();
   const [open,setOpen] = useState(false);
-  const [language,setLanguage] = useState<'EN'|'العربية'>('EN');
+  const {language,setLanguage}=useLanguage();
   const [cartPulse,setCartPulse]=useState(false);
   const previousCount=useRef(count);
   useEffect(()=>{
@@ -82,24 +84,25 @@ function Header({ count, search, onSearch }:{count:number; search:string; onSear
   const nav = [['Components','/components'],['Project Kits','/project-kits'],['Build Assist','/build-assist'],['About','/about']] as const;
   return <header className="site-header"><div className="header-inner">
     <Logo/>
-    <nav className="nav-links" aria-label="Main navigation">{nav.map(([label,url])=><Link key={url} href={url} className={`nav-link ${path===url?'active':''}`} data-testid={`nav-${url.slice(1)}`}>{label}</Link>)}</nav>
-    <div className="header-search"><Search size={15}/><input aria-label="Search components, part numbers, or tools" placeholder="Search components, part numbers, or tools..." value={search} onChange={e=>onSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')setLocation('/components')}} data-testid="input-global-search"/></div>
+    <nav className="nav-links" aria-label={t('Main navigation',language)}>{nav.map(([label,url])=><Link key={url} href={url} className={`nav-link ${path===url?'active':''}`} data-testid={`nav-${url.slice(1)}`}>{t(label,language)}</Link>)}</nav>
+    <div className="header-search"><Search size={15}/><input aria-label={t('Search components, part numbers, or tools',language)} placeholder={t('Search components, part numbers, or tools...',language)} value={search} onChange={e=>onSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')setLocation('/components')}} data-testid="input-global-search"/></div>
     <div className="header-actions">
-      <div className="language-switch" role="group" aria-label="Language preference">{(['EN','العربية'] as const).map(l=><button type="button" key={l} aria-pressed={language===l} className={language===l?'selected':''} onClick={()=>setLanguage(l)} data-testid={`button-language-${l==='EN'?'en':'ar'}`}>{l}</button>)}</div>
-      <span className="tag" aria-label="Prices in Kuwaiti Dinar">KWD</span>
-      <Link href="/cart" className={`icon-button cart-link ${cartPulse?'cart-link-pulse':''}`} aria-label={`Cart, ${count} items`} data-testid="link-cart"><ShoppingCart key={`cart-icon-${cartPulse?count:'idle'}`} className={cartPulse?'cart-icon-pop':''} size={17}/>{count>0&&<span key={`cart-count-${cartPulse?count:'idle'}`} className={`cart-count ${cartPulse?'cart-count-pop':''}`} data-testid="cart-count">{count}</span>}</Link>
-      <button className="icon-button mobile-toggle" aria-label={open?'Close navigation':'Open navigation'} aria-expanded={open} onClick={()=>setOpen(!open)} data-testid="button-mobile-menu">{open?<X size={18}/>:<Menu size={18}/>}</button>
+      <div className="language-switch" role="group" aria-label={t('Language preference',language)}>{([['en','EN'],['ar','العربية']] as const).map(([code,label])=><button type="button" key={code} aria-pressed={language===code} className={language===code?'selected':''} onClick={()=>setLanguage(code)} data-testid={`button-language-${code}`}>{label}</button>)}</div>
+      <span className="tag" aria-label={t('Prices in Kuwaiti Dinar',language)}>KWD</span>
+      <Link href="/cart" className={`icon-button cart-link ${cartPulse?'cart-link-pulse':''}`} aria-label={language==='ar'?`السلة، ${count} عناصر`:`Cart, ${count} items`} data-testid="link-cart"><ShoppingCart key={`cart-icon-${cartPulse?count:'idle'}`} className={cartPulse?'cart-icon-pop':''} size={17}/>{count>0&&<span key={`cart-count-${cartPulse?count:'idle'}`} className={`cart-count ${cartPulse?'cart-count-pop':''}`} data-testid="cart-count">{count}</span>}</Link>
+      <button className="icon-button mobile-toggle" aria-label={t(open?'Close navigation':'Open navigation',language)} aria-expanded={open} onClick={()=>setOpen(!open)} data-testid="button-mobile-menu">{open?<X size={18}/>:<Menu size={18}/>}</button>
     </div>
-  </div>{open&&<nav className="mobile-nav" aria-label="Mobile navigation">{nav.map(([label,url])=><Link key={url} href={url} onClick={()=>setOpen(false)} className={`nav-link ${path===url?'active':''}`} data-testid={`mobile-nav-${url.slice(1)}`}>{label}</Link>)}</nav>}</header>;
+  </div>{open&&<nav className="mobile-nav" aria-label={t('Mobile navigation',language)}>{nav.map(([label,url])=><Link key={url} href={url} onClick={()=>setOpen(false)} className={`nav-link ${path===url?'active':''}`} data-testid={`mobile-nav-${url.slice(1)}`}>{t(label,language)}</Link>)}</nav>}</header>;
 }
 
 function Footer() {
+  const {language}=useLanguage();
   return <footer className="footer"><div className="container">
-    <div className="footer-grid"><div><Logo/><p>Electronic components and practical guidance for engineers, students, and makers in Kuwait.</p><div className="footer-social"><span>KW</span><span>EST. SHUWAIKH</span><span>HARDWARE / LAB</span></div></div>
-      <div><h4>Shop</h4><Link href="/components">Microcontrollers</Link><Link href="/components">Sensors</Link><Link href="/components">Components</Link><Link href="/components">Tools &amp; passives</Link><Link href="/project-kits">Project Kits</Link></div>
-      <div><h4>Support</h4><Link href="/about#hub">Contact &amp; local operations</Link><Link href="/about#delivery">Kuwait delivery overview</Link><Link href="/build-assist">BOM planning</Link></div>
-      <div><h4>Company &amp; preferences</h4><Link href="/about">About Circuits KW</Link><Link href="/cart">Shopping Cart</Link><span className="footer-note">EN · العربية-ready</span><span className="footer-note">KWD (Kuwaiti Dinar)</span></div>
-    </div><div className="footer-bottom"><span>© 2025 Circuits KW. All rights reserved. Made for engineers, students, and makers.</span><span><i/> Kuwait-local details &nbsp; | &nbsp; Illustrative catalog data</span></div>
+    <div className="footer-grid"><div><Logo/><p>{t('Electronic components and practical guidance for engineers, students, and makers in Kuwait.',language)}</p><div className="footer-social"><span>KW</span><span>EST. SHUWAIKH</span><span>HARDWARE / LAB</span></div></div>
+      <div><h4>{t('Shop',language)}</h4><Link href="/components">{t('Microcontrollers',language)}</Link><Link href="/components">{t('Sensors',language)}</Link><Link href="/components">{t('Components',language)}</Link><Link href="/components">{t('Tools & passives',language)}</Link><Link href="/project-kits">{t('Project Kits',language)}</Link></div>
+      <div><h4>{t('Support',language)}</h4><Link href="/about#hub">{t('Contact & local operations',language)}</Link><Link href="/about#delivery">{t('Kuwait delivery overview',language)}</Link><Link href="/build-assist">{t('BOM planning',language)}</Link></div>
+      <div><h4>{t('Company & preferences',language)}</h4><Link href="/about">{t('About Circuits KW',language)}</Link><Link href="/cart">{t('Shopping Cart',language)}</Link><span className="footer-note">{t('EN · العربية-ready',language)}</span><span className="footer-note">{t('KWD (Kuwaiti Dinar)',language)}</span></div>
+    </div><div className="footer-bottom"><span>{t('© 2025 Circuits KW. All rights reserved. Made for engineers, students, and makers.',language)}</span><span><i/> {t('Kuwait-local details',language)} &nbsp; | &nbsp; {t('Illustrative catalog data',language)}</span></div>
   </div></footer>;
 }
 
@@ -497,10 +500,16 @@ function Router({items,add,update,remove,clearCart,search,setSearch}:{items:Item
 
 function App() {
   const [items,setItemsState]=useState<Item[]>(()=>{try{return JSON.parse(localStorage.getItem('circuits-kw-cart')||localStorage.getItem('voltiva-cart')||'[]') as Item[]}catch{return[]}});
+  const [language,setLanguage]=useState<Language>(()=>localStorage.getItem('circuits-kw-language')==='ar'?'ar':'en');
   const [search,setSearch]=useState('');
   const [cartNotice,setCartNotice]=useState<{id:number;name:string}|null>(null);
   const cartNoticeId=useRef(0);
   useEffect(()=>{localStorage.setItem('circuits-kw-cart',JSON.stringify(items))},[items]);
+  useEffect(()=>{
+    localStorage.setItem('circuits-kw-language',language);
+    document.documentElement.lang=language;
+    document.documentElement.dir=language==='ar'?'rtl':'ltr';
+  },[language]);
   useEffect(()=>{
     if(!cartNotice) return;
     const timer=window.setTimeout(()=>setCartNotice(null),2200);
@@ -514,7 +523,7 @@ function App() {
   const update=(id:string,qty:number)=>setItemsState(old=>qty<=0?old.filter(x=>x.id!==id):old.map(x=>x.id===id?{...x,qty}:x));
   const remove=(id:string)=>setItemsState(old=>old.filter(x=>x.id!==id));
   const clearCart=()=>setItemsState([]);
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/,'')}><Router items={items} add={add} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>Added to cart</strong><span>{cartNotice.name}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">View cart <ArrowRight size={13}/></Link></div>}</WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>;
+  return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/,'')}><Router items={items} add={add} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t('Added to cart',language)}</strong><span>{cartNotice.name}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
 }
 
 export default App;
