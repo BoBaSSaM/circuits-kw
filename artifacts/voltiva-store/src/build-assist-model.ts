@@ -2,9 +2,87 @@ export type CatalogPart = {
   id: string;
   name: string;
   sku: string;
-  price: number;
+  price: number | null;
   category: string;
 };
+
+export type ImportedPriceList = {
+  pricesBySku: Record<string, number>;
+};
+
+const normalizeSku = (sku: string) => sku.trim().toLocaleUpperCase('en-US');
+
+function parseCsvRows(csv: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let quoted = false;
+
+  for (let index = 0; index < csv.length; index += 1) {
+    const character = csv[index];
+    if (quoted) {
+      if (character === '"' && csv[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (character === '"') {
+        quoted = false;
+      } else {
+        field += character;
+      }
+    } else if (character === '"' && field.length === 0) {
+      quoted = true;
+    } else if (character === ',') {
+      row.push(field);
+      field = '';
+    } else if (character === '\n' || character === '\r') {
+      if (character === '\r' && csv[index + 1] === '\n') index += 1;
+      row.push(field);
+      if (row.some((cell) => cell.trim() !== '')) rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += character;
+    }
+  }
+
+  if (quoted) throw new Error('The CSV contains an unclosed quoted field.');
+  row.push(field);
+  if (row.some((cell) => cell.trim() !== '')) rows.push(row);
+  return rows;
+}
+
+export function parseAuthorizedPriceCsv(csv: string): ImportedPriceList {
+  const rows = parseCsvRows(csv.replace(/^\uFEFF/, ''));
+  if (rows.length < 2) throw new Error('Add a header row and at least one price row.');
+
+  const headers = rows[0].map((header) => header.trim().toLowerCase().replaceAll(' ', '_'));
+  const skuIndex = headers.indexOf('sku');
+  const unitPriceIndex = headers.indexOf('unit_price');
+  const priceIndex = unitPriceIndex >= 0 ? unitPriceIndex : headers.indexOf('price');
+  const currencyIndex = headers.indexOf('currency');
+  if (skuIndex < 0 || priceIndex < 0) {
+    throw new Error('CSV must include SKU and price (or unit_price) columns.');
+  }
+
+  const pricesBySku: Record<string, number> = {};
+  for (const [rowIndex, cells] of rows.slice(1).entries()) {
+    const line = rowIndex + 2;
+    const sku = normalizeSku(cells[skuIndex] ?? '');
+    const rawPrice = (cells[priceIndex] ?? '').trim();
+    if (!sku || !rawPrice) throw new Error(`CSV row ${line} is missing an SKU or price.`);
+    const price = Number(rawPrice);
+    if (!Number.isFinite(price) || price < 0 || !/^\d+(?:\.\d{1,3})?$/.test(rawPrice)) {
+      throw new Error(`CSV row ${line} must have a non-negative KWD price with up to 3 decimals.`);
+    }
+    if (currencyIndex >= 0 && (cells[currencyIndex] ?? '').trim().toUpperCase() !== 'KWD') {
+      throw new Error(`CSV row ${line} currency must be KWD.`);
+    }
+    if (Object.hasOwn(pricesBySku, sku)) throw new Error(`CSV contains duplicate SKU ${sku}.`);
+    pricesBySku[sku] = price;
+  }
+
+  return { pricesBySku };
+}
 
 export type BuildPlan<TPart extends CatalogPart = CatalogPart> = {
   parts: TPart[];
@@ -56,7 +134,7 @@ export function inferAssemblyCount(prompt: string): number {
   return match ? clampBuildQuantity(toQuantity(match[1])) : 1;
 }
 
-export function inferPartQuantity(prompt: string, part: CatalogPart): number {
+export function inferPartQuantity(prompt: string, part: Pick<CatalogPart, 'id' | 'category'>): number {
   const text = normalizePrompt(prompt);
   const aliasesById: Record<string, string[]> = {
     esp32: ['esp32', 'wroom', 'controllers', 'controller', 'boards', 'board'],
@@ -206,12 +284,12 @@ export function buildBomCartItems<TPart extends CatalogPart>(
   assemblies: number,
 ): BomCartItem[] {
   const assemblyCount = clampBuildQuantity(assemblies);
-  return parts.map((part) => ({
+  return parts.flatMap((part) => part.price === null ? [] : [{
     id: `bom-${part.id}`,
     name: part.name,
     price: part.price,
-    kind: 'bom',
+    kind: 'bom' as const,
     sku: part.sku,
     qty: clampBuildQuantity(quantityFor(part)) * assemblyCount,
-  }));
+  }]);
 }

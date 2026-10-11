@@ -7,6 +7,7 @@ import {
   calculateBomTotal,
   inferAssemblyCount,
   inferPartQuantity,
+  parseAuthorizedPriceCsv,
 } from './build-assist-model.ts';
 import { addCartItem, calculateCartSubtotal } from './cart-model.ts';
 
@@ -90,6 +91,34 @@ test('adds estimate lines with their full quantities and matching subtotal', () 
     assemblies,
   ));
   assert.equal(calculateCartSubtotal(cart), 30.6);
+});
+
+test('imports KWD price rows by normalized SKU and never falls back for missing prices', () => {
+  const priceList = parseAuthorizedPriceCsv('\uFEFFSKU,unit_price,currency\r\nesp32-wrm-32d,3.125,KWD\r\nSNS-BME280-I2C,0.000,KWD\r\n');
+  assert.deepEqual(priceList.pricesBySku, {
+    'ESP32-WRM-32D': 3.125,
+    'SNS-BME280-I2C': 0,
+  });
+
+  const parts = [
+    { ...catalog[0], price: priceList.pricesBySku[catalog[0].sku] ?? null },
+    { ...catalog[1], price: priceList.pricesBySku[catalog[1].sku] ?? null },
+    { ...catalog[2], price: priceList.pricesBySku[catalog[2].sku] ?? null },
+  ];
+  assert.equal(parts[0].price, 3.125);
+  assert.equal(parts[1].price, 0);
+  assert.equal(parts[2].price, null);
+  assert.deepEqual(buildBomCartItems(parts, () => 1, 1).map(({ sku, price }) => ({ sku, price })), [
+    { sku: catalog[0].sku, price: 3.125 },
+    { sku: catalog[1].sku, price: 0 },
+  ]);
+});
+
+test('rejects malformed, duplicate, and non-KWD supplier price rows', () => {
+  assert.throws(() => parseAuthorizedPriceCsv('sku,price\nESP32-WRM-32D,-1'), /non-negative KWD price/);
+  assert.throws(() => parseAuthorizedPriceCsv('sku,price,currency\nA,1,USD'), /currency must be KWD/);
+  assert.throws(() => parseAuthorizedPriceCsv('sku,price\nA,1\nA,2'), /duplicate SKU A/);
+  assert.throws(() => parseAuthorizedPriceCsv('sku,cost\nA,1'), /SKU and price/);
 });
 
 test('adding an estimate merges quantities into an existing matching cart line', () => {
