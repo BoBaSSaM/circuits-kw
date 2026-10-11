@@ -280,6 +280,7 @@ const arabic: Record<string, string> = {
   'Demo parts and sample stock · Build Assist prices require your current KWD price CSV · verify electrical compatibility independently': 'قطع ومخزون تجريبي · تتطلب أسعار مساعد البناء ملف CSV حديثاً بالدينار الكويتي · تحقّق من التوافق الكهربائي بنفسك',
   'Calculated as imported unit price × quantity per assembly × number of assemblies. Only priced parts are included.': 'يُحسب الإجمالي من سعر الوحدة المستورد × الكمية لكل تجميعة × عدد التجميعات. تُحتسب القطع المسعّرة فقط.',
   'Use your current KWD prices': 'استخدم أسعارك الحالية بالدينار الكويتي',
+  'Import current part prices': 'استيراد أسعار القطع الحالية',
   'Import an authorized supplier CSV. Required columns: sku and price (or unit_price); optional currency values must be KWD. Unmatched SKUs stay unpriced.': 'استورد ملف CSV معتمداً من المورد. الأعمدة المطلوبة: sku وprice (أو unit_price)، ويجب أن تكون العملة الاختيارية KWD. تبقى أرقام SKU غير المطابقة بلا سعر.',
   'Supplier or price-list source': 'المورد أو مصدر قائمة الأسعار',
   'Price list last updated': 'تاريخ آخر تحديث لقائمة الأسعار',

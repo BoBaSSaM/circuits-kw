@@ -17,6 +17,7 @@ const catalog = [
   { id: 'hcsr04', name: 'HC-SR04 Ultrasonic Sensor', sku: 'SNS-HCSR04-5V', price: 0.85, category: 'Sensors' },
   { id: 'soil', name: 'Capacitive Soil Moisture Sensor', sku: 'SNS-SOIL-CAP-12', price: 1.2, category: 'Sensors' },
   { id: 'level', name: 'Logic Level Converter', sku: 'MOD-LLC-4CH-BI', price: 0.65, category: 'ICs & Logic Translators' },
+  { id: 'lcd', name: '16x2 I2C Character LCD', sku: 'DIS-LCD-1602I2C', price: 1.45, category: 'Displays' },
 ];
 
 test('infers English assembly and per-part quantities independently', () => {
@@ -43,6 +44,14 @@ test('calculates edited per-part quantities across multiple assemblies in fils',
   assert.equal(calculateBomTotal(lines, 4), 30.6);
 });
 
+test('keeps soil-only monitors from adding a climate sensor', () => {
+  const englishSoilMonitor = buildPlanFromPrompt('ESP32 soil moisture monitor', '3.3V', catalog);
+  assert.deepEqual(englishSoilMonitor.parts.map((part) => part.id).sort(), ['esp32', 'soil']);
+
+  const arabicSoilMonitor = buildPlanFromPrompt('مراقبة رطوبة التربة', '3.3V', catalog);
+  assert.deepEqual(arabicSoilMonitor.parts.map((part) => part.id).sort(), ['esp32', 'soil']);
+});
+
 test('selects a level converter according to the requested logic voltage', () => {
   const esp32AtFiveVolts = buildPlanFromPrompt('ESP32 weather monitor', '5V', catalog);
   assert.ok(esp32AtFiveVolts.parts.some((part) => part.id === 'level'));
@@ -52,6 +61,9 @@ test('selects a level converter according to the requested logic voltage', () =>
 
   const esp32AtNativeVoltage = buildPlanFromPrompt('ESP32 weather monitor', '3.3V', catalog);
   assert.ok(!esp32AtNativeVoltage.parts.some((part) => part.id === 'level'));
+
+  const lcdAt3v3 = buildPlanFromPrompt('ESP32 weather display with 16x2 LCD', '3.3V', catalog);
+  assert.ok(lcdAt3v3.parts.some((part) => part.id === 'level'));
 });
 
 test('keeps requested parts without catalog prices out of the estimate', () => {

@@ -169,8 +169,8 @@ export function buildPlanFromPrompt<TPart extends CatalogPart>(
   const isRobot = /robot|rover|robotics|روبوت|عربة/.test(text);
   const isLineFollower = /line follower|follow(?:ing)? a line|track(?:ing)? line|تتبع الخط/.test(text);
   const isObstacleProject = /obstacle|avoid(?:ing)?|parking|distance|ultrasonic|sonar|عقبة|تجنب|مسافة|موقف/.test(text);
-  const isWeather = /weather|temperature|humidity|pressure|barometric|طقس|حرارة|رطوبة|ضغط/.test(text);
-  const isGreenhouse = /greenhouse|soil|moisture|plant|irrigat|water(?:ing)?|بيت زجاجي|دفيئة|تربة|نبات|ري/.test(text);
+  const isWeather = /weather|temperature|humidity|pressure|barometric|طقس|حرارة|ضغط|رطوبة(?!\s*(?:التربة|التراب))/.test(text);
+  const isGreenhouse = /greenhouse|plant|irrigat|water(?:ing)?|بيت زجاجي|دفيئة|نبات|ري/.test(text);
   const isDisplay = /display|screen|lcd|شاشة|عرض/.test(text);
   const needsWateringHardware = /water(?:ing)?|irrigat|pump|مضخة|ري/.test(text);
   const needsWhatsApp = /whatsapp|واتساب/.test(text);
