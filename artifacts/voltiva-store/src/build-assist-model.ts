@@ -39,7 +39,7 @@ function quantityBefore(text: string, aliases: string[]): number | undefined {
   for (const alias of aliases.sort((a, b) => b.length - a.length)) {
     const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const pattern = new RegExp(
-      `(?:^|[^\\p{L}\\p{N}])${quantityToken}\\s*(?:x\\s*)?${escaped}(?=$|[^\\p{L}\\p{N}])`,
+      `(?:^|[^\\p{L}\\p{N}]|و)${quantityToken}\\s*(?:x\\s*)?${escaped}(?=$|[^\\p{L}\\p{N}])`,
       'iu',
     );
     const match = text.match(pattern);
@@ -51,7 +51,7 @@ function quantityBefore(text: string, aliases: string[]): number | undefined {
 export function inferAssemblyCount(prompt: string): number {
   const text = normalizePrompt(prompt);
   const units = 'assembl(?:y|ies)|units?|devices?|systems?|builds?|projects?|kits?|greenhouses?|monitors?|وحدات|أجهزة|اجهزة|مشاريع|أطقم|تجميعات|محطات';
-  const pattern = new RegExp(`(?:^|[^\\p{L}\\p{N}])${quantityToken}\\s*(?:x\\s*)?(?:${units})(?=$|[^\\p{L}\\p{N}])`, 'iu');
+  const pattern = new RegExp(`(?:^|[^\\p{L}\\p{N}]|و)${quantityToken}\\s*(?:x\\s*)?(?:${units})(?=$|[^\\p{L}\\p{N}])`, 'iu');
   const match = text.match(pattern);
   return match ? clampBuildQuantity(toQuantity(match[1])) : 1;
 }
@@ -189,4 +189,29 @@ export function calculateBomTotal(
     0,
   ) * clampBuildQuantity(assemblies);
   return totalFils / 1000;
+}
+
+export type BomCartItem = {
+  id: string;
+  name: string;
+  price: number;
+  kind: 'bom';
+  sku: string;
+  qty: number;
+};
+
+export function buildBomCartItems<TPart extends CatalogPart>(
+  parts: readonly TPart[],
+  quantityFor: (part: TPart) => number,
+  assemblies: number,
+): BomCartItem[] {
+  const assemblyCount = clampBuildQuantity(assemblies);
+  return parts.map((part) => ({
+    id: `bom-${part.id}`,
+    name: part.name,
+    price: part.price,
+    kind: 'bom',
+    sku: part.sku,
+    qty: clampBuildQuantity(quantityFor(part)) * assemblyCount,
+  }));
 }

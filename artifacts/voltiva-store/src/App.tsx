@@ -8,12 +8,14 @@ import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter
 import { LanguageProvider, t, useLanguage, type Language } from './i18n';
 import {
   buildPlanFromPrompt,
+  buildBomCartItems,
   calculateBomLineTotal,
   calculateBomTotal,
   clampBuildQuantity,
   inferAssemblyCount,
   inferPartQuantity,
 } from './build-assist-model';
+import { addCartItem, calculateCartSubtotal } from './cart-model';
 import {
   ArrowDown, ArrowRight, BatteryCharging, BookOpen, Bot,
   CheckCircle2, CircuitBoard, Cpu, Gauge, GraduationCap, Grid2X2,
@@ -284,14 +286,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
     setNotice(t('Estimate recalculated from catalog parts and requested quantities.',language));
   };
   const addBom=()=>{
-    bom.forEach(part=>add({
-      id:`bom-${part.id}`,
-      name:bomName(part),
-      price:part.price,
-      kind:'bom',
-      sku:part.sku,
-      qty:quantityFor(part)*assemblies,
-    }));
+    buildBomCartItems(bom,quantityFor,assemblies).forEach(add);
     setNotice(t('Catalog BOM quantities added to your cart.',language));
   };
   return <div className="container page-top">
@@ -409,7 +404,7 @@ function AboutPage() {
 function CartPage({items,update,remove}:{items:Item[];update:(id:string,qty:number)=>void;remove:(id:string)=>void}) {
   const {language}=useLanguage();
   useDocument(t('Shopping cart',language),t('Review and update your local Circuits KW cart. Demo orders are saved only in this browser; no payment is taken.',language));
-  const subtotal=items.reduce((n,i)=>n+i.price*i.qty,0);
+  const subtotal=calculateCartSubtotal(items);
   return <div className="container page-top"><div className="eyebrow">{t('YOUR BUILD / LOCAL CART',language)}</div><h1 style={{fontSize:38}}>{t('Cart review',language)}</h1><p className="lead" style={{fontSize:14}}>{t('You can place a local demo order. No payment, shipping or real fulfillment is connected.',language)}</p>
     {!items.length?<div className="surface empty-state"><div className="empty-icon"><ShoppingCart size={23}/></div><h3>{t('Your cart is ready for a build.',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Add components, a project kit or a demo BOM to keep your parts list together.',language)}</p><div style={{display:'flex',justifyContent:'center',gap:9,flexWrap:'wrap'}}><Link className="button button-primary" href="/components" data-testid="link-empty-cart-components">{t('Browse components',language)}</Link><Link className="button button-outline" href="/project-kits" data-testid="link-empty-cart-kits">{t('Explore kits',language)}</Link></div></div>:
       <div className="cart-layout"><section className="cart-list surface" aria-label={t('Cart items',language)}>{items.map(i=><article className="cart-row" key={i.id} data-testid={`row-cart-${i.id}`}><div className="cart-product"><span className="cart-thumb">{i.kind==='kit'?<PackageCheck size={22}/>:i.kind==='bom'?<CircuitBoard size={22}/>:<Cpu size={22}/>}</span><span><strong>{t(i.name,language)}</strong><span>{i.sku} · {t(i.kind==='kit'?'Project kit':i.kind==='bom'?'Build Assist demo item':'Component',language)}</span></span></div><div className="quantity" aria-label={`${t('Quantity',language)} ${t(i.name,language)}`}><button aria-label={t('Decrease quantity',language)} onClick={()=>update(i.id,i.qty-1)} data-testid={`button-decrease-${i.id}`}><Minus size={12}/></button><input aria-label={`${t('Quantity',language)} ${t(i.name,language)}`} type="number" min="1" value={i.qty} onChange={e=>update(i.id,Math.max(1,Number(e.target.value)||1))} data-testid={`input-quantity-${i.id}`}/><button aria-label={t('Increase quantity',language)} onClick={()=>update(i.id,i.qty+1)} data-testid={`button-increase-${i.id}`}><Plus size={12}/></button></div><span className="price">{fmt(i.price*i.qty)}</span><button className="remove" aria-label={`${t('Remove',language)} ${t(i.name,language)}`} onClick={()=>remove(i.id)} data-testid={`button-remove-${i.id}`}><Trash2 size={16}/></button></article>)}</section>
@@ -465,7 +460,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
     const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({top:0,left:0,behavior:reducedMotion?'auto':'smooth'});
   },[placedOrder]);
-  const subtotal=items.reduce((n,i)=>n+i.price*i.qty,0);
+  const subtotal=calculateCartSubtotal(items);
   const submitDemoOrder=(event:FormEvent<HTMLFormElement>)=>{
     event.preventDefault();
     setOrderError('');
@@ -639,9 +634,7 @@ function App() {
     return ()=>window.clearTimeout(timer);
   },[cartNotice?.id]);
   const add=(item:AddItem)=>{
-    const requestedQuantity=Number(item.qty);
-    const quantity=Number.isFinite(requestedQuantity)?Math.max(1,Math.trunc(requestedQuantity)):1;
-    setItemsState(old=>{const found=old.find(x=>x.id===item.id);return found?old.map(x=>x.id===item.id?{...x,qty:x.qty+quantity}:x):[...old,{...item,qty:quantity}]});
+    setItemsState(old=>addCartItem(old,item));
     cartNoticeId.current+=1;
     setCartNotice({id:cartNoticeId.current,name:item.name});
   };
