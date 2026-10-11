@@ -12,7 +12,6 @@ import {
   calculateBomLineTotal,
   calculateBomTotal,
   clampBuildQuantity,
-  inferAssemblyCount,
   inferPartQuantity,
   parseAuthorizedPriceCsv,
 } from './build-assist-model';
@@ -59,6 +58,18 @@ const products: Product[] = [
   { id:'soil', name:'Capacitive Soil Moisture Sensor v1.2', sku:'SNS-SOIL-CAP-12', category:'Sensors', price:1.200, stock:48, package:'Analog module', description:'Corrosion-resistant PCB with stable 3.3V analog voltage output.', voltage:'3.3V analog', interface:'ADC output', icon:'sensor' },
   { id:'tp4056', name:'TP4056 1A Li-Ion Solar Battery Charger', sku:'PWR-TP4056-C', category:'Power & Battery', price:0.750, stock:92, package:'USB-C module', description:'Dual DW01A protection ICs, USB-C and solder terminals.', voltage:'4.2V charge', interface:'USB-C · Li-ion', icon:'power' },
   { id:'battery', name:'18650 3000mAh Battery Cell with Holder', sku:'BAT-18650-3000', category:'Power & Battery', price:2.200, stock:39, package:'18650 + holder', description:'High-discharge 18650 cell with gold-plated clip-terminal leads.', voltage:'3.7V nominal', interface:'Li-ion · holder', icon:'power' },
+];
+
+type BuildOption = { id:string; title:string; description:string; prompt:string; partIds:string[] };
+const buildOptions: BuildOption[] = [
+  { id:'greenhouse', title:'Greenhouse Monitor', description:'Monitor soil moisture and local climate using the ESP32, BME280, and capacitive probe.', prompt:'Greenhouse monitor with soil moisture and temperature humidity pressure readings.', partIds:['esp32','bme280','soil'] },
+  { id:'weather-station', title:'Wi-Fi Weather Station', description:'Measure temperature, humidity, and air pressure with a Wi-Fi microcontroller.', prompt:'Wi-Fi weather station measuring temperature humidity and pressure with BME280.', partIds:['esp32','bme280'] },
+  { id:'soil-monitor', title:'Soil Moisture Monitor', description:'Read soil moisture on the ESP32 using a corrosion-resistant capacitive probe.', prompt:'ESP32 soil moisture monitor.', partIds:['esp32','soil'] },
+  { id:'parking-sensor', title:'Parking Distance Sensor', description:'Measure distance with HC-SR04 and convert its 5V signal for a 3.3V controller.', prompt:'ESP32 parking distance sensor using HC-SR04 ultrasonic sensor.', partIds:['esp32','hcsr04','level'] },
+  { id:'parking-display', title:'Parking Distance Display', description:'Add a 16×2 screen to show readings from the ultrasonic distance sensor.', prompt:'ESP32 parking distance display with HC-SR04 ultrasonic sensor and 16x2 LCD.', partIds:['esp32','hcsr04','level','lcd'] },
+  { id:'lcd-weather-display', title:'LCD Weather Display', description:'Show BME280 temperature, humidity, and pressure readings on a 16×2 LCD.', prompt:'ESP32 weather display with BME280 temperature humidity pressure sensor and 16x2 LCD.', partIds:['esp32','bme280','level','lcd'] },
+  { id:'portable-weather-node', title:'Portable Weather Node', description:'Power a Wi-Fi weather sensor from a rechargeable 18650 battery pack.', prompt:'Portable battery-powered Wi-Fi weather node using a 18650 battery and TP4056 charger with BME280.', partIds:['esp32','bme280','battery','tp4056'] },
+  { id:'stm32-weather-node', title:'STM32 Weather Node', description:'Build an STM32-based station for temperature, humidity, and pressure.', prompt:'STM32 Nucleo weather monitor measuring temperature humidity and pressure with BME280.', partIds:['nucleo','bme280'] },
 ];
 
 const kits: Kit[] = [
@@ -276,8 +287,10 @@ function KitsPage({add}:{add:(item:AddItem)=>void}) {
 
 function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const {language}=useLanguage();
-  useDocument(t('Build Assist',language),t('Create a local bill of materials from your project brief and price it with an authorized KWD CSV. Parts without a matching current price are marked unpriced.',language));
-  const [prompt,setPrompt]=useState('I want to build an automated greenhouse monitor with soil moisture, solar battery charging, and WhatsApp alerts.');
+  useDocument(t('Build Assist',language),t('Choose a ready project from the current component catalog and review its bill of materials with your KWD price list.',language));
+  const [selectedProjectId,setSelectedProjectId]=useState(buildOptions[0].id);
+  const selectedProject=buildOptions.find(option=>option.id===selectedProjectId)??buildOptions[0];
+  const prompt=selectedProject.prompt;
   const [voltage,setVoltage]=useState('3.3V');
   const [level,setLevel]=useState('Hobbyist');
   const [budget,setBudget]=useState(15);
@@ -295,13 +308,13 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
     if(priceList) localStorage.setItem(PRICE_LIST_STORAGE_KEY,JSON.stringify(priceList));
     else localStorage.removeItem(PRICE_LIST_STORAGE_KEY);
   },[priceList]);
-  useEffect(()=>{setAssemblyOverride(null);setPartQuantities({})},[prompt]);
+  useEffect(()=>{setAssemblyOverride(null);setPartQuantities({});setGenerated(false);setNotice('');setPreview(null)},[selectedProjectId]);
   const plan=useMemo(()=>buildPlanFromPrompt(prompt,voltage,products),[prompt,voltage]);
   const bom=plan.parts.map(part=>({
     ...part,
     price:priceList?.pricesBySku[normalizePriceSku(part.sku)]??null,
   }));
-  const assemblies=assemblyOverride??inferAssemblyCount(prompt);
+  const assemblies=assemblyOverride??1;
   const quantityFor=(part:Pick<Product,'id'|'category'>)=>clampBuildQuantity(partQuantities[part.id]??inferPartQuantity(prompt,part));
   const pricedBom=bom.flatMap((part)=>part.price===null?[]:[{...part,price:part.price}]);
   const unpricedBom=bom.filter((part)=>part.price===null);
@@ -309,7 +322,6 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
     pricedBom.map(part=>({unitPrice:part.price,quantityPerAssembly:quantityFor(part)})),
     assemblies,
   );
-  const projectTitle=plan.projectTitleKey;
   const controller=bom.find(part=>['esp32','nucleo','pico'].includes(part.id));
   const bomName=(product:{name:string})=>product.name;
   const generate=()=>{
@@ -336,21 +348,26 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   };
   return <div className="container page-top">
     <div className="eyebrow">{t('LOCAL PROJECT PLANNER · KUWAIT',language)}</div>
-    <h1 style={{fontSize:'clamp(33px,4vw,48px)'}}>{t('Build Assist:',language)} <span style={{color:'#00687b'}}>{t('describe your idea.',language)}</span></h1>
-    <p className="lead">{t('A local demo tool that maps a project brief to a sample parts list. It is not an AI service, live inventory check or engineering review.',language)}</p>
+    <h1 style={{fontSize:'clamp(33px,4vw,48px)'}}>{t('Build Assist:',language)} <span style={{color:'#00687b'}}>{t('choose a project.',language)}</span></h1>
+    <p className="lead">{t('Choose a ready project from the current catalog to see its suggested parts and estimated total. This is not a live stock check or engineering review.',language)}</p>
     <div className="tag" style={{margin:'13px 0 20px'}}><Info size={13}/> {t('Demo parts and sample stock · Build Assist prices require your current KWD price CSV · verify electrical compatibility independently',language)}</div>
     <div className="assist-layout">
       <section>
         <div className="assist-form surface">
           <div className="eyebrow">{t('PROJECT SPECIFICATION',language)}</div>
           <div className="assist-section">
-            <label htmlFor="project-prompt">{t('What are you building?',language)}</label>
-            <textarea id="project-prompt" value={prompt} onChange={e=>setPrompt(e.target.value)} maxLength={500} placeholder={t('Describe sensors, controllers, communication needs or constraints…',language)} data-testid="input-build-prompt"/>
-            <div className="mono" style={{textAlign:'right',fontSize:9,color:'#7c8991',marginTop:5}} data-testid="text-prompt-count">{prompt.length} / 500</div>
-          </div>
-          <div className="assist-section">
-            <label>{t('Quick project starters',language)}</label>
-            <div className="preset-row">{[['Greenhouse','Automated greenhouse monitor with soil moisture, solar charging, and alerts'],['Parking sensor','Arduino-compatible parking sensor with distance alerts'],['Line follower','Two-motor line follower robot with IR sensor array'],['Weather node','Wi-Fi weather node measuring pressure and humidity']].map(([name,value])=><button type="button" className="preset" key={name} onClick={()=>setPrompt(value)} data-testid={`preset-${name.toLowerCase().replace(' ','-')}`}>{t(name,language)}</button>)}</div>
+            <div className="assist-project-label" id="ready-project-heading">{t('Choose a ready-to-build project',language)}</div>
+            <p className="assist-project-hint">{t('These choices use components listed in the current catalog. Select one to update the estimate.',language)}</p>
+            <div className="build-project-grid" role="group" aria-labelledby="ready-project-heading">
+              {buildOptions.map(option=>{
+                const selected=selectedProjectId===option.id;
+                return <button type="button" key={option.id} className={`build-project-option ${selected?'active':''}`} onClick={()=>setSelectedProjectId(option.id)} aria-pressed={selected} data-testid={`button-build-project-${option.id}`}>
+                  <span className="build-project-title-row"><strong>{t(option.title,language)}</strong>{selected&&<span className="build-project-selected"><CheckCircle2 size={12}/>{t('Selected',language)}</span>}</span>
+                  <span className="build-project-description">{t(option.description,language)}</span>
+                  <span className="build-project-parts">{option.partIds.map(id=>{const part=products.find(product=>product.id===id);return part?<span className="build-project-part" key={id} title={part.name}>{t(part.name,language)}</span>:null})}</span>
+                </button>;
+              })}
+            </div>
           </div>
           <div className="assist-section">
             <label>{t('Target logic voltage',language)}</label>
@@ -363,7 +380,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
           <div className="assist-section">
             <label htmlFor="assembly-count">{t('Number of assemblies',language)}</label>
             <input className="assist-number-input" id="assembly-count" type="number" min="1" max="99" step="1" value={assemblies} onChange={e=>setAssemblyOverride(clampBuildQuantity(Number(e.target.value)))} aria-label={t('Number of assemblies',language)} data-testid="input-assembly-count"/>
-            <p className="assist-input-hint">{t('Counts such as “3 devices” and “2 sensors” are read from the brief; adjust them here or in the parts list.',language)}</p>
+            <p className="assist-input-hint">{t('Set the number of copies here; adjust part quantities per copy in the estimate.',language)}</p>
           </div>
           <div className="assist-section">
             <div className="range-line"><label htmlFor="budget-range" style={{margin:0}}>{t('Maximum BOM budget',language)}</label><strong data-testid="text-budget-value">{fmt(budget)}</strong></div>
@@ -381,7 +398,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
       </section>
       <section className="bom-panel surface" aria-label={t('Demo bill of materials',language)} data-testid="panel-demo-bom">
         <div className="assist-output-head">
-          <div><div className="eyebrow" style={{color:'#9a4600'}}>{t('SAMPLE OUTPUT · NOT VERIFIED',language)}</div><h2>{t(projectTitle,language)}</h2><p>{generated?prompt:t('Preview a local mapping from the project brief. No external service is involved.',language)}</p></div>
+          <div><div className="eyebrow" style={{color:'#9a4600'}}>{t('SAMPLE OUTPUT · NOT VERIFIED',language)}</div><h2>{t(selectedProject.title,language)}</h2><p>{generated?t(selectedProject.description,language):t('Select a project card to preview its catalog parts. No external service is involved.',language)}</p></div>
           <span className="demo-stamp">{t('LOCAL DEMO',language)}</span>
         </div>
         <div className="diagram">

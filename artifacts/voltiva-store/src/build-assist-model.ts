@@ -209,7 +209,7 @@ export function buildPlanFromPrompt<TPart extends CatalogPart>(
   const needsLevelConverter =
     /level shifter|level converter|محوّل مستويات|محول مستوى/.test(text) ||
     (targetVoltage === '5V' && includesEsp32OrPico) ||
-    (targetVoltage === '3.3V' && selectedIds.has('hcsr04'));
+    (targetVoltage === '3.3V' && (selectedIds.has('hcsr04') || selectedIds.has('lcd')));
   if (needsLevelConverter) addPart('level');
 
   const unpricedRequirements: string[] = [];
