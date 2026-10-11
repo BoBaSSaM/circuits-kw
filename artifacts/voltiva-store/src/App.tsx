@@ -13,6 +13,8 @@ import {
   calculateBomTotal,
   clampBuildQuantity,
   inferPartQuantity,
+  isPriceListStale,
+  PRICE_LIST_FRESHNESS_DAYS,
 } from './build-assist-model';
 import { addCartItem, calculateCartSubtotal } from './cart-model';
 import {
@@ -299,6 +301,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const [notice,setNotice]=useState('');
   const [preview,setPreview]=useState<'wiring'|'code'|null>(null);
   const [priceList]=useState<PriceListState|null>(readSavedPriceList);
+  const priceListIsStale=priceList!==null&&isPriceListStale(priceList.updatedAt);
   useEffect(()=>{setAssemblyOverride(null);setPartQuantities({});setGenerated(false);setNotice('');setPreview(null)},[selectedProjectId]);
   const plan=useMemo(()=>buildPlanFromPrompt(prompt,voltage,products),[prompt,voltage]);
   const bom=plan.parts.map(part=>({
@@ -406,6 +409,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
           </div>;
         })}</div>
         <div className="bom-total"><span>{t('Priced parts subtotal',language)} · {assemblies} {t('assemblies',language)}</span><span className="mono" data-testid="text-build-assist-total">{pricedBom.length?fmt(total):'—'}</span></div>
+        {priceListIsStale&&<div className="notice" role="alert" data-testid="notice-stale-price-list"><strong>{t('Stale price warning:',language)}</strong> {t('This imported price list is over',language)} {PRICE_LIST_FRESHNESS_DAYS} {t('days old. Verify current supplier prices before relying on this subtotal.',language)}</div>}
         <div className="bom-calculation-note" data-testid="text-price-source">{priceList?<><strong>{t('Price source:',language)}</strong> {priceList.source} · <strong>{t('Last updated:',language)}</strong> {priceList.updatedAt}</>:t('No saved price list is available; parts without prices are excluded from the subtotal.',language)}</div>
         {unpricedBom.length>0&&<div className="notice" data-testid="notice-unpriced-parts"><strong>{t('Unpriced parts excluded from subtotal:',language)}</strong> {unpricedBom.map(part=>`${part.name} (${part.sku})`).join(', ')}</div>}
         {plan.unpricedRequirements.length>0&&<div className="notice" data-testid="notice-unpriced-requirements"><strong>{t('Not included in parts subtotal:',language)}</strong> {plan.unpricedRequirements.map(requirement=>t(requirement,language)).join(', ')}</div>}

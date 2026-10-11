@@ -10,6 +10,27 @@ export type ImportedPriceList = {
   pricesBySku: Record<string, number>;
 };
 
+// Price lists older than 90 calendar days need re-verification; update this when supplier refresh expectations change.
+export const PRICE_LIST_FRESHNESS_DAYS = 90;
+
+export function isPriceListStale(updatedAt: string, now: Date = new Date()): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(updatedAt);
+  if (!match) return false;
+
+  const [, year, month, day] = match;
+  const updatedTime = Date.UTC(Number(year), Number(month) - 1, Number(day));
+  const updatedDate = new Date(updatedTime);
+  if (
+    updatedDate.getUTCFullYear() !== Number(year) ||
+    updatedDate.getUTCMonth() !== Number(month) - 1 ||
+    updatedDate.getUTCDate() !== Number(day)
+  ) return false;
+
+  const todayTime = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const ageInDays = Math.floor((todayTime - updatedTime) / 86_400_000);
+  return ageInDays >= PRICE_LIST_FRESHNESS_DAYS;
+}
+
 const normalizeSku = (sku: string) => sku.trim().toLocaleUpperCase('en-US');
 
 function parseCsvRows(csv: string): string[][] {

@@ -7,7 +7,9 @@ import {
   calculateBomTotal,
   inferAssemblyCount,
   inferPartQuantity,
+  isPriceListStale,
   parseAuthorizedPriceCsv,
+  PRICE_LIST_FRESHNESS_DAYS,
 } from './build-assist-model.ts';
 import { addCartItem, calculateCartSubtotal } from './cart-model.ts';
 
@@ -19,6 +21,20 @@ const catalog = [
   { id: 'level', name: 'Logic Level Converter', sku: 'MOD-LLC-4CH-BI', price: 0.65, category: 'ICs & Logic Translators' },
   { id: 'lcd', name: '16x2 I2C Character LCD', sku: 'DIS-LCD-1602I2C', price: 1.45, category: 'Displays' },
 ];
+
+test('marks a price list stale at the documented calendar-day threshold', () => {
+  const now = new Date('2026-10-11T16:00:00Z');
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const dateDaysAgo = (days) => new Date(today.getTime() - days * 86_400_000).toISOString().slice(0, 10);
+
+  assert.equal(PRICE_LIST_FRESHNESS_DAYS, 90);
+  assert.equal(isPriceListStale(dateDaysAgo(PRICE_LIST_FRESHNESS_DAYS - 1), now), false);
+  assert.equal(isPriceListStale(dateDaysAgo(PRICE_LIST_FRESHNESS_DAYS), now), true);
+  assert.equal(isPriceListStale(dateDaysAgo(PRICE_LIST_FRESHNESS_DAYS + 1), now), true);
+  assert.equal(isPriceListStale('2026-10-12', now), false);
+  assert.equal(isPriceListStale('2026-02-30', now), false);
+  assert.equal(isPriceListStale('not-a-date', now), false);
+});
 
 test('infers English assembly and per-part quantities independently', () => {
   const prompt = 'Build three devices with two ESP32 controllers and four soil sensors';
