@@ -222,6 +222,12 @@ const arabic: Record<string, string> = {
 
   'LOCAL PROJECT PLANNER · KUWAIT': 'مخطط مشاريع محلي · الكويت',
   'Build Assist:': 'مساعد البناء:',
+  'Choose a catalog project and see totals from any saved supplier price list. Parts without a saved price remain unpriced.': 'اختر مشروعاً من الكتالوج للاطلاع على الإجمالي باستخدام قائمة أسعار المورد المحفوظة إن وجدت. تبقى القطع بلا سعر غير مسعّرة.',
+  'Demo parts and sample stock · saved price-list values are used when available · verify electrical compatibility independently': 'قطع ومخزون تجريبي · تُستخدم أسعار القائمة المحفوظة عند توفرها · تحقّق بنفسك من التوافق الكهربائي',
+  'Estimate recalculated from saved price list and requested quantities.': 'أُعيد حساب التقدير من قائمة الأسعار المحفوظة والكميات المطلوبة.',
+  'Parts list refreshed. No saved price list is available, so parts remain unpriced.': 'تم تحديث قائمة القطع. لا توجد قائمة أسعار محفوظة، لذلك تبقى القطع بلا سعر.',
+  'No priced BOM items are available to add.': 'لا توجد قطع مسعّرة متاحة للإضافة.',
+  'No saved price list is available; parts without prices are excluded from the subtotal.': 'لا توجد قائمة أسعار محفوظة؛ وتُستبعد القطع التي بلا سعر من المجموع الفرعي.',
   'describe your idea.': 'صف فكرتك.',
   'choose a project.': 'اختر مشروعاً.',
   'Choose a ready project from the current component catalog and review its bill of materials with your KWD price list.': 'اختر مشروعاً جاهزاً من كتالوج القطع الحالي وراجع قائمة مكوناته باستخدام قائمة أسعارك بالدينار الكويتي.',

@@ -13,14 +13,13 @@ import {
   calculateBomTotal,
   clampBuildQuantity,
   inferPartQuantity,
-  parseAuthorizedPriceCsv,
 } from './build-assist-model';
 import { addCartItem, calculateCartSubtotal } from './cart-model';
 import {
   ArrowDown, ArrowRight, BatteryCharging, BookOpen, Bot,
   CheckCircle2, CircuitBoard, Cpu, Gauge, GraduationCap, Grid2X2,
   Info, Layers, LifeBuoy, MapPin, Menu, Minus, PackageCheck, Plus,
-  Search, ShieldCheck, ShoppingCart, SlidersHorizontal, Trash2, Truck, Upload, Wifi, X,
+  Search, ShieldCheck, ShoppingCart, SlidersHorizontal, Trash2, Truck, Wifi, X,
 } from 'lucide-react';
 
 type Item = { id: string; name: string; price: number; kind: 'component' | 'kit' | 'bom'; sku: string; qty: number };
@@ -287,7 +286,7 @@ function KitsPage({add}:{add:(item:AddItem)=>void}) {
 
 function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const {language}=useLanguage();
-  useDocument(t('Build Assist',language),t('Choose a ready project from the current component catalog and review its bill of materials with your KWD price list.',language));
+  useDocument(t('Build Assist',language),t('Choose a catalog project and see totals from any saved supplier price list. Parts without a saved price remain unpriced.',language));
   const [selectedProjectId,setSelectedProjectId]=useState(buildOptions[0].id);
   const selectedProject=buildOptions.find(option=>option.id===selectedProjectId)??buildOptions[0];
   const prompt=selectedProject.prompt;
@@ -299,15 +298,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const [generated,setGenerated]=useState(false);
   const [notice,setNotice]=useState('');
   const [preview,setPreview]=useState<'wiring'|'code'|null>(null);
-  const [priceList,setPriceList]=useState<PriceListState|null>(readSavedPriceList);
-  const [priceSource,setPriceSource]=useState(()=>readSavedPriceList()?.source??'');
-  const [priceUpdatedAt,setPriceUpdatedAt]=useState(()=>readSavedPriceList()?.updatedAt??'');
-  const [priceFile,setPriceFile]=useState<File|null>(null);
-  const [priceListMessage,setPriceListMessage]=useState('');
-  useEffect(()=>{
-    if(priceList) localStorage.setItem(PRICE_LIST_STORAGE_KEY,JSON.stringify(priceList));
-    else localStorage.removeItem(PRICE_LIST_STORAGE_KEY);
-  },[priceList]);
+  const [priceList]=useState<PriceListState|null>(readSavedPriceList);
   useEffect(()=>{setAssemblyOverride(null);setPartQuantities({});setGenerated(false);setNotice('');setPreview(null)},[selectedProjectId]);
   const plan=useMemo(()=>buildPlanFromPrompt(prompt,voltage,products),[prompt,voltage]);
   const bom=plan.parts.map(part=>({
@@ -327,30 +318,18 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const generate=()=>{
     if(prompt.trim().length<8){setNotice(t('Add a little more detail to describe your hardware idea.',language));return}
     setGenerated(true);
-    setNotice(priceList?t('Estimate recalculated from imported price list and requested quantities.',language):t('Parts list refreshed. Import current KWD prices to calculate the estimate.',language));
+    setNotice(priceList?t('Estimate recalculated from saved price list and requested quantities.',language):t('Parts list refreshed. No saved price list is available, so parts remain unpriced.',language));
   };
   const addBom=()=>{
     const items=buildBomCartItems(bom,quantityFor,assemblies);
     items.forEach(add);
-    setNotice(items.length?t('Priced BOM items added to your cart. Unpriced parts were skipped.',language):t('No priced BOM items are available to add. Import current KWD prices first.',language));
-  };
-  const importPriceList=async()=>{
-    if(!priceFile){setPriceListMessage(t('Choose a CSV price file first.',language));return}
-    if(!priceSource.trim()||!priceUpdatedAt){setPriceListMessage(t('Enter the supplier or price-list source and its last-updated date.',language));return}
-    try{
-      const imported=parseAuthorizedPriceCsv(await priceFile.text());
-      setPriceList({...imported,source:priceSource.trim(),updatedAt:priceUpdatedAt});
-      setPriceListMessage(t('Price list imported successfully.',language));
-      setPriceFile(null);
-    }catch(error){
-      setPriceListMessage(error instanceof Error?error.message:t('Could not read this CSV price list.',language));
-    }
+    setNotice(items.length?t('Priced BOM items added to your cart. Unpriced parts were skipped.',language):t('No priced BOM items are available to add.',language));
   };
   return <div className="container page-top">
     <div className="eyebrow">{t('LOCAL PROJECT PLANNER · KUWAIT',language)}</div>
     <h1 style={{fontSize:'clamp(33px,4vw,48px)'}}>{t('Build Assist:',language)} <span style={{color:'#00687b'}}>{t('choose a project.',language)}</span></h1>
     <p className="lead">{t('Choose a ready project from the current catalog to see its suggested parts and estimated total. This is not a live stock check or engineering review.',language)}</p>
-    <div className="tag" style={{margin:'13px 0 20px'}}><Info size={13}/> {t('Demo parts and sample stock · Build Assist prices require your current KWD price CSV · verify electrical compatibility independently',language)}</div>
+    <div className="tag" style={{margin:'13px 0 20px'}}><Info size={13}/> {t('Demo parts and sample stock · saved price-list values are used when available · verify electrical compatibility independently',language)}</div>
     <div className="assist-layout">
       <section>
         <div className="assist-form surface">
@@ -426,24 +405,8 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
             </div>
           </div>;
         })}</div>
-        <section className="surface" aria-label={t('Import current part prices',language)} style={{padding:14,marginTop:16,background:'#f7fafc'}} data-testid="panel-price-list-import">
-          <div className="filter-title">{t('Use your current KWD prices',language)}</div>
-          <p className="bom-calculation-note" style={{margin:'6px 0 12px'}}>{t('Import an authorized supplier CSV. Required columns: sku and price (or unit_price); optional currency values must be KWD. Unmatched SKUs stay unpriced.',language)}</p>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:10,marginBottom:10}}>
-            <label>{t('Supplier or price-list source',language)}<input className="assist-number-input" style={{display:'block',width:'100%',maxWidth:'none',marginTop:5}} value={priceSource} onChange={e=>setPriceSource(e.target.value)} placeholder={t('Supplier name or price list',language)} data-testid="input-price-source"/></label>
-            <label>{t('Price list last updated',language)}<input className="assist-number-input" style={{display:'block',width:'100%',maxWidth:'none',marginTop:5}} type="date" value={priceUpdatedAt} onChange={e=>setPriceUpdatedAt(e.target.value)} data-testid="input-price-updated-at"/></label>
-          </div>
-          <label style={{display:'block',fontSize:10,color:'#53636d',marginBottom:10}}>{t('CSV price file',language)}
-            <input style={{display:'block',width:'100%',marginTop:5,fontSize:11}} type="file" accept=".csv,text/csv" onChange={e=>setPriceFile(e.target.files?.[0]??null)} data-testid="input-price-csv"/>
-          </label>
-          <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
-            <button className="button button-primary small-button" type="button" onClick={importPriceList} data-testid="button-import-price-csv"><Upload size={14}/>{t('Import price CSV',language)}</button>
-            {priceList&&<button className="button button-outline small-button" type="button" onClick={()=>{setPriceList(null);setPriceSource('');setPriceUpdatedAt('');setPriceListMessage(t('Saved price list removed.',language))}} data-testid="button-clear-price-list">{t('Remove saved price list',language)}</button>}
-          </div>
-          {priceListMessage&&<p role="status" className="bom-calculation-note" style={{margin:'9px 0 0'}} data-testid="status-price-list">{priceListMessage}</p>}
-        </section>
         <div className="bom-total"><span>{t('Priced parts subtotal',language)} · {assemblies} {t('assemblies',language)}</span><span className="mono" data-testid="text-build-assist-total">{pricedBom.length?fmt(total):'—'}</span></div>
-        <div className="bom-calculation-note" data-testid="text-price-source">{priceList?<><strong>{t('Price source:',language)}</strong> {priceList.source} · <strong>{t('Last updated:',language)}</strong> {priceList.updatedAt}</>:t('No current price list loaded. Import a dated, authorized CSV to calculate costs.',language)}</div>
+        <div className="bom-calculation-note" data-testid="text-price-source">{priceList?<><strong>{t('Price source:',language)}</strong> {priceList.source} · <strong>{t('Last updated:',language)}</strong> {priceList.updatedAt}</>:t('No saved price list is available; parts without prices are excluded from the subtotal.',language)}</div>
         {unpricedBom.length>0&&<div className="notice" data-testid="notice-unpriced-parts"><strong>{t('Unpriced parts excluded from subtotal:',language)}</strong> {unpricedBom.map(part=>`${part.name} (${part.sku})`).join(', ')}</div>}
         {plan.unpricedRequirements.length>0&&<div className="notice" data-testid="notice-unpriced-requirements"><strong>{t('Not included in parts subtotal:',language)}</strong> {plan.unpricedRequirements.map(requirement=>t(requirement,language)).join(', ')}</div>}
         {pricedBom.length>0&&total>budget&&<div className="notice" data-testid="notice-over-budget">{t('This priced-parts subtotal is above your stated budget. Review quantities or choose alternative parts before purchase.',language)}</div>}
