@@ -6,8 +6,8 @@ export type CatalogPart = {
   category: string;
 };
 
-export type BuildPlan = {
-  parts: CatalogPart[];
+export type BuildPlan<TPart extends CatalogPart = CatalogPart> = {
+  parts: TPart[];
   isSolar: boolean;
   isRobot: boolean;
   isWeather: boolean;
@@ -24,11 +24,68 @@ const normalizePrompt = (value: string) =>
     .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x6f0))
     .toLowerCase();
 
-export function buildPlanFromPrompt(
+const quantityWords: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5,
+  six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  واحد: 1, واحدة: 1, اثنان: 2, اثنين: 2, ثلاثة: 3,
+  أربعة: 4, اربعة: 4, خمسة: 5, ستة: 6, سبعة: 7,
+  ثمانية: 8, تسعة: 9, عشرة: 10,
+};
+
+const quantityToken = '(\\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|واحد|واحدة|اثنان|اثنين|ثلاثة|أربعة|اربعة|خمسة|ستة|سبعة|ثمانية|تسعة|عشرة)';
+const toQuantity = (value: string) => quantityWords[value] ?? Number(value);
+
+function quantityBefore(text: string, aliases: string[]): number | undefined {
+  for (const alias of aliases.sort((a, b) => b.length - a.length)) {
+    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(
+      `(?:^|[^\\p{L}\\p{N}])${quantityToken}\\s*(?:x\\s*)?${escaped}(?=$|[^\\p{L}\\p{N}])`,
+      'iu',
+    );
+    const match = text.match(pattern);
+    if (match) return clampBuildQuantity(toQuantity(match[1]));
+  }
+  return undefined;
+}
+
+export function inferAssemblyCount(prompt: string): number {
+  const text = normalizePrompt(prompt);
+  const units = 'assembl(?:y|ies)|units?|devices?|systems?|builds?|projects?|kits?|greenhouses?|monitors?|وحدات|أجهزة|اجهزة|مشاريع|أطقم|تجميعات|محطات';
+  const pattern = new RegExp(`(?:^|[^\\p{L}\\p{N}])${quantityToken}\\s*(?:x\\s*)?(?:${units})(?=$|[^\\p{L}\\p{N}])`, 'iu');
+  const match = text.match(pattern);
+  return match ? clampBuildQuantity(toQuantity(match[1])) : 1;
+}
+
+export function inferPartQuantity(prompt: string, part: CatalogPart): number {
+  const text = normalizePrompt(prompt);
+  const aliasesById: Record<string, string[]> = {
+    esp32: ['esp32', 'wroom', 'controllers', 'controller', 'boards', 'board'],
+    nucleo: ['stm32', 'nucleo'],
+    pico: ['raspberry pi pico', 'pico w', 'pico'],
+    bme280: ['bme280', 'weather sensors', 'humidity sensors', 'temperature sensors', 'pressure sensors'],
+    hcsr04: ['hc-sr04', 'hcsr04', 'ultrasonic sensors', 'distance sensors'],
+    soil: ['soil sensors', 'moisture sensors', 'soil sensor', 'moisture sensor'],
+    lcd: ['lcds', 'lcd', 'displays', 'display', 'screens', 'screen'],
+    tp4056: ['tp4056', 'chargers', 'charger'],
+    battery: ['18650 batteries', '18650', 'batteries', 'battery', 'cells', 'cell'],
+    resistor: ['resistors', 'resistor'],
+    level: ['level shifters', 'level shifter', 'level converters', 'level converter'],
+  };
+  const aliases = aliasesById[part.id] ?? [];
+  const specific = quantityBefore(text, aliases);
+  if (specific !== undefined) return specific;
+  if (part.category === 'Sensors') {
+    const generic = quantityBefore(text, ['sensors', 'sensor', 'مستشعرات', 'مستشعر']);
+    if (generic !== undefined) return generic;
+  }
+  return 1;
+}
+
+export function buildPlanFromPrompt<TPart extends CatalogPart>(
   prompt: string,
   targetVoltage: string,
-  catalog: readonly CatalogPart[],
-): BuildPlan {
+  catalog: readonly TPart[],
+): BuildPlan<TPart> {
   const text = normalizePrompt(prompt);
   const isSolar = /solar|photovoltaic|pv panel|شمسي|الشمس|طاقة شمسية/.test(text);
   const isRobot = /robot|rover|robotics|روبوت|عربة/.test(text);
