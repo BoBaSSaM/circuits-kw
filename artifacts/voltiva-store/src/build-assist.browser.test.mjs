@@ -144,6 +144,18 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.getByTestId('row-cart-bom-esp32').count(), 1);
     assert.equal(await page.getByTestId('row-cart-bom-soil').count(), 0);
     assert.equal(await page.getByTestId('row-cart-bom-bme280').count(), 0);
+    assert.equal(await page.getByTestId('input-quantity-bom-esp32').inputValue(), '2');
+    assert.equal(await page.getByTestId('row-cart-bom-esp32').locator('.price').innerText(), '3.250 KWD');
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '3.250 KWD');
+
+    await page.reload();
+    const restoredBomRow = page.getByTestId('row-cart-bom-esp32');
+    await restoredBomRow.waitFor();
+    assert.equal(await restoredBomRow.count(), 1);
+    assert.equal(await page.getByTestId('row-cart-bom-soil').count(), 0);
+    assert.equal(await page.getByTestId('row-cart-bom-bme280').count(), 0);
+    assert.equal(await page.getByTestId('input-quantity-bom-esp32').inputValue(), '2');
+    assert.equal(await restoredBomRow.locator('.price').innerText(), '3.250 KWD');
     assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '3.250 KWD');
     assert.deepEqual(pageErrors, []);
   } catch (error) {
