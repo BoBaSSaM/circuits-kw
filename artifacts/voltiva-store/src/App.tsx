@@ -462,7 +462,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
             <input type="range" id="budget-range" min="3" max="45" step=".5" value={budget} onChange={e=>setBudget(Number(e.target.value))} data-testid="input-budget"/>
             <div className="range-line" style={{color:'#849099',marginTop:4}}><span>3.000 KWD</span><span>45.000 KWD</span></div>
           </div>
-          <button className="button button-primary" style={{width:'100%',height:48}} onClick={generate} data-testid="button-generate-bom"><CircuitBoard size={17}/> {t('Generate local demo BOM',language)}</button>
+          <button className="button button-primary" style={{width:'100%',height:48}} onClick={generate} data-testid="button-generate-bom"><CircuitBoard size={17}/> {t(generated?'Update local demo BOM':'Generate local demo BOM',language)}</button>
           <p className="mono" style={{textAlign:'center',fontSize:9,color:'#6b7880',margin:'10px 0 0'}}>{t('Rule-based local sample · no external service or live stock check',language)}</p>
           {notice&&<p role="status" className="tag" style={{marginTop:12}} data-testid="status-build-assist">{notice}</p>}
         </div>
@@ -473,10 +473,9 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
       </section>
       <section className="bom-panel surface" aria-label={t('Demo bill of materials',language)} data-testid="panel-demo-bom">
         <div className="assist-output-head">
-          <div><div className="eyebrow" style={{color:'#9a4600'}}>{t('SAMPLE OUTPUT · NOT VERIFIED',language)}</div><h2>{t(selectedProject.title,language)}</h2><p>{generated?t(selectedProject.description,language):t('Choose a project to preview catalog parts.',language)}</p></div>
+          <div><div className="eyebrow" style={{color:'#9a4600'}}>{t('SAMPLE OUTPUT · NOT VERIFIED',language)}</div><h2>{t(selectedProject.title,language)}</h2><p>{generated?t(selectedProject.description,language):t('Preview parts; generate to confirm.',language)}</p></div>
           <span className="demo-stamp">{t('LOCAL DEMO',language)}</span>
         </div>
-        {generated?<>
         <div className="diagram">
           <div className="diagram-label"><span>{t('Illustrative connection flow',language)}</span><span>{voltage} {t('logic target',language)}</span></div>
           <div className="diagram-flow"><div className="diagram-node">{plan.isSolar?t('Solar PV',language):t('Power',language)}<br/>{t('source',language)}</div><ArrowRight className="diagram-arrow" size={18}/><div className="diagram-node core">{t(controller?.name??'ESP32-WROOM-32D',language)}<br/>{t('controller',language)}</div><ArrowRight className="diagram-arrow" size={18}/><div className="diagram-node">{plan.isGreenhouse?t('Soil capacitive',language):t('Sensor',language)}<br/>{t('module',language)}</div></div>
@@ -519,7 +518,6 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
           {preview==='wiring'?<p>{t(controller?.name??'ESP32-WROOM-32D',language)} inputs connect to the selected sensor modules following their datasheets. Power components shown in the BOM require independent compatibility checks; this is illustrative only, not a generated schematic.</p>:<pre>{`# Local example outline — not downloadable firmware\nread_sensor()\ncheck_threshold()\nnotify_placeholder()  # no messaging service connected`}</pre>}
         </div>}
         <button className="button button-primary" style={{width:'100%'}} onClick={addBom} disabled={!pricedBom.length} data-testid="button-add-bom-cart"><ShoppingCart size={16}/> {t('Add priced BOM items to cart',language)} · {pricedBom.length?fmt(total):'—'}</button>
-        </>:<div className="bom-empty-state" role="status" data-testid="state-build-assist-empty"><CircuitBoard size={24}/><p>{t('Generate a BOM to see its parts.',language)}</p></div>}
       </section>
     </div>
      <div className="assist-delivery-reference"><div><span className="eyebrow">{t('KUWAIT DELIVERY REFERENCE',language)}</span><strong>{t('Same-day dispatch concept · 15:00 AST cutoff',language)}</strong><span>{t('Shuwaikh hub is a reference only; delivery and pickup are not connected.',language)}</span></div><Link href="/about#delivery" className="button button-outline small-button" data-testid="link-assist-delivery">{t('View sample zones',language)} <ArrowRight size={13}/></Link></div>

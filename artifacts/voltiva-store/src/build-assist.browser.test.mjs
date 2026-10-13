@@ -91,8 +91,12 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     page.on('pageerror', (error) => pageErrors.push(error.message));
 
     await page.goto(`${baseUrl}/build-assist`);
-    assert.equal(await page.getByTestId('row-bom-esp32').count(), 0);
+    await page.getByTestId('row-bom-esp32').waitFor();
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '—');
+    const previewDescription = await page.locator('.assist-output-head p').innerText();
     await page.getByTestId('button-generate-bom').click();
+    await page.getByTestId('status-build-assist').waitFor();
+    assert.notEqual(await page.locator('.assist-output-head p').innerText(), previewDescription);
     await page.getByTestId('text-unpriced-esp32').waitFor();
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '—');
     const staleUpdatedAt = dateDaysAgo(freshnessPeriodDays);
@@ -237,7 +241,7 @@ test('imports a zero-cost supplier CSV row and keeps the BOM item in the cart', 
     });
     await page.getByTestId('button-import-price-csv').click();
     await page.getByTestId('status-build-assist').waitFor();
-    assert.equal(await page.getByTestId('row-bom-esp32').count(), 0);
+    await page.getByTestId('row-bom-esp32').waitFor();
     await page.getByTestId('button-generate-bom').click();
 
     assert.equal(await page.getByTestId('text-unpriced-soil').count(), 0);

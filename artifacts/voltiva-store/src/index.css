@@ -278,9 +278,6 @@ input[type=range] { width:100%; accent-color:#007b91; }
 .assist-output-head { display:flex; justify-content:space-between; gap:12px; padding-bottom:13px; border-bottom:1px solid #e5eaf0; }
 .assist-output-head h2 { font-size:22px; margin:4px 0 5px; }
 .assist-output-head p { margin:0; color:#62717c; font-size:11px; }
-.bom-empty-state { display:flex; min-height:240px; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:#63717d; text-align:center; }
-.bom-empty-state svg { color:#007b91; }
-.bom-empty-state p { margin:0; font-size:12px; }
 .demo-stamp { border-radius:6px; background:#fff2e8; color:#9a4600; padding:7px 9px; font:9px var(--app-font-mono); height:max-content; white-space:nowrap; }
 .diagram { padding:12px; margin:14px 0; border-radius:8px; background:#f1f4f6; }
 .diagram-label { display:flex; justify-content:space-between; font:9px var(--app-font-mono); color:#65747e; text-transform:uppercase; margin-bottom:10px; }
