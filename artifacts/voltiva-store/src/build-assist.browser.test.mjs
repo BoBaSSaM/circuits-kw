@@ -107,6 +107,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
         const list = document.querySelector('.cart-list');
         const summary = document.querySelector('.summary-card');
         const quantity = row?.querySelector('.quantity');
+        const price = row?.querySelector('.price');
         const remove = row?.querySelector('.remove');
         return {
           width: window.innerWidth,
@@ -117,12 +118,15 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
           summaryLeft: summary?.getBoundingClientRect().left ?? 0,
           rowRight: row?.getBoundingClientRect().right ?? 0,
           quantityRight: quantity?.getBoundingClientRect().right ?? 0,
+          priceRight: price?.getBoundingClientRect().right ?? 0,
+          removeLeft: remove?.getBoundingClientRect().left ?? 0,
           removeRight: remove?.getBoundingClientRect().right ?? 0,
           priceDisplay: getComputedStyle(row?.querySelector('.price')).display,
         };
       });
       assert.equal(sizing.documentWidth, width, `cart should not overflow at ${width}px`);
       assert.ok(sizing.quantityRight <= sizing.rowRight, `quantity control should fit at ${width}px`);
+      assert.ok(sizing.priceRight <= sizing.removeLeft, `price and remove control should not overlap at ${width}px`);
       assert.ok(sizing.removeRight <= sizing.rowRight, `remove control should fit at ${width}px`);
       if (width <= 980) assert.ok(sizing.summaryTop >= sizing.listBottom, `summary should stack below items at ${width}px`);
       else assert.ok(sizing.summaryLeft > sizing.listRight, 'desktop summary should sit beside the cart');
