@@ -342,6 +342,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const [notice,setNotice]=useState('');
   const [preview,setPreview]=useState<'wiring'|'code'|null>(null);
   const [priceList,setPriceList]=useState<PriceListState|null>(readSavedPriceList);
+  const [priceListRemoved,setPriceListRemoved]=useState(false);
   const [priceSource,setPriceSource]=useState(()=>readSavedPriceList()?.source??'');
   const [priceUpdatedAt,setPriceUpdatedAt]=useState(()=>readSavedPriceList()?.updatedAt??new Date().toISOString().slice(0,10));
   const [priceFile,setPriceFile]=useState<File|null>(null);
@@ -352,13 +353,13 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
     if(priceList) localStorage.setItem(PRICE_LIST_STORAGE_KEY,JSON.stringify(priceList));
     else localStorage.removeItem(PRICE_LIST_STORAGE_KEY);
   },[priceList]);
-  useEffect(()=>{setAssemblyOverride(null);setPartQuantities({});setGenerated(false);setNotice('');setPreview(null)},[selectedProjectId]);
+  useEffect(()=>{setAssemblyOverride(null);setPartQuantities({});setGenerated(false);setPriceListRemoved(false);setNotice('');setPreview(null)},[selectedProjectId]);
   const plan=useMemo(()=>buildPlanFromPrompt(prompt,voltage,products),[prompt,voltage]);
   const bom=plan.parts.map(part=>({
     ...part,
     price:priceList
       ?(priceList.pricesBySku[normalizePriceSku(part.sku)]??null)
-      :part.price,
+      :priceListRemoved?null:part.price,
   }));
   const assemblies=assemblyOverride??1;
   const quantityFor=(part:Pick<Product,'id'|'category'>)=>clampBuildQuantity(partQuantities[part.id]??inferPartQuantity(prompt,part));
@@ -372,6 +373,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const bomName=(product:{name:string})=>product.name;
   const generate=()=>{
     if(prompt.trim().length<8){setNotice(t('Add a little more detail to describe your hardware idea.',language));return}
+    setPriceListRemoved(false);
     setGenerated(true);
     setNotice(priceList?t('Estimate recalculated from saved price list and requested quantities.',language):t('Using illustrative catalog prices; import a supplier CSV for current prices.',language));
   };
@@ -387,6 +389,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
     try{
       const imported=parseAuthorizedPriceCsv(await priceFile.text());
       setPriceList({...imported,source:priceSource.trim(),updatedAt:priceUpdatedAt});
+      setPriceListRemoved(false);
       setPriceImportError('');
       setPriceFile(null);
       if(priceFileInputRef.current) priceFileInputRef.current.value='';
@@ -397,6 +400,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   };
   const removePriceList=()=>{
     setPriceList(null);
+    setPriceListRemoved(true);
     setPriceSource('');
     setPriceUpdatedAt(new Date().toISOString().slice(0,10));
     setGenerated(false);

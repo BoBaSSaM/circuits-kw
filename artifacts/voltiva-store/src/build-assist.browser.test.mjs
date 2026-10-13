@@ -187,6 +187,20 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.match(await page.getByTestId('text-price-source').innerText(), new RegExp(staleUpdatedAt));
     await page.getByTestId('notice-stale-price-list').waitFor();
 
+    await page.getByTestId('summary-price-list').click();
+    await page.getByTestId('button-remove-price-list').click();
+    await page.getByTestId('text-unpriced-esp32').waitFor();
+    assert.equal(await page.getByTestId('text-line-total-esp32').innerText(), '—');
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '—');
+    assert.match(await page.getByTestId('text-price-source').innerText(), /Illustrative catalog prices/);
+    assert.equal(await page.getByTestId('button-add-bom-cart').isDisabled(), true);
+    assert.equal(
+      await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]').length),
+      0,
+      'removing the supplier prices must not add any BOM items to the cart',
+    );
+    assert.equal(await page.evaluate((key) => localStorage.getItem(key), priceListStorageKey), null);
+
     const freshUpdatedAt = dateDaysAgo(0);
     const freshPriceList = { ...stalePriceList, source: 'Fresh supplier list', updatedAt: freshUpdatedAt };
     await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
