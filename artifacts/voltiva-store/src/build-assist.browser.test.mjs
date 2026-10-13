@@ -192,7 +192,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     await page.getByTestId('text-unpriced-esp32').waitFor();
     assert.equal(await page.getByTestId('text-line-total-esp32').innerText(), '—');
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '—');
-    assert.match(await page.getByTestId('text-price-source').innerText(), /Illustrative catalog prices/);
+    assert.match(await page.getByTestId('text-price-source').innerText(), /No current price list loaded/);
     assert.equal(await page.getByTestId('button-add-bom-cart').isDisabled(), true);
     assert.equal(
       await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]').length),
@@ -213,6 +213,26 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.getByTestId('notice-stale-price-list').count(), 0);
     assert.match(await page.getByTestId('text-price-source').innerText(), /Fresh supplier list/);
     assert.match(await page.getByTestId('text-price-source').innerText(), new RegExp(freshUpdatedAt));
+
+    await page.getByTestId('summary-price-list').click();
+    await page.getByTestId('input-price-list-source').fill('Rejected replacement');
+    await page.getByTestId('input-price-list-file').setInputFiles({
+      name: 'invalid-currency.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('sku,price,currency\nESP32-WRM-32D,1.625,USD\n'),
+    });
+    await page.getByTestId('button-import-price-csv').click();
+    assert.equal(
+      await page.getByTestId('error-price-list-import').innerText(),
+      'CSV row 2 currency must be KWD.',
+    );
+    assert.match(await page.getByTestId('text-price-source').innerText(), /Fresh supplier list/);
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '3.250 KWD');
+    assert.deepEqual(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), priceListStorageKey),
+      freshPriceList,
+      'a rejected replacement must not overwrite the currently saved price list',
+    );
 
     await page.getByTestId('button-add-bom-cart').click();
     await page.getByTestId('link-cart').click();
@@ -287,9 +307,9 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.notEqual(await page.locator('.assist-output-head p').innerText(), previewBeforePriceListRemoval);
     await page.getByTestId('summary-price-list').click();
     await page.getByTestId('button-remove-price-list').click();
-    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '6.000 KWD');
-    assert.equal(await page.getByTestId('text-line-total-esp32').innerText(), '2.850 KWD');
-    assert.match(await page.getByTestId('text-price-source').innerText(), /Illustrative catalog prices/);
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '—');
+    assert.equal(await page.getByTestId('text-line-total-esp32').innerText(), '—');
+    assert.match(await page.getByTestId('text-price-source').innerText(), /No current price list loaded/);
     assert.equal(await page.locator('.assist-output-head p').innerText(), previewBeforePriceListRemoval);
     assert.match(await page.getByTestId('status-build-assist').innerText(), /Price list removed/);
     assert.match(await page.getByTestId('button-generate-bom').innerText(), /Generate local demo BOM/);

@@ -5,6 +5,10 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { ClerkProvider, SignIn, SignUp, useClerk, useUser } from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
+import { arSA, enUS } from '@clerk/localizations';
+import { shadcn } from '@clerk/themes';
 import { LanguageProvider, t, useLanguage, type Language } from './i18n';
 import {
   buildPlanFromPrompt,
@@ -22,7 +26,7 @@ import {
   ArrowDown, ArrowRight, BatteryCharging, BookOpen, Bot,
   CheckCircle2, CircuitBoard, Cpu, Gauge, GraduationCap, Grid2X2,
   Info, Layers, LifeBuoy, MapPin, Menu, Minus, PackageCheck, Plus,
-  Search, ShieldCheck, ShoppingCart, SlidersHorizontal, Trash2, Truck, Wifi, X,
+  Search, ShieldCheck, ShoppingCart, SlidersHorizontal, Trash2, Truck, UserRound, Wifi, X,
 } from 'lucide-react';
 
 type Item = { id: string; name: string; price: number; kind: 'component' | 'kit' | 'bom'; sku: string; qty: number };
@@ -33,6 +37,109 @@ type Kit = { id: string; code:string; title: string; category: string; level: 'B
 type PriceListState = { pricesBySku: Record<string, number>; source: string; updatedAt: string };
 const PRICE_LIST_STORAGE_KEY = 'circuits-kw-build-assist-prices';
 const normalizePriceSku = (sku: string) => sku.trim().toLocaleUpperCase('en-US');
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const clerkPublishableKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+
+if (!clerkPublishableKey) {
+  throw new Error('Clerk is not configured: VITE_CLERK_PUBLISHABLE_KEY is missing.');
+}
+
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: 'clerk',
+  variables: {
+    colorPrimary: '#00b8d9',
+    colorForeground: '#101c30',
+    colorMutedForeground: '#64727d',
+    colorBackground: '#ffffff',
+    colorInput: '#fbfcfd',
+    colorInputForeground: '#233744',
+    colorDanger: '#a23128',
+    colorNeutral: '#dce5ea',
+    fontFamily: '"IBM Plex Sans", "IBM Plex Sans Arabic", sans-serif',
+    borderRadius: '12px',
+  },
+  options: {
+    logoPlacement: 'inside' as const,
+    logoLinkUrl: basePath || '/',
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+  },
+  elements: {
+    rootBox: 'w-full flex justify-center',
+    cardBox: 'bg-white rounded-xl max-w-full overflow-hidden shadow-none',
+    card: '!bg-transparent !shadow-none !border-0',
+    footer: '!bg-transparent !shadow-none !border-0',
+    headerTitle: 'text-[#172d3b]',
+    headerSubtitle: 'text-[#64727d]',
+    socialButtonsBlockButtonText: 'text-[#172d3b]',
+    formFieldLabel: 'text-[#394b58]',
+    footerActionLink: 'text-[#00687b] hover:text-[#00a3c2]',
+    footerActionText: 'text-[#64727d]',
+    dividerText: 'text-[#64727d]',
+    identityPreviewEditButton: 'text-[#00687b]',
+    formFieldSuccessText: 'text-[#26734b]',
+    formFieldHintText: 'text-[#64727d]',
+    formFieldErrorText: 'text-[#a23128]',
+    alertText: 'text-[#a23128]',
+    formButtonPrimary: 'bg-[#00b8d9] text-[#101c30] hover:bg-[#00a3c2]',
+    formFieldInput: 'border-[#dce5ea] bg-[#fbfcfd] text-[#233744]',
+    otpCodeFieldInput: 'border-[#dce5ea] bg-[#fbfcfd] text-[#233744]',
+    socialButtonsBlockButton: 'border-[#dce5ea] bg-white hover:bg-[#f7f9fc]',
+    dividerLine: 'bg-[#e5eaf0]',
+    alert: 'border-[#f0b5b0] bg-[#fff4f2]',
+    main: 'w-full',
+  },
+};
+
+function stripBasePath(path: string) {
+  if (!basePath) return path;
+  if (path === basePath) return '/';
+  return path.startsWith(`${basePath}/`) ? path.slice(basePath.length) : path;
+}
+
+function ClerkRouterBridge({ children }: { children: ReactNode }) {
+  const [, setLocation] = useLocation();
+  const { language } = useLanguage();
+  const baseLocalization = language === 'ar' ? arSA : enUS;
+  const localization = {
+    ...baseLocalization,
+    signIn: {
+      ...baseLocalization.signIn,
+      start: {
+        ...baseLocalization.signIn?.start,
+        title: language === 'ar' ? 'مرحباً بعودتك' : 'Welcome back',
+        subtitle: language === 'ar'
+          ? 'سجّل الدخول إلى حسابك في Circuits KW'
+          : 'Sign in to your Circuits KW account',
+      },
+    },
+    signUp: {
+      ...baseLocalization.signUp,
+      start: {
+        ...baseLocalization.signUp?.start,
+        title: language === 'ar' ? 'أنشئ حسابك' : 'Create your account',
+        subtitle: language === 'ar'
+          ? 'أنشئ حساب Circuits KW للبدء'
+          : 'Create a Circuits KW account to get started',
+      },
+    },
+  };
+
+  return <ClerkProvider
+    publishableKey={clerkPublishableKey}
+    proxyUrl={clerkProxyUrl}
+    appearance={clerkAppearance}
+    signInUrl={`${basePath}/sign-in`}
+    signUpUrl={`${basePath}/sign-up`}
+    localization={localization}
+    routerPush={path => setLocation(stripBasePath(path))}
+    routerReplace={path => setLocation(stripBasePath(path), { replace: true })}
+  >{children}</ClerkProvider>;
+}
 
 function readBrowserStorage(key: string): string | null {
   try {
@@ -153,6 +260,7 @@ function Header({ count, search, onSearch }:{count:number; search:string; onSear
   const [path,setLocation] = useLocation();
   const [open,setOpen] = useState(false);
   const {language,setLanguage}=useLanguage();
+  const {isLoaded,isSignedIn}=useUser();
   const [cartPulse,setCartPulse]=useState(false);
   const previousCount=useRef(count);
   useEffect(()=>{
@@ -164,17 +272,21 @@ function Header({ count, search, onSearch }:{count:number; search:string; onSear
     return ()=>window.clearTimeout(timer);
   },[count]);
   const nav = [['Components','/components'],['Project Kits','/project-kits'],['Build Assist','/build-assist'],['About','/about']] as const;
+  const accountHref=isLoaded&&isSignedIn?'/account':'/sign-in';
+  const accountLabel=isLoaded&&isSignedIn?t('Account',language):t('Sign in',language);
+  const accountActive=path.startsWith('/account')||path.startsWith('/sign-in')||path.startsWith('/sign-up')||path==='/sign-out';
   return <header className="site-header"><div className="header-inner">
     <Logo/>
     <nav className="nav-links" aria-label={t('Main navigation',language)}>{nav.map(([label,url])=><Link key={url} href={url} className={`nav-link ${path===url?'active':''}`} data-testid={`nav-${url.slice(1)}`}>{t(label,language)}</Link>)}</nav>
      <div className="header-search"><Search size={15}/><input aria-label={t('Search parts by name or SKU',language)} placeholder={t('Search parts or SKU…',language)} value={search} onChange={e=>onSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')setLocation('/components')}} data-testid="input-global-search"/></div>
     <div className="header-actions">
+      <Link href={accountHref} className={`header-account-link ${accountActive?'active':''}`} data-testid={isLoaded&&isSignedIn?'link-account':'link-sign-in'}><UserRound size={15}/><span>{accountLabel}</span></Link>
       <div className="language-switch" role="group" aria-label={t('Language preference',language)}>{([['en','EN'],['ar','العربية']] as const).map(([code,label])=><button type="button" key={code} aria-pressed={language===code} className={language===code?'selected':''} onClick={()=>setLanguage(code)} data-testid={`button-language-${code}`}>{label}</button>)}</div>
       <span className="tag" aria-label={t('Prices in Kuwaiti Dinar',language)}>KWD</span>
       <Link href="/cart" className={`icon-button cart-link ${cartPulse?'cart-link-pulse':''}`} aria-label={language==='ar'?`السلة، ${count} عناصر`:`Cart, ${count} items`} data-testid="link-cart"><ShoppingCart key={`cart-icon-${cartPulse?count:'idle'}`} className={cartPulse?'cart-icon-pop':''} size={17}/>{count>0&&<span key={`cart-count-${cartPulse?count:'idle'}`} className={`cart-count ${cartPulse?'cart-count-pop':''}`} data-testid="cart-count">{count}</span>}</Link>
       <button className="icon-button mobile-toggle" aria-label={t(open?'Close navigation':'Open navigation',language)} aria-expanded={open} onClick={()=>setOpen(!open)} data-testid="button-mobile-menu">{open?<X size={18}/>:<Menu size={18}/>}</button>
     </div>
-  </div>{open&&<nav className="mobile-nav" aria-label={t('Mobile navigation',language)}>{nav.map(([label,url])=><Link key={url} href={url} onClick={()=>setOpen(false)} className={`nav-link ${path===url?'active':''}`} data-testid={`mobile-nav-${url.slice(1)}`}>{t(label,language)}</Link>)}</nav>}</header>;
+  </div>{open&&<nav className="mobile-nav" aria-label={t('Mobile navigation',language)}>{nav.map(([label,url])=><Link key={url} href={url} onClick={()=>setOpen(false)} className={`nav-link ${path===url?'active':''}`} data-testid={`mobile-nav-${url.slice(1)}`}>{t(label,language)}</Link>)}{isLoaded&&<Link href={accountHref} onClick={()=>setOpen(false)} className={`nav-link mobile-account-link ${accountActive?'active':''}`} data-testid="mobile-nav-account">{accountLabel}</Link>}</nav>}</header>;
 }
 
 function Footer() {
@@ -327,6 +439,20 @@ function KitsPage({add}:{add:(item:AddItem)=>void}) {
   </>;
 }
 
+function getPriceCsvImportError(error: unknown, language: Language) {
+  const message = error instanceof Error ? error.message : '';
+  const rowError = message.match(/^CSV row (\d+) (is missing an SKU or price|must have a non-negative KWD price with up to 3 decimals|currency must be KWD)\.$/);
+  if (rowError) {
+    return t(`CSV row {row} ${rowError[2]}.`, language).replace('{row}', rowError[1]);
+  }
+  const duplicateSku = message.match(/^CSV contains duplicate SKU (.+)\.$/);
+  if (duplicateSku) return t('CSV contains duplicate SKU {sku}.', language).replace('{sku}', duplicateSku[1]);
+  const translated = t(message, language);
+  return message && translated !== message
+    ? translated
+    : t('CSV could not be imported. Check required columns, row values, KWD prices, and duplicate SKUs.', language);
+}
+
 function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const {language}=useLanguage();
    useDocument(t('Build Assist',language),t('Choose a project and preview its parts and saved prices.',language));
@@ -386,16 +512,23 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
       setPriceImportError(t('Enter a source and last-updated date.',language));
       return;
     }
+    let csv: string;
+    try {
+      csv = await priceFile.text();
+    } catch {
+      setPriceImportError(t('Could not read the selected CSV file. Try again or save it as UTF-8 CSV.', language));
+      return;
+    }
     try{
-      const imported=parseAuthorizedPriceCsv(await priceFile.text());
+      const imported=parseAuthorizedPriceCsv(csv);
       setPriceList({...imported,source:priceSource.trim(),updatedAt:priceUpdatedAt});
       setPriceListRemoved(false);
       setPriceImportError('');
       setPriceFile(null);
       if(priceFileInputRef.current) priceFileInputRef.current.value='';
       setNotice(t('Price list imported.',language));
-    }catch{
-      setPriceImportError(t('Could not import CSV. Check its columns, SKUs, prices, and KWD currency.',language));
+    }catch(error){
+      setPriceImportError(getPriceCsvImportError(error, language));
     }
   };
   const removePriceList=()=>{
@@ -527,7 +660,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
         })}</div>
         <div className="bom-total"><span>{t('Priced parts subtotal',language)} · {assemblies} {t('assemblies',language)}</span><span className="mono" data-testid="text-build-assist-total">{pricedBom.length?fmt(total):'—'}</span></div>
         {priceListIsStale&&<div className="notice" role="alert" data-testid="notice-stale-price-list"><strong>{t('Stale price warning:',language)}</strong> {t('Price list is',language)} {PRICE_LIST_FRESHNESS_DAYS} {t('days old. Verify with the supplier.',language)}</div>}
-   <div className="bom-calculation-note" data-testid="text-price-source">{priceList?<><strong>{t('Price source:',language)}</strong> {priceList.source} · <strong>{t('Last updated:',language)}</strong> {priceList.updatedAt}</>:t('Illustrative catalog prices; supplier CSV overrides them.',language)}</div>
+   <div className="bom-calculation-note" data-testid="text-price-source">{priceList?<><strong>{t('Price source:',language)}</strong> {priceList.source} · <strong>{t('Last updated:',language)}</strong> {priceList.updatedAt}</>:priceListRemoved?t('No current price list loaded. Import a dated, authorized CSV to calculate costs.',language):t('Illustrative catalog prices; supplier CSV overrides them.',language)}</div>
         {unpricedBom.length>0&&<div className="notice" data-testid="notice-unpriced-parts"><strong>{t('Unpriced parts excluded from subtotal:',language)}</strong> {unpricedBom.map(part=>`${part.name} (${part.sku})`).join(', ')}</div>}
         {plan.unpricedRequirements.length>0&&<div className="notice" data-testid="notice-unpriced-requirements"><strong>{t('Not included in parts subtotal:',language)}</strong> {plan.unpricedRequirements.map(requirement=>t(requirement,language)).join(', ')}</div>}
         {pricedBom.length>0&&total>budget&&<div className="notice" data-testid="notice-over-budget">{t('Above budget. Review quantities or choose alternatives.',language)}</div>}
@@ -614,6 +747,7 @@ function checkoutFieldError(field:string,value:string):string|undefined {
 
 function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
   const {language}=useLanguage();
+  const {isLoaded,isSignedIn,user}=useUser();
   useDocument(t('Checkout',language),t('Demo orders are saved in this browser.',language));
   const [placedOrder,setPlacedOrder]=useState<DemoOrder|null>(null);
   const [orderError,setOrderError]=useState('');
@@ -698,6 +832,23 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
       }
     }} data-testid="form-checkout">
       <div className="checkout-form-column">
+        <section className="surface checkout-panel checkout-account-panel" data-testid="checkout-account-options">
+          <div className="checkout-account-copy">
+            <strong>{isLoaded&&isSignedIn?t('Signed in as',language):t('Checkout account',language)}</strong>
+            <span>{isLoaded&&isSignedIn
+              ? user?.primaryEmailAddress?.emailAddress || user?.fullName || t('Your account',language)
+              : t('Sign in or create an account, or continue as a guest.',language)}</span>
+          </div>
+          <div className="checkout-account-actions">
+            {isLoaded&&isSignedIn
+              ? <Link href="/account" className="button button-outline small-button" data-testid="link-checkout-account">{t('Manage account',language)}</Link>
+              : <>
+                  <Link href="/sign-in?returnTo=checkout" className="button button-outline small-button" data-testid="link-checkout-sign-in">{t('Sign in',language)}</Link>
+                  <Link href="/sign-up?returnTo=checkout" className="button button-primary small-button" data-testid="link-checkout-sign-up">{t('Create account',language)}</Link>
+                </>}
+          </div>
+          <p className="checkout-account-note">{t('Guest checkout is available. Demo orders are not saved to your account.',language)}</p>
+        </section>
         <section className="surface checkout-panel">
            <div className="checkout-section-heading"><span className="checkout-step">01</span><div><h2>{t('Contact details',language)}</h2><p>{t('For this demo order.',language)}</p></div></div>
           <div className="checkout-fields">
@@ -738,6 +889,136 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
   </div>;
 }
 
+function AuthPageFrame({title,children}:{title:string;children:ReactNode}) {
+  const {language}=useLanguage();
+  return <div className="container page-top auth-page">
+    <div className="auth-page-heading">
+      <div><div className="eyebrow">{t('Circuits KW account',language)}</div><h1>{t(title,language)}</h1></div>
+      <Link className="checkout-edit-link" href="/">{t('Return to store',language)}</Link>
+    </div>
+    {children}
+  </div>;
+}
+
+function authRedirectPath() {
+  const destination=new URLSearchParams(window.location.search).get('returnTo')==='checkout'?'checkout':'account';
+  return `${basePath}/${destination}`;
+}
+
+function authReturnQuery() {
+  return new URLSearchParams(window.location.search).get('returnTo')==='checkout'?'?returnTo=checkout':'';
+}
+
+function SignInPage() {
+  const {language}=useLanguage();
+  useDocument(t('Sign in',language),t('Sign in to your Circuits KW account.',language));
+  const returnQuery=authReturnQuery();
+  return <AuthPageFrame title="Account access">
+    <div className="auth-clerk-frame" data-testid="page-sign-in">
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={`${basePath}/sign-up${returnQuery}`}
+        forceRedirectUrl={authRedirectPath()}
+        appearance={clerkAppearance}
+      />
+    </div>
+  </AuthPageFrame>;
+}
+
+function SignUpPage() {
+  const {language}=useLanguage();
+  useDocument(t('Create account',language),t('Create a Circuits KW account.',language));
+  const returnQuery=authReturnQuery();
+  return <AuthPageFrame title="Create account">
+    <div className="auth-clerk-frame" data-testid="page-sign-up">
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={`${basePath}/sign-in${returnQuery}`}
+        forceRedirectUrl={authRedirectPath()}
+        appearance={clerkAppearance}
+      />
+    </div>
+  </AuthPageFrame>;
+}
+
+function AccountPage() {
+  const {language}=useLanguage();
+  const {isLoaded,isSignedIn,user}=useUser();
+  useDocument(t('Account',language),t('Your account',language));
+
+  if(!isLoaded) return <AuthPageFrame title="Account"><div className="surface account-panel" aria-live="polite">{t('Loading account…',language)}</div></AuthPageFrame>;
+  if(!isSignedIn||!user) return <AuthPageFrame title="Account">
+    <section className="surface account-panel">
+      <p>{t('Sign in or create an account to view your profile.',language)}</p>
+      <div className="account-actions">
+        <Link href="/sign-in" className="button button-primary">{t('Sign in',language)}</Link>
+        <Link href="/sign-up" className="button button-outline">{t('Create account',language)}</Link>
+      </div>
+    </section>
+  </AuthPageFrame>;
+
+  return <AuthPageFrame title="Your account">
+    <section className="surface account-panel" data-testid="page-account">
+      <div className="account-avatar"><UserRound size={23}/></div>
+      <div className="eyebrow">{t('Account details',language)}</div>
+      <h2>{user.fullName||t('Your account',language)}</h2>
+      <p className="account-email">{user.primaryEmailAddress?.emailAddress}</p>
+      <p className="account-demo-note">{t('Demo orders are not saved to your account.',language)}</p>
+      <div className="account-actions">
+        <Link href="/sign-out" className="button button-outline" data-testid="link-sign-out">{t('Sign out',language)}</Link>
+        <Link href="/" className="button button-quiet">{t('Return to store',language)}</Link>
+      </div>
+    </section>
+  </AuthPageFrame>;
+}
+
+function SignOutPage() {
+  const {language}=useLanguage();
+  const {isLoaded,isSignedIn}=useUser();
+  const {signOut}=useClerk();
+  const [isSigningOut,setIsSigningOut]=useState(false);
+  const [error,setError]=useState('');
+  useDocument(t('Sign out',language),t('Sign out of your Circuits KW account.',language));
+
+  const confirmSignOut=async()=>{
+    setIsSigningOut(true);
+    setError('');
+    try {
+      await signOut({redirectUrl:`${basePath}/`});
+    } catch {
+      setIsSigningOut(false);
+      setError(t('Could not sign out. Please try again.',language));
+    }
+  };
+
+  return <AuthPageFrame title="Sign out">
+    <section className="surface account-panel" data-testid="page-sign-out">
+      {!isLoaded
+        ? <p aria-live="polite">{t('Loading account…',language)}</p>
+        : isSignedIn
+          ? <>
+              <h2>{t('Sign out of your account?',language)}</h2>
+              <p>{t('You can sign in again at any time.',language)}</p>
+              {error&&<div className="checkout-error" role="alert">{error}</div>}
+              <div className="account-actions">
+                <button type="button" className="button button-primary" onClick={confirmSignOut} disabled={isSigningOut} data-testid="button-confirm-sign-out">{t(isSigningOut?'Signing out…':'Sign out',language)}</button>
+                <Link href="/account" className="button button-outline">{t('Cancel',language)}</Link>
+              </div>
+            </>
+          : <>
+              <h2>{t('You are signed out.',language)}</h2>
+              <p>{t('Sign in again or return to the store.',language)}</p>
+              <div className="account-actions">
+                <Link href="/sign-in" className="button button-primary">{t('Sign in',language)}</Link>
+                <Link href="/" className="button button-outline">{t('Return to store',language)}</Link>
+              </div>
+            </>}
+    </section>
+  </AuthPageFrame>;
+}
+
 function Shell({children, count, globalSearch, setGlobalSearch, cartStorageUnavailable}:{children:ReactNode;count:number;globalSearch:string;setGlobalSearch:(v:string)=>void;cartStorageUnavailable:boolean}) {
   const {language}=useLanguage();
   return <><Header count={count} search={globalSearch} onSearch={setGlobalSearch}/>{cartStorageUnavailable&&<div className="storage-warning" role="status" aria-live="polite" data-testid="cart-storage-warning">{t('Browser storage is unavailable. Your cart still works in this tab, but changes may not persist after you leave or reload.',language)}</div>}<main>{children}</main><Footer/></>;
@@ -776,6 +1057,10 @@ function Router({items,add,update,remove,clearCart,search,setSearch,cartStorageU
     <Route path="/about"><AboutPage/></Route>
     <Route path="/cart"><CartPage items={items} update={update} remove={remove}/></Route>
     <Route path="/checkout"><CheckoutPage items={items} clearCart={clearCart}/></Route>
+    <Route path="/sign-in/*?" component={SignInPage}/>
+    <Route path="/sign-up/*?" component={SignUpPage}/>
+    <Route path="/account" component={AccountPage}/>
+    <Route path="/sign-out" component={SignOutPage}/>
     <Route component={NotFound}/>
   </Switch></div></Shell></RoutedErrorBoundary>;
 }
@@ -837,7 +1122,7 @@ function App() {
   const update=(id:string,qty:number)=>setItemsState(old=>qty<=0?old.filter(x=>x.id!==id):old.map(x=>x.id===id?{...x,qty}:x));
   const remove=(id:string)=>setItemsState(old=>old.filter(x=>x.id!==id));
   const clearCart=()=>setItemsState([]);
-  return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/,'')}><Router items={items} add={add} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t('Added to cart',language)}</strong><span>{t(cartNotice.name,language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
+  return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ClerkRouterBridge><Router items={items} add={add} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t('Added to cart',language)}</strong><span>{t(cartNotice.name,language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</ClerkRouterBridge></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
 }
 
 export default App;

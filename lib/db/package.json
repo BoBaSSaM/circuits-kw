@@ -9,11 +9,14 @@
   },
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",
-    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
+    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
+    "seed": "node ./scripts/seed-catalog.mjs",
+    "seed:mongo": "node ./scripts/seed-mongodb.mjs"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
     "drizzle-zod": "^0.8.3",
+    "mongodb": "^7.7.0",
     "pg": "^8.23.0",
     "zod": "catalog:"
   },
