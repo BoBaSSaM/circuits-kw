@@ -402,3 +402,87 @@ test('recovers from malformed saved cart data and keeps valid cart entries uncha
     }
   }
 });
+
+test('keeps cart interactions usable when browser storage reads or writes fail', {
+  timeout: 90_000,
+}, async () => {
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+    cwd: artifactDir,
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let serverOutput = '';
+  serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+  serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+
+  let browser;
+  try {
+    await waitForServer(serverProcess, baseUrl);
+    const executablePath = await findChromiumPath();
+    assert.ok(executablePath, 'Set CHROMIUM_PATH or install Chromium to run browser tests.');
+    browser = await chromium.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+
+    const readFailurePage = await browser.newPage();
+    const readFailureErrors = [];
+    readFailurePage.on('pageerror', (error) => readFailureErrors.push(error.message));
+    await readFailurePage.addInitScript(() => {
+      Storage.prototype.getItem = () => {
+        throw new DOMException('Storage is unavailable', 'SecurityError');
+      };
+    });
+    await readFailurePage.goto(`${baseUrl}/cart`);
+    await readFailurePage.getByTestId('cart-storage-warning').waitFor();
+    await readFailurePage.getByTestId('link-empty-cart-components').click();
+    await readFailurePage.getByTestId('button-add-esp32').click();
+    await readFailurePage.getByTestId('link-cart').click();
+    const addedRow = readFailurePage.getByTestId('row-cart-esp32');
+    await addedRow.waitFor();
+    await readFailurePage.getByTestId('button-increase-esp32').click();
+    assert.equal(await readFailurePage.getByTestId('input-quantity-esp32').inputValue(), '2');
+    await readFailurePage.getByTestId('cart-storage-warning').waitFor();
+    assert.deepEqual(readFailureErrors, []);
+
+    const writeFailurePage = await browser.newPage();
+    const writeFailureErrors = [];
+    writeFailurePage.on('pageerror', (error) => writeFailureErrors.push(error.message));
+    await writeFailurePage.addInitScript((items) => {
+      localStorage.setItem('circuits-kw-cart', JSON.stringify(items));
+      Storage.prototype.setItem = () => {
+        throw new DOMException('Storage is full', 'QuotaExceededError');
+      };
+    }, [{
+      id: 'storage-test-item',
+      name: 'Storage test component',
+      price: 2,
+      kind: 'component',
+      sku: 'STORAGE-001',
+      qty: 1,
+    }]);
+    await writeFailurePage.goto(`${baseUrl}/cart`);
+    await writeFailurePage.getByTestId('cart-storage-warning').waitFor();
+    const savedRow = writeFailurePage.getByTestId('row-cart-storage-test-item');
+    await savedRow.waitFor();
+    await writeFailurePage.getByTestId('button-increase-storage-test-item').click();
+    assert.equal(await writeFailurePage.getByTestId('input-quantity-storage-test-item').inputValue(), '2');
+    assert.equal(await savedRow.locator('.price').innerText(), '4.000 KWD');
+    assert.deepEqual(writeFailureErrors, []);
+  } catch (error) {
+    error.message += `\nVite output:\n${serverOutput}`;
+    throw error;
+  } finally {
+    await browser?.close();
+    serverProcess.kill('SIGTERM');
+    if (serverProcess.exitCode === null) {
+      await Promise.race([
+        new Promise((resolve) => serverProcess.once('exit', resolve)),
+        delay(2_000),
+      ]);
+    }
+  }
+});

@@ -662,6 +662,7 @@ const arabic: Record<string, string> = {
   'Overseas orders can be slow and costly. This demo shows local sourcing.': 'قد تكون الطلبات الخارجية بطيئة ومكلفة. يعرض هذا النموذج فكرة التوريد المحلي.',
   'brings parts and engineering details closer to makers. Fulfillment and pickup are demo concepts only.': 'يقرّب القطع والمعلومات الهندسية من المبتكرين. التوصيل والاستلام فكرتان تجريبيتان فقط.',
   'Only items and totals are saved. Contact details stay private; delivery is not connected.': 'تُحفظ القطع والإجمالي فقط. تبقى بيانات التواصل خاصة؛ التوصيل غير متصل.',
+  'Browser storage is unavailable. Your cart still works in this tab, but changes may not persist after you leave or reload.': 'مساحة تخزين المتصفح غير متاحة. لا تزال سلتك تعمل في علامة التبويب هذه، لكن قد لا تستمر التغييرات بعد مغادرتها أو إعادة تحميلها.',
 };
 
 export function t(text: string, language: Language) {

@@ -34,6 +34,23 @@ type PriceListState = { pricesBySku: Record<string, number>; source: string; upd
 const PRICE_LIST_STORAGE_KEY = 'circuits-kw-build-assist-prices';
 const normalizePriceSku = (sku: string) => sku.trim().toLocaleUpperCase('en-US');
 
+function readBrowserStorage(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeBrowserStorage(key: string, value: string): boolean {
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isSavedCartItem(value: unknown): value is Item {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
@@ -45,14 +62,14 @@ function isSavedCartItem(value: unknown): value is Item {
     && typeof item.qty === 'number' && Number.isFinite(item.qty) && item.qty > 0;
 }
 
-function readSavedCartItems(): Item[] {
-  if (typeof window === 'undefined') return [];
+function readSavedCart(): { items: Item[]; storageAvailable: boolean } {
+  if (typeof window === 'undefined') return { items: [], storageAvailable: true };
   try {
     const saved = window.localStorage.getItem('circuits-kw-cart') || window.localStorage.getItem('voltiva-cart') || '[]';
     const value: unknown = JSON.parse(saved);
-    return Array.isArray(value) ? value.filter(isSavedCartItem) : [];
+    return { items: Array.isArray(value) ? value.filter(isSavedCartItem) : [], storageAvailable: true };
   } catch {
-    return [];
+    return { items: [], storageAvailable: false };
   }
 }
 
@@ -716,13 +733,14 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
   </div>;
 }
 
-function Shell({children, count, globalSearch, setGlobalSearch}:{children:ReactNode;count:number;globalSearch:string;setGlobalSearch:(v:string)=>void}) {
-  return <><Header count={count} search={globalSearch} onSearch={setGlobalSearch}/><main>{children}</main><Footer/></>;
+function Shell({children, count, globalSearch, setGlobalSearch, cartStorageUnavailable}:{children:ReactNode;count:number;globalSearch:string;setGlobalSearch:(v:string)=>void;cartStorageUnavailable:boolean}) {
+  const {language}=useLanguage();
+  return <><Header count={count} search={globalSearch} onSearch={setGlobalSearch}/>{cartStorageUnavailable&&<div className="storage-warning" role="status" aria-live="polite" data-testid="cart-storage-warning">{t('Browser storage is unavailable. Your cart still works in this tab, but changes may not persist after you leave or reload.',language)}</div>}<main>{children}</main><Footer/></>;
 }
 
 function RoutedErrorBoundary({children}:{children:ReactNode}) { const [location]=useLocation(); return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>; }
 
-function Router({items,add,update,remove,clearCart,search,setSearch}:{items:Item[];add:(item:AddItem)=>void;update:(id:string,qty:number)=>void;remove:(id:string)=>void;clearCart:()=>void;search:string;setSearch:(v:string)=>void}) {
+function Router({items,add,update,remove,clearCart,search,setSearch,cartStorageUnavailable}:{items:Item[];add:(item:AddItem)=>void;update:(id:string,qty:number)=>void;remove:(id:string)=>void;clearCart:()=>void;search:string;setSearch:(v:string)=>void;cartStorageUnavailable:boolean}) {
   const [location]=useLocation();
   const count=items.reduce((n,i)=>n+i.qty,0);
   useEffect(()=>{
@@ -745,7 +763,7 @@ function Router({items,add,update,remove,clearCart,search,setSearch}:{items:Item
     });
     return ()=>observer.disconnect();
   },[location]);
-  return <RoutedErrorBoundary><Shell count={count} globalSearch={search} setGlobalSearch={setSearch}><div className="page-transition" key={location}><Switch>
+  return <RoutedErrorBoundary><Shell count={count} globalSearch={search} setGlobalSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}><div className="page-transition" key={location}><Switch>
     <Route path="/" component={HomePage}/>
     <Route path="/components"><CatalogPage add={add} globalSearch={search}/></Route>
     <Route path="/project-kits"><KitsPage add={add}/></Route>
@@ -758,14 +776,23 @@ function Router({items,add,update,remove,clearCart,search,setSearch}:{items:Item
 }
 
 function App() {
-  const [items,setItemsState]=useState<Item[]>(readSavedCartItems);
-  const [language,setLanguage]=useState<Language>(()=>localStorage.getItem('circuits-kw-language')==='ar'?'ar':'en');
+  const [initialCart] = useState(readSavedCart);
+  const [items,setItemsState]=useState<Item[]>(initialCart.items);
+  const [cartStorageUnavailable,setCartStorageUnavailable]=useState(!initialCart.storageAvailable);
+  const [language,setLanguage]=useState<Language>(()=>readBrowserStorage('circuits-kw-language')==='ar'?'ar':'en');
   const [search,setSearch]=useState('');
   const [cartNotice,setCartNotice]=useState<{id:number;name:string}|null>(null);
   const cartNoticeId=useRef(0);
-  useEffect(()=>{localStorage.setItem('circuits-kw-cart',JSON.stringify(items))},[items]);
+  const firstCartSave=useRef(true);
   useEffect(()=>{
-    localStorage.setItem('circuits-kw-language',language);
+    if(firstCartSave.current) {
+      firstCartSave.current=false;
+      if(!initialCart.storageAvailable) return;
+    }
+    setCartStorageUnavailable(!initialCart.storageAvailable || !writeBrowserStorage('circuits-kw-cart',JSON.stringify(items)));
+  },[items,initialCart.storageAvailable]);
+  useEffect(()=>{
+    writeBrowserStorage('circuits-kw-language',language);
     document.documentElement.lang=language;
     document.documentElement.dir=language==='ar'?'rtl':'ltr';
   },[language]);
@@ -782,7 +809,7 @@ function App() {
   const update=(id:string,qty:number)=>setItemsState(old=>qty<=0?old.filter(x=>x.id!==id):old.map(x=>x.id===id?{...x,qty}:x));
   const remove=(id:string)=>setItemsState(old=>old.filter(x=>x.id!==id));
   const clearCart=()=>setItemsState([]);
-  return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/,'')}><Router items={items} add={add} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t('Added to cart',language)}</strong><span>{t(cartNotice.name,language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
+  return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/,'')}><Router items={items} add={add} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t('Added to cart',language)}</strong><span>{t(cartNotice.name,language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
 }
 
 export default App;
