@@ -14,6 +14,7 @@ import {
   clampBuildQuantity,
   inferPartQuantity,
   isPriceListStale,
+  parseAuthorizedPriceCsv,
   PRICE_LIST_FRESHNESS_DAYS,
 } from './build-assist-model';
 import { addCartItem, calculateCartSubtotal } from './cart-model';
@@ -300,8 +301,16 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const [generated,setGenerated]=useState(false);
   const [notice,setNotice]=useState('');
   const [preview,setPreview]=useState<'wiring'|'code'|null>(null);
-  const [priceList]=useState<PriceListState|null>(readSavedPriceList);
+  const [priceList,setPriceList]=useState<PriceListState|null>(readSavedPriceList);
+  const [priceSource,setPriceSource]=useState('');
+  const [priceUpdatedAt,setPriceUpdatedAt]=useState(()=>new Date().toISOString().slice(0,10));
+  const [priceFile,setPriceFile]=useState<File|null>(null);
+  const [priceImportError,setPriceImportError]=useState('');
   const priceListIsStale=priceList!==null&&isPriceListStale(priceList.updatedAt);
+  useEffect(()=>{
+    if(priceList) localStorage.setItem(PRICE_LIST_STORAGE_KEY,JSON.stringify(priceList));
+    else localStorage.removeItem(PRICE_LIST_STORAGE_KEY);
+  },[priceList]);
   useEffect(()=>{setAssemblyOverride(null);setPartQuantities({});setGenerated(false);setNotice('');setPreview(null)},[selectedProjectId]);
   const plan=useMemo(()=>buildPlanFromPrompt(prompt,voltage,products),[prompt,voltage]);
   const bom=plan.parts.map(part=>({
@@ -323,6 +332,29 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
     setGenerated(true);
     setNotice(priceList?t('Estimate recalculated from saved price list and requested quantities.',language):t('Parts list refreshed. No saved price list is available, so parts remain unpriced.',language));
   };
+  const importPriceList=async()=>{
+    if(!priceFile){
+      setPriceImportError(t('Choose a CSV price file first.',language));
+      return;
+    }
+    if(!priceSource.trim()||!priceUpdatedAt){
+      setPriceImportError(t('Enter the supplier or price-list source and its last-updated date.',language));
+      return;
+    }
+    try{
+      const imported=parseAuthorizedPriceCsv(await priceFile.text());
+      setPriceList({...imported,source:priceSource.trim(),updatedAt:priceUpdatedAt});
+      setPriceImportError('');
+      setNotice(t('Price list imported successfully.',language));
+    }catch{
+      setPriceImportError(t('Could not read this CSV price list.',language));
+    }
+  };
+  const removePriceList=()=>{
+    setPriceList(null);
+    setPriceImportError('');
+    setNotice(t('Saved price list removed.',language));
+  };
   const addBom=()=>{
     const items=buildBomCartItems(bom,quantityFor,assemblies);
     items.forEach(add);
@@ -337,6 +369,21 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
       <section>
         <div className="assist-form surface">
           <div className="eyebrow">{t('PROJECT SPECIFICATION',language)}</div>
+          <div className="assist-section" data-testid="section-price-list-import">
+            <label>{t('Use your current KWD prices',language)}</label>
+            <p className="assist-input-hint">{t('Import an authorized supplier CSV. Required columns: sku and price (or unit_price); optional currency values must be KWD. Unmatched SKUs stay unpriced.',language)}</p>
+            <label htmlFor="price-list-source">{t('Supplier or price-list source',language)}</label>
+            <input className="assist-number-input" id="price-list-source" value={priceSource} onChange={event=>setPriceSource(event.target.value)} placeholder={t('Supplier name or price list',language)} data-testid="input-price-list-source"/>
+            <label htmlFor="price-list-updated">{t('Price list last updated',language)}</label>
+            <input className="assist-number-input" id="price-list-updated" type="date" value={priceUpdatedAt} onChange={event=>setPriceUpdatedAt(event.target.value)} data-testid="input-price-list-updated"/>
+            <label htmlFor="price-list-file">{t('CSV price file',language)}</label>
+            <input className="assist-number-input" id="price-list-file" type="file" accept=".csv,text/csv" onChange={event=>setPriceFile(event.target.files?.[0]??null)} data-testid="input-price-list-file"/>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:8}}>
+              <button type="button" className="button button-primary small-button" onClick={importPriceList} data-testid="button-import-price-csv">{t('Import price CSV',language)}</button>
+              {priceList&&<button type="button" className="button button-outline small-button" onClick={removePriceList} data-testid="button-remove-price-list">{t('Remove saved price list',language)}</button>}
+            </div>
+            {priceImportError&&<p role="alert" className="notice" data-testid="error-price-list-import">{priceImportError}</p>}
+          </div>
           <div className="assist-section">
             <div className="assist-project-label" id="ready-project-heading">{t('Choose a ready-to-build project',language)}</div>
              <p className="assist-project-hint">{t('Catalog parts only. Choose a card to update the estimate.',language)}</p>

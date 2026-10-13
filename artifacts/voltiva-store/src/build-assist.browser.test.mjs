@@ -160,3 +160,70 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     }
   }
 });
+
+test('imports a zero-cost supplier CSV row and keeps the BOM item in the cart', {
+  timeout: 90_000,
+}, async () => {
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+    cwd: artifactDir,
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let serverOutput = '';
+  serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+  serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+
+  let browser;
+  try {
+    await waitForServer(serverProcess, baseUrl);
+    const executablePath = await findChromiumPath();
+    assert.ok(executablePath, 'Set CHROMIUM_PATH or install Chromium to run browser tests.');
+    browser = await chromium.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    const page = await browser.newPage();
+    const pageErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    await page.goto(`${baseUrl}/build-assist`);
+    await page.getByTestId('input-price-list-source').fill('Free parts supplier');
+    await page.getByTestId('input-price-list-file').setInputFiles({
+      name: 'free-parts.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('sku,price,currency\nSNS-SOIL-CAP-12,0.000,KWD\n'),
+    });
+    await page.getByTestId('button-import-price-csv').click();
+    await page.getByTestId('status-build-assist').waitFor();
+
+    assert.equal(await page.getByTestId('text-unpriced-soil').count(), 0);
+    assert.equal(await page.getByTestId('text-line-total-soil').innerText(), '0.000 KWD');
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '0.000 KWD');
+    const savedPriceList = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), priceListStorageKey);
+    assert.equal(savedPriceList.pricesBySku['SNS-SOIL-CAP-12'], 0);
+
+    await page.getByTestId('button-add-bom-cart').click();
+    await page.getByTestId('link-cart').click();
+    const zeroCostCartRow = page.getByTestId('row-cart-bom-soil');
+    await zeroCostCartRow.waitFor();
+    assert.equal(await zeroCostCartRow.count(), 1);
+    assert.equal(await zeroCostCartRow.locator('.price').innerText(), '0.000 KWD');
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '0.000 KWD');
+    assert.deepEqual(pageErrors, []);
+  } catch (error) {
+    error.message += `\nVite output:\n${serverOutput}`;
+    throw error;
+  } finally {
+    await browser?.close();
+    serverProcess.kill('SIGTERM');
+    if (serverProcess.exitCode === null) {
+      await Promise.race([
+        new Promise((resolve) => serverProcess.once('exit', resolve)),
+        delay(2_000),
+      ]);
+    }
+  }
+});
