@@ -101,6 +101,48 @@ function stripBasePath(path: string) {
   return path.startsWith(`${basePath}/`) ? path.slice(basePath.length) : path;
 }
 
+function ClerkProfileSync() {
+  const { isLoaded, isSignedIn, user } = useUser();
+  const { language } = useLanguage();
+  const [syncError, setSyncError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user) {
+      setSyncError(false);
+      return;
+    }
+
+    let active = true;
+    setSyncError(false);
+    void fetch(`${basePath}/api/users/me`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+      .then(response => {
+        if (!response.ok) throw new Error('profile_sync_failed');
+        if (active) setSyncError(false);
+      })
+      .catch(() => {
+        if (active) setSyncError(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isLoaded, isSignedIn, user?.id, user?.updatedAt, retryCount]);
+
+  if (!isLoaded || !isSignedIn || !syncError) return null;
+
+  return <div className="profile-sync-warning" role="alert" data-testid="profile-sync-warning">
+    <span>{t('Your account profile could not be saved. Please retry.', language)}</span>
+    <button type="button" onClick={() => setRetryCount(count => count + 1)}>
+      {t('Retry', language)}
+    </button>
+  </div>;
+}
+
 function ClerkRouterBridge({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
   const { language } = useLanguage();
@@ -138,7 +180,7 @@ function ClerkRouterBridge({ children }: { children: ReactNode }) {
     localization={localization}
     routerPush={path => setLocation(stripBasePath(path))}
     routerReplace={path => setLocation(stripBasePath(path), { replace: true })}
-  >{children}</ClerkProvider>;
+  ><ClerkProfileSync />{children}</ClerkProvider>;
 }
 
 function readBrowserStorage(key: string): string | null {

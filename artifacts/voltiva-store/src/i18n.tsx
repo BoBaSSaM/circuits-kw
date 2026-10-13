@@ -54,6 +54,8 @@ const arabic: Record<string, string> = {
   'Sign in to your Circuits KW account.': 'سجّل الدخول إلى حسابك في Circuits KW.',
   'Create a Circuits KW account.': 'أنشئ حساباً في Circuits KW.',
   'Account details': 'بيانات الحساب',
+  'Your account profile could not be saved. Please retry.': 'تعذر حفظ بيانات حسابك. حاول مرة أخرى.',
+  'Retry': 'إعادة المحاولة',
   'Loading account…': 'جارٍ تحميل الحساب…',
   'Sign in or create an account to view your profile.': 'سجّل الدخول أو أنشئ حساباً لعرض ملفك الشخصي.',
   'Demo orders are not saved to your account.': 'الطلبات التجريبية لا تُحفظ في حسابك.',
