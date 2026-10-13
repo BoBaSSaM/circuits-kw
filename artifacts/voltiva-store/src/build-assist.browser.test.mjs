@@ -264,6 +264,28 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     await page.reload();
     await page.getByTestId('link-empty-cart-components').waitFor();
     assert.equal(await page.locator('[data-testid^="row-cart-"]').count(), 0);
+
+    await page.goto(`${baseUrl}/build-assist`);
+    await page.getByTestId('row-bom-esp32').waitFor();
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '1.625 KWD');
+    const previewBeforePriceListRemoval = await page.locator('.assist-output-head p').innerText();
+    await page.getByTestId('button-generate-bom').click();
+    assert.notEqual(await page.locator('.assist-output-head p').innerText(), previewBeforePriceListRemoval);
+    await page.getByTestId('summary-price-list').click();
+    await page.getByTestId('button-remove-price-list').click();
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '6.000 KWD');
+    assert.equal(await page.getByTestId('text-line-total-esp32').innerText(), '2.850 KWD');
+    assert.match(await page.getByTestId('text-price-source').innerText(), /Illustrative catalog prices/);
+    assert.equal(await page.locator('.assist-output-head p').innerText(), previewBeforePriceListRemoval);
+    assert.match(await page.getByTestId('status-build-assist').innerText(), /Price list removed/);
+    assert.match(await page.getByTestId('button-generate-bom').innerText(), /Generate local demo BOM/);
+    await page.waitForFunction((key) => localStorage.getItem(key) === null, priceListStorageKey);
+
+    await page.reload();
+    await page.getByTestId('row-bom-esp32').waitFor();
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '6.000 KWD');
+    assert.match(await page.getByTestId('text-price-source').innerText(), /Illustrative catalog prices/);
+    assert.equal(await page.getByTestId('button-remove-price-list').count(), 0);
     assert.deepEqual(pageErrors, []);
   } catch (error) {
     error.message += `\nVite output:\n${serverOutput}`;

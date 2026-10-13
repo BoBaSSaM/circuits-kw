@@ -399,6 +399,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
     setPriceList(null);
     setPriceSource('');
     setPriceUpdatedAt(new Date().toISOString().slice(0,10));
+    setGenerated(false);
     setPriceFile(null);
     if(priceFileInputRef.current) priceFileInputRef.current.value='';
     setPriceImportError('');
