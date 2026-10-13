@@ -232,6 +232,33 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await editedBomRow.locator('.price').innerText(), '6.500 KWD');
     assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '6.500 KWD');
 
+    const removedBeforeCheckout = {
+      id: 'removed-before-checkout',
+      name: 'Removed before checkout',
+      price: 12.5,
+      kind: 'component',
+      sku: 'REMOVE-001',
+      qty: 2,
+    };
+    await page.evaluate((item) => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      localStorage.setItem('circuits-kw-cart', JSON.stringify([...cart, item]));
+    }, removedBeforeCheckout);
+    await page.reload();
+    await page.getByTestId('row-cart-removed-before-checkout').waitFor();
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '31.500 KWD');
+    await page.getByTestId('button-remove-removed-before-checkout').click();
+    await page.getByTestId('row-cart-removed-before-checkout').waitFor({ state: 'detached' });
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '6.500 KWD');
+    await page.getByTestId('link-checkout').click();
+    const checkoutBomRow = page.getByTestId('row-checkout-bom-esp32');
+    await checkoutBomRow.waitFor();
+    assert.match(await checkoutBomRow.innerText(), /Qty 4/);
+    assert.ok((await checkoutBomRow.innerText()).includes('6.500 KWD'));
+    assert.equal(await page.getByTestId('row-checkout-removed-before-checkout').count(), 0);
+    assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '6.500 KWD');
+
+    await page.getByRole('link', { name: /Edit cart/ }).click();
     await page.getByTestId('button-remove-bom-esp32').click();
     await page.getByTestId('link-empty-cart-components').waitFor();
     await page.reload();

@@ -722,8 +722,8 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
       </div>
       <aside className="surface checkout-summary">
         <div className="eyebrow">{t('YOUR PARTS LIST',language)}</div><h2>{t('Order summary',language)}</h2>
-        <div className="checkout-items">{items.map(item=><div className="checkout-item" key={item.id}><div><strong>{t(item.name,language)}</strong><span>{item.sku} · {t('Qty',language)} {item.qty}</span></div><b>{fmt(item.price*item.qty)}</b></div>)}</div>
-        <div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono">{fmt(subtotal)}</strong></div>
+        <div className="checkout-items">{items.map(item=><div className="checkout-item" key={item.id} data-testid={`row-checkout-${item.id}`}><div><strong>{t(item.name,language)}</strong><span>{item.sku} · {t('Qty',language)} {item.qty}</span></div><b>{fmt(item.price*item.qty)}</b></div>)}</div>
+        <div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono" data-testid="text-checkout-subtotal">{fmt(subtotal)}</strong></div>
         <div className="summary-line"><span>{t('Delivery',language)}</span><span>{t('Not connected',language)}</span></div>
         <div className="summary-line summary-total"><span>{t('Estimated total',language)}</span><span className="mono">{fmt(subtotal)}</span></div>
         <p className="checkout-total-note">{t('Sample KWD prices; delivery fees excluded.',language)}</p>
