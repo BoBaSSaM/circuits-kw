@@ -100,6 +100,34 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     await samplePage.getByTestId('row-cart-bom-esp32').waitFor();
     assert.equal(await samplePage.getByTestId('row-cart-bom-esp32').locator('.price').innerText(), '2.850 KWD');
     assert.equal(await samplePage.locator('.summary-card .summary-total .mono').innerText(), '6.000 KWD');
+    for (const width of [1280, 980, 768, 402, 320]) {
+      await samplePage.setViewportSize({ width, height: 1000 });
+      const sizing = await samplePage.evaluate(() => {
+        const row = document.querySelector('.cart-row');
+        const list = document.querySelector('.cart-list');
+        const summary = document.querySelector('.summary-card');
+        const quantity = row?.querySelector('.quantity');
+        const remove = row?.querySelector('.remove');
+        return {
+          width: window.innerWidth,
+          documentWidth: document.documentElement.scrollWidth,
+          listBottom: list?.getBoundingClientRect().bottom ?? 0,
+          summaryTop: summary?.getBoundingClientRect().top ?? 0,
+          listRight: list?.getBoundingClientRect().right ?? 0,
+          summaryLeft: summary?.getBoundingClientRect().left ?? 0,
+          rowRight: row?.getBoundingClientRect().right ?? 0,
+          quantityRight: quantity?.getBoundingClientRect().right ?? 0,
+          removeRight: remove?.getBoundingClientRect().right ?? 0,
+          priceDisplay: getComputedStyle(row?.querySelector('.price')).display,
+        };
+      });
+      assert.equal(sizing.documentWidth, width, `cart should not overflow at ${width}px`);
+      assert.ok(sizing.quantityRight <= sizing.rowRight, `quantity control should fit at ${width}px`);
+      assert.ok(sizing.removeRight <= sizing.rowRight, `remove control should fit at ${width}px`);
+      if (width <= 980) assert.ok(sizing.summaryTop >= sizing.listBottom, `summary should stack below items at ${width}px`);
+      else assert.ok(sizing.summaryLeft > sizing.listRight, 'desktop summary should sit beside the cart');
+      if (width <= 760) assert.equal(sizing.priceDisplay, 'block', 'mobile cart should keep line prices visible');
+    }
     assert.deepEqual(sampleErrors, []);
     await sampleContext.close();
 
