@@ -241,3 +241,77 @@ test('imports a zero-cost supplier CSV row and keeps the BOM item in the cart', 
     }
   }
 });
+
+test('recovers from malformed saved cart data and keeps valid cart entries unchanged', {
+  timeout: 90_000,
+}, async () => {
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+    cwd: artifactDir,
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let serverOutput = '';
+  serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+  serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+
+  let browser;
+  try {
+    await waitForServer(serverProcess, baseUrl);
+    const executablePath = await findChromiumPath();
+    assert.ok(executablePath, 'Set CHROMIUM_PATH or install Chromium to run browser tests.');
+    browser = await chromium.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    const page = await browser.newPage();
+    const pageErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    await page.goto(`${baseUrl}/cart`);
+    await page.evaluate(() => localStorage.setItem('circuits-kw-cart', '{malformed json'));
+    await page.reload();
+    await page.getByTestId('link-empty-cart-components').waitFor();
+    assert.equal(await page.locator('[data-testid^="row-cart-"]').count(), 0);
+
+    await page.evaluate(() => localStorage.setItem('circuits-kw-cart', JSON.stringify({ items: [] })));
+    await page.reload();
+    await page.getByTestId('link-empty-cart-components').waitFor();
+    assert.equal(await page.locator('[data-testid^="row-cart-"]').count(), 0);
+
+    const validCart = [{
+      id: 'valid-cart-item',
+      name: 'Saved component',
+      price: 1.25,
+      kind: 'component',
+      sku: 'SAVED-001',
+      qty: 3,
+    }];
+    await page.evaluate((items) => localStorage.setItem('circuits-kw-cart', JSON.stringify(items)), [
+      ...validCart,
+      { id: 'invalid-cart-item', name: 'Missing cart fields' },
+    ]);
+    await page.reload();
+    const restoredRow = page.getByTestId('row-cart-valid-cart-item');
+    await restoredRow.waitFor();
+    assert.equal(await restoredRow.locator('.price').innerText(), '3.750 KWD');
+    assert.equal(await page.getByTestId('input-quantity-valid-cart-item').inputValue(), '3');
+    assert.equal(await page.getByTestId('row-cart-invalid-cart-item').count(), 0);
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart'))), validCart);
+    assert.deepEqual(pageErrors, []);
+  } catch (error) {
+    error.message += `\nVite output:\n${serverOutput}`;
+    throw error;
+  } finally {
+    await browser?.close();
+    serverProcess.kill('SIGTERM');
+    if (serverProcess.exitCode === null) {
+      await Promise.race([
+        new Promise((resolve) => serverProcess.once('exit', resolve)),
+        delay(2_000),
+      ]);
+    }
+  }
+});

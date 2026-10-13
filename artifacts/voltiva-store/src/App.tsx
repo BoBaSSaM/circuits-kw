@@ -33,6 +33,29 @@ type Kit = { id: string; code:string; title: string; category: string; level: 'B
 type PriceListState = { pricesBySku: Record<string, number>; source: string; updatedAt: string };
 const PRICE_LIST_STORAGE_KEY = 'circuits-kw-build-assist-prices';
 const normalizePriceSku = (sku: string) => sku.trim().toLocaleUpperCase('en-US');
+
+function isSavedCartItem(value: unknown): value is Item {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.id === 'string' && item.id.length > 0
+    && typeof item.name === 'string' && item.name.length > 0
+    && typeof item.sku === 'string'
+    && (item.kind === 'component' || item.kind === 'kit' || item.kind === 'bom')
+    && typeof item.price === 'number' && Number.isFinite(item.price) && item.price >= 0
+    && typeof item.qty === 'number' && Number.isFinite(item.qty) && item.qty > 0;
+}
+
+function readSavedCartItems(): Item[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const saved = window.localStorage.getItem('circuits-kw-cart') || window.localStorage.getItem('voltiva-cart') || '[]';
+    const value: unknown = JSON.parse(saved);
+    return Array.isArray(value) ? value.filter(isSavedCartItem) : [];
+  } catch {
+    return [];
+  }
+}
+
 function readSavedPriceList(): PriceListState | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -733,7 +756,7 @@ function Router({items,add,update,remove,clearCart,search,setSearch}:{items:Item
 }
 
 function App() {
-  const [items,setItemsState]=useState<Item[]>(()=>{try{return JSON.parse(localStorage.getItem('circuits-kw-cart')||localStorage.getItem('voltiva-cart')||'[]') as Item[]}catch{return[]}});
+  const [items,setItemsState]=useState<Item[]>(readSavedCartItems);
   const [language,setLanguage]=useState<Language>(()=>localStorage.getItem('circuits-kw-language')==='ar'?'ar':'en');
   const [search,setSearch]=useState('');
   const [cartNotice,setCartNotice]=useState<{id:number;name:string}|null>(null);
