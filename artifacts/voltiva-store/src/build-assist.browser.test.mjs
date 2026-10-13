@@ -86,19 +86,38 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
       executablePath,
       args: ['--no-sandbox', '--disable-dev-shm-usage'],
     });
+    const sampleContext = await browser.newContext();
+    const samplePage = await sampleContext.newPage();
+    const sampleErrors = [];
+    samplePage.on('pageerror', (error) => sampleErrors.push(error.message));
+    await samplePage.goto(`${baseUrl}/build-assist`);
+    await samplePage.getByTestId('row-bom-esp32').waitFor();
+    assert.equal(await samplePage.getByTestId('text-build-assist-total').innerText(), '6.000 KWD');
+    assert.match(await samplePage.getByTestId('text-price-source').innerText(), /Illustrative catalog prices/);
+    assert.equal(await samplePage.getByTestId('button-add-bom-cart').isDisabled(), false);
+    await samplePage.getByTestId('button-add-bom-cart').click();
+    await samplePage.getByTestId('link-cart').click();
+    await samplePage.getByTestId('row-cart-bom-esp32').waitFor();
+    assert.equal(await samplePage.getByTestId('row-cart-bom-esp32').locator('.price').innerText(), '2.850 KWD');
+    assert.equal(await samplePage.locator('.summary-card .summary-total .mono').innerText(), '6.000 KWD');
+    assert.deepEqual(sampleErrors, []);
+    await sampleContext.close();
+
     const page = await browser.newPage();
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
 
     await page.goto(`${baseUrl}/build-assist`);
     await page.getByTestId('row-bom-esp32').waitFor();
-    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '—');
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '6.000 KWD');
+    assert.equal(await page.getByTestId('button-add-bom-cart').isDisabled(), false);
+    assert.match(await page.getByTestId('text-price-source').innerText(), /Illustrative catalog prices/);
     const previewDescription = await page.locator('.assist-output-head p').innerText();
     await page.getByTestId('button-generate-bom').click();
     await page.getByTestId('status-build-assist').waitFor();
     assert.notEqual(await page.locator('.assist-output-head p').innerText(), previewDescription);
-    await page.getByTestId('text-unpriced-esp32').waitFor();
-    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '—');
+    assert.match(await page.getByTestId('status-build-assist').innerText(), /illustrative catalog prices/);
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '6.000 KWD');
     const staleUpdatedAt = dateDaysAgo(freshnessPeriodDays);
     const stalePriceList = {
       pricesBySku: { 'ESP32-WRM-32D': 1.625 },

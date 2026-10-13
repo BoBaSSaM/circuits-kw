@@ -339,7 +339,9 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const plan=useMemo(()=>buildPlanFromPrompt(prompt,voltage,products),[prompt,voltage]);
   const bom=plan.parts.map(part=>({
     ...part,
-    price:priceList?.pricesBySku[normalizePriceSku(part.sku)]??null,
+    price:priceList
+      ?(priceList.pricesBySku[normalizePriceSku(part.sku)]??null)
+      :part.price,
   }));
   const assemblies=assemblyOverride??1;
   const quantityFor=(part:Pick<Product,'id'|'category'>)=>clampBuildQuantity(partQuantities[part.id]??inferPartQuantity(prompt,part));
@@ -354,7 +356,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const generate=()=>{
     if(prompt.trim().length<8){setNotice(t('Add a little more detail to describe your hardware idea.',language));return}
     setGenerated(true);
-    setNotice(priceList?t('Estimate recalculated from saved price list and requested quantities.',language):t('Updated. No saved prices; parts stay unpriced.',language));
+    setNotice(priceList?t('Estimate recalculated from saved price list and requested quantities.',language):t('Using illustrative catalog prices; import a supplier CSV for current prices.',language));
   };
   const importPriceList=async()=>{
     if(!priceFile){
@@ -503,7 +505,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
         })}</div>
         <div className="bom-total"><span>{t('Priced parts subtotal',language)} · {assemblies} {t('assemblies',language)}</span><span className="mono" data-testid="text-build-assist-total">{pricedBom.length?fmt(total):'—'}</span></div>
         {priceListIsStale&&<div className="notice" role="alert" data-testid="notice-stale-price-list"><strong>{t('Stale price warning:',language)}</strong> {t('Price list is',language)} {PRICE_LIST_FRESHNESS_DAYS} {t('days old. Verify with the supplier.',language)}</div>}
-   <div className="bom-calculation-note" data-testid="text-price-source">{priceList?<><strong>{t('Price source:',language)}</strong> {priceList.source} · <strong>{t('Last updated:',language)}</strong> {priceList.updatedAt}</>:t('No saved prices. Unpriced parts are excluded.',language)}</div>
+   <div className="bom-calculation-note" data-testid="text-price-source">{priceList?<><strong>{t('Price source:',language)}</strong> {priceList.source} · <strong>{t('Last updated:',language)}</strong> {priceList.updatedAt}</>:t('Illustrative catalog prices; supplier CSV overrides them.',language)}</div>
         {unpricedBom.length>0&&<div className="notice" data-testid="notice-unpriced-parts"><strong>{t('Unpriced parts excluded from subtotal:',language)}</strong> {unpricedBom.map(part=>`${part.name} (${part.sku})`).join(', ')}</div>}
         {plan.unpricedRequirements.length>0&&<div className="notice" data-testid="notice-unpriced-requirements"><strong>{t('Not included in parts subtotal:',language)}</strong> {plan.unpricedRequirements.map(requirement=>t(requirement,language)).join(', ')}</div>}
         {pricedBom.length>0&&total>budget&&<div className="notice" data-testid="notice-over-budget">{t('Above budget. Review quantities or choose alternatives.',language)}</div>}

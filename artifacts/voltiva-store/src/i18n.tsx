@@ -601,6 +601,8 @@ const arabic: Record<string, string> = {
   'days old. Verify with the supplier.': 'يوماً. تحقّق من المورد.',
   'No saved prices. Unpriced parts are excluded.': 'لا توجد أسعار محفوظة. تُستبعد القطع بلا سعر.',
   'Updated. No saved prices; parts remain unpriced.': 'تم التحديث. لا توجد أسعار محفوظة؛ بقيت القطع بلا سعر.',
+  'Using illustrative catalog prices; import a supplier CSV for current prices.': 'تُستخدم أسعار الكتالوج التوضيحية؛ استورد ملف المورد للأسعار الحالية.',
+  'Illustrative catalog prices; supplier CSV overrides them.': 'أسعار كتالوج توضيحية؛ يستبدلها ملف أسعار المورد.',
   'Above budget. Review quantities or choose alternatives.': 'تجاوزت الميزانية. راجع الكميات أو اختر بديلاً.',
   'TP4056: panel ≤6V open-circuit (example: 5V, 1–2W). Verify charging, protection and heat; design not validated.': 'TP4056: جهد اللوح بالدائرة المفتوحة ≤6V (مثال: 5V، 1–2W). تحقّق من الشحن والحماية والحرارة؛ التصميم غير معتمد.',
   'Illustrative only. Verify voltage, current, wiring and datasheets before powering hardware.': 'للتوضيح فقط. تحقّق من الجهد والتيار والتوصيلات وأوراق البيانات قبل تشغيل العتاد.',
