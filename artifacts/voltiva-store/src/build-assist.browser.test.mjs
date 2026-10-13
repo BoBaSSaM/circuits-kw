@@ -164,6 +164,24 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.getByTestId('input-quantity-bom-esp32').inputValue(), '2');
     assert.equal(await restoredBomRow.locator('.price').innerText(), '3.250 KWD');
     assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '3.250 KWD');
+
+    await page.getByTestId('input-quantity-bom-esp32').fill('4');
+    assert.equal(await page.getByTestId('input-quantity-bom-esp32').inputValue(), '4');
+    assert.equal(await restoredBomRow.locator('.price').innerText(), '6.500 KWD');
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '6.500 KWD');
+
+    await page.reload();
+    const editedBomRow = page.getByTestId('row-cart-bom-esp32');
+    await editedBomRow.waitFor();
+    assert.equal(await page.getByTestId('input-quantity-bom-esp32').inputValue(), '4');
+    assert.equal(await editedBomRow.locator('.price').innerText(), '6.500 KWD');
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '6.500 KWD');
+
+    await page.getByTestId('button-remove-bom-esp32').click();
+    await page.getByTestId('link-empty-cart-components').waitFor();
+    await page.reload();
+    await page.getByTestId('link-empty-cart-components').waitFor();
+    assert.equal(await page.locator('[data-testid^="row-cart-"]').count(), 0);
     assert.deepEqual(pageErrors, []);
   } catch (error) {
     error.message += `\nVite output:\n${serverOutput}`;
