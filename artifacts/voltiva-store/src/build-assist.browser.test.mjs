@@ -202,6 +202,8 @@ test('imports a zero-cost supplier CSV row and keeps the BOM item in the cart', 
     page.on('pageerror', (error) => pageErrors.push(error.message));
 
     await page.goto(`${baseUrl}/build-assist`);
+    assert.equal(await page.getByTestId('details-price-list').evaluate((details) => details.open), false);
+    await page.getByTestId('summary-price-list').click();
     await page.getByTestId('input-price-list-source').fill('Free parts supplier');
     await page.getByTestId('input-price-list-file').setInputFiles({
       name: 'free-parts.csv',

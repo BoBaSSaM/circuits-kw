@@ -241,6 +241,21 @@ input:focus,select:focus,textarea:focus { border-color:#00a6c2!important; box-sh
 .assist-section { margin:17px 0; }
 .assist-number-input { display:block; width:100%; max-width:140px; min-height:38px; padding:8px 10px; border:1px solid #dce5ea; border-radius:7px; background:#f7f9fb; font:12px var(--app-font-mono); }
 .assist-input-hint { color:#63717d; font-size:9px; line-height:1.5; margin:6px 0 0; }
+.price-list-details { margin:12px 0 17px; border:1px solid #dfe7eb; border-radius:8px; background:#f8fafb; }
+.price-list-details > summary { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; list-style:none; }
+.price-list-details > summary::-webkit-details-marker { display:none; }
+.price-list-details > summary:focus-visible { outline:2px solid #007b91; outline-offset:2px; border-radius:7px; }
+.price-list-summary-copy { display:flex; min-width:0; flex-direction:column; gap:3px; }
+.price-list-summary-copy strong { font-size:11px; }
+.price-list-summary-copy small { overflow:hidden; color:#63717d; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.price-list-summary-action { color:#007b91; font-size:10px; font-weight:700; white-space:nowrap; }
+.price-list-fields { padding:10px 12px 12px; border-top:1px solid #e3e9ec; }
+.price-list-fields > p { margin:0 0 10px; color:#63717d; font-size:9px; }
+.price-list-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.price-list-grid > div label { display:block; margin:0 0 5px; font-size:10px; font-weight:700; }
+.price-list-grid .assist-number-input { max-width:none; min-height:34px; }
+.price-list-file { grid-column:1 / -1; }
+.price-list-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
 .assist-project-label { font-size:12px; font-weight:700; }
 .assist-project-hint { margin:4px 0 9px; color:#63717d; font-size:9px; line-height:1.5; }
 .build-project-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
@@ -258,6 +273,7 @@ input:focus,select:focus,textarea:focus { border-color:#00a6c2!important; box-sh
 .segmented button { min-height:39px; border:1px solid #e0e7eb; border-radius:7px; background:#fff; font-size:11px; color:#4d5c68; }
 .segmented button.active { background:#101c30; color:#fff; border-color:#101c30; }
 .range-line { display:flex; align-items:center; justify-content:space-between; font-size:11px; margin-bottom:8px; }.range-line strong { font:11px var(--app-font-mono); }
+@media (max-width:600px) { .price-list-grid { grid-template-columns:1fr; }.price-list-file { grid-column:auto; } }
 input[type=range] { width:100%; accent-color:#007b91; }
 .assist-output-head { display:flex; justify-content:space-between; gap:12px; padding-bottom:13px; border-bottom:1px solid #e5eaf0; }
 .assist-output-head h2 { font-size:22px; margin:4px 0 5px; }
