@@ -336,6 +336,100 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
   }
 });
 
+test('reports rejected supplier price imports without replacing saved prices', {
+  timeout: 90_000,
+}, async () => {
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+    cwd: artifactDir,
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let serverOutput = '';
+  serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+  serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+
+  let browser;
+  try {
+    await waitForServer(serverProcess, baseUrl);
+    const executablePath = await findChromiumPath();
+    assert.ok(executablePath, 'Set CHROMIUM_PATH or install Chromium to run browser tests.');
+    browser = await chromium.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    const page = await browser.newPage();
+    const pageErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.goto(`${baseUrl}/build-assist`);
+    await page.getByTestId('row-bom-esp32').waitFor();
+
+    const savedPriceList = {
+      pricesBySku: { 'ESP32-WRM-32D': 1.625 },
+      source: 'Verified supplier list',
+      updatedAt: dateDaysAgo(freshnessPeriodDays),
+    };
+    await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+      key: priceListStorageKey,
+      value: savedPriceList,
+    });
+    await page.reload();
+    await page.getByTestId('summary-price-list').click();
+    await page.getByTestId('input-price-list-source').fill('Replacement supplier');
+    await page.getByTestId('input-price-list-updated').fill(dateDaysAgo(0));
+    await page.getByTestId('input-price-list-file').setInputFiles({
+      name: 'invalid-prices.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('product,cost\nESP32-WRM-32D,9.990\n'),
+    });
+    await page.getByTestId('button-import-price-csv').click();
+    const importError = page.getByTestId('error-price-list-import');
+    await importError.waitFor();
+    assert.match(await importError.innerText(), /Could not import CSV/);
+    assert.deepEqual(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), priceListStorageKey),
+      savedPriceList,
+      'a rejected CSV must not replace saved supplier prices',
+    );
+    assert.match(await page.getByTestId('text-price-source').innerText(), /Verified supplier list/);
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '1.625 KWD');
+
+    await page.getByTestId('input-price-list-source').fill('');
+    await page.getByTestId('button-import-price-csv').click();
+    assert.match(await importError.innerText(), /Enter a source and last-updated date/);
+    assert.deepEqual(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), priceListStorageKey),
+      savedPriceList,
+      'missing supplier source must not replace saved prices',
+    );
+
+    await page.getByTestId('input-price-list-source').fill('Replacement supplier');
+    await page.getByTestId('input-price-list-updated').fill('');
+    await page.getByTestId('button-import-price-csv').click();
+    assert.match(await importError.innerText(), /Enter a source and last-updated date/);
+    assert.deepEqual(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), priceListStorageKey),
+      savedPriceList,
+      'missing update date must not replace saved prices',
+    );
+    assert.deepEqual(pageErrors, []);
+  } catch (error) {
+    error.message += `\nVite output:\n${serverOutput}`;
+    throw error;
+  } finally {
+    await browser?.close();
+    serverProcess.kill('SIGTERM');
+    if (serverProcess.exitCode === null) {
+      await Promise.race([
+        new Promise((resolve) => serverProcess.once('exit', resolve)),
+        delay(2_000),
+      ]);
+    }
+  }
+});
+
 test('uses a saved zero-cost price-list entry and keeps the BOM item in the cart', {
   timeout: 90_000,
 }, async () => {
