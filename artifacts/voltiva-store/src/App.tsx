@@ -14,7 +14,6 @@ import {
   clampBuildQuantity,
   inferPartQuantity,
   isPriceListStale,
-  parseAuthorizedPriceCsv,
   PRICE_LIST_FRESHNESS_DAYS,
 } from './build-assist-model';
 import { addCartItem, calculateCartSubtotal } from './cart-model';
@@ -127,7 +126,7 @@ function Header({ count, search, onSearch }:{count:number; search:string; onSear
   return <header className="site-header"><div className="header-inner">
     <Logo/>
     <nav className="nav-links" aria-label={t('Main navigation',language)}>{nav.map(([label,url])=><Link key={url} href={url} className={`nav-link ${path===url?'active':''}`} data-testid={`nav-${url.slice(1)}`}>{t(label,language)}</Link>)}</nav>
-    <div className="header-search"><Search size={15}/><input aria-label={t('Search components, part numbers, or tools',language)} placeholder={t('Search components, part numbers, or tools...',language)} value={search} onChange={e=>onSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')setLocation('/components')}} data-testid="input-global-search"/></div>
+     <div className="header-search"><Search size={15}/><input aria-label={t('Search parts by name or SKU',language)} placeholder={t('Search parts or SKU…',language)} value={search} onChange={e=>onSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')setLocation('/components')}} data-testid="input-global-search"/></div>
     <div className="header-actions">
       <div className="language-switch" role="group" aria-label={t('Language preference',language)}>{([['en','EN'],['ar','العربية']] as const).map(([code,label])=><button type="button" key={code} aria-pressed={language===code} className={language===code?'selected':''} onClick={()=>setLanguage(code)} data-testid={`button-language-${code}`}>{label}</button>)}</div>
       <span className="tag" aria-label={t('Prices in Kuwaiti Dinar',language)}>KWD</span>
@@ -140,11 +139,11 @@ function Header({ count, search, onSearch }:{count:number; search:string; onSear
 function Footer() {
   const {language}=useLanguage();
   return <footer className="footer"><div className="container">
-    <div className="footer-grid"><div><Logo/><p>{t('Electronic components and practical guidance for engineers, students, and makers in Kuwait.',language)}</p><div className="footer-social"><span>KW</span><span>EST. SHUWAIKH</span><span>HARDWARE / LAB</span></div></div>
+     <div className="footer-grid"><div><Logo/><p>{t('Parts and practical guidance for Kuwait’s makers, students and engineers.',language)}</p><div className="footer-social"><span>KW</span><span>EST. SHUWAIKH</span><span>HARDWARE / LAB</span></div></div>
       <div><h4>{t('Shop',language)}</h4><Link href="/components">{t('Microcontrollers',language)}</Link><Link href="/components">{t('Sensors',language)}</Link><Link href="/components">{t('Components',language)}</Link><Link href="/components">{t('Tools & passives',language)}</Link><Link href="/project-kits">{t('Project Kits',language)}</Link></div>
       <div><h4>{t('Support',language)}</h4><Link href="/about#hub">{t('Contact & local operations',language)}</Link><Link href="/about#delivery">{t('Kuwait delivery overview',language)}</Link><Link href="/build-assist">{t('BOM planning',language)}</Link></div>
       <div><h4>{t('Company & preferences',language)}</h4><Link href="/about">{t('About Circuits KW',language)}</Link><Link href="/cart">{t('Shopping Cart',language)}</Link><span className="footer-note">{t('EN · العربية-ready',language)}</span><span className="footer-note">{t('KWD (Kuwaiti Dinar)',language)}</span></div>
-    </div><div className="footer-bottom"><span>{t('© 2025 Circuits KW. All rights reserved. Made for engineers, students, and makers.',language)}</span><span><i/> {t('Kuwait-local details',language)} &nbsp; | &nbsp; {t('Illustrative catalog data',language)}</span></div>
+     </div><div className="footer-bottom"><span>{t('© 2025 Circuits KW · Built for makers and engineers.',language)}</span><span><i/> {t('Kuwait-local details',language)} &nbsp; | &nbsp; {t('Illustrative catalog data',language)}</span></div>
   </div></footer>;
 }
 
@@ -211,7 +210,7 @@ function HomePage() {
           <article className="surface feature-card assist-feature"><div><div className="feature-icon"><Bot size={23}/></div><h3>{t('Meet Build Assist',language)}</h3><p>{t('Plan a sample BOM, set voltage and budget, then add parts to your cart.',language)}</p></div><div className="feature-arrow"><Link href="/build-assist" data-testid="link-build-assist-feature">{t('Meet Build Assist',language)} <ArrowRight size={16}/></Link><span className="tag">{t('Rule-based local demo',language)}</span></div></article>
       </div>
     </div></section>
-      <section className="section"><div className="container"><div className="dark-cta"><div className="eyebrow" style={{color:'#54d8ec'}}>{t('PARTS · PROJECT KITS · BUILD ASSIST',language)}</div><h2>{t('Your next idea starts with the right parts.',language)}</h2><p>{t('Browse parts or plan a sample BOM. Delivery is only a reference; fulfillment is not connected.',language)}</p><div className="hero-actions"><Link className="button button-primary" href="/components" data-testid="link-start-building">{t('Start building',language)} <ArrowRight size={16}/></Link><Link className="button button-outline" href="/build-assist" data-testid="link-ask-assist">{t('Ask Build Assist',language)}</Link></div><span className="mono" style={{fontSize:10,color:'#bcc8d1'}}>{t('Kuwait City · Hawalli · Shuwaikh · All governorates — reference zones',language)}</span></div></div></section>
+      <section className="section"><div className="container"><div className="dark-cta"><div className="eyebrow" style={{color:'#54d8ec'}}>{t('PARTS · PROJECT KITS · BUILD ASSIST',language)}</div><h2>{t('Your next idea starts with the right parts.',language)}</h2><p>{t('Browse parts or plan a BOM. Delivery is illustrative; fulfillment is not connected.',language)}</p><div className="hero-actions"><Link className="button button-primary" href="/components" data-testid="link-start-building">{t('Start building',language)} <ArrowRight size={16}/></Link><Link className="button button-outline" href="/build-assist" data-testid="link-ask-assist">{t('Ask Build Assist',language)}</Link></div><span className="mono" style={{fontSize:10,color:'#bcc8d1'}}>{t('Kuwait City · Hawalli · Shuwaikh · All governorates — reference zones',language)}</span></div></div></section>
   </>;
 }
 
@@ -231,7 +230,7 @@ function CatalogPage({ add, globalSearch }:{add:(item:AddItem)=>void;globalSearc
    return <div className="container page-top">
      <div className="catalog-breadcrumb"><Link href="/">{t('Home',language)}</Link><span>/</span><span>{t('Components',language)}</span><span>/</span><b>{t('Catalog',language)}</b><span className="sample-sync"><i/> {t('SAMPLE CATALOG DATA',language)}</span></div>
       <div className="page-heading-row"><div><div className="eyebrow">{t('LOCAL INVENTORY · KUWAIT REFERENCE',language)}</div><h1>{t('Electronic components.',language)}</h1><p className="lead" style={{fontSize:14,marginBottom:20}}>{t('Search parts and compare specs. Prices and stock are samples.',language)}</p></div><span className="tag"><MapPin size={12}/> {t('KWD · Kuwait-focused',language)}</span></div>
-     <div className="catalog-search surface"><div className="search-field"><Search size={17}/><input aria-label={t('Search components by name or SKU',language)} placeholder={t('Search boards, sensors, part numbers, interfaces…',language)} value={query} onChange={e=>setQuery(e.target.value)} data-testid="input-component-search"/></div><button className="button button-outline small-button" onClick={reset} data-testid="button-reset-filters"><SlidersHorizontal size={14}/> {t('Reset filters',language)}</button></div>
+      <div className="catalog-search surface"><div className="search-field"><Search size={17}/><input aria-label={t('Search components by name or SKU',language)} placeholder={t('Search components or SKU…',language)} value={query} onChange={e=>setQuery(e.target.value)} data-testid="input-component-search"/></div><button className="button button-outline small-button" onClick={reset} data-testid="button-reset-filters"><SlidersHorizontal size={14}/> {t('Reset filters',language)}</button></div>
      <div className="quick-filters" aria-label={t('Popular categories',language)}>{['All components','Microcontrollers','Sensors','Power & Battery','Passives'].map(c=><button key={c} onClick={()=>setCategory(c)} className={category===c?'active':''} data-testid={`quick-category-${c.toLowerCase().replaceAll(' ','-').replace('&-','')}`}>{t(c,language)}</button>)}</div>
     <div className="catalog-layout">
        <aside className="filter-panel surface" aria-label={t('Catalog filters',language)}>
@@ -279,7 +278,7 @@ function KitsPage({add}:{add:(item:AddItem)=>void}) {
   return <>
        <section className="kit-hero"><div className="container"><div className="eyebrow" style={{color:'#55d7e9'}}>{t('CURATED PROJECT STARTERS · KUWAIT',language)}</div><div className="page-heading-row" style={{alignItems:'center'}}><div><h1>{t('Curated Project Kits.',language)}</h1><p>{t('Six sample kits with BOMs and schematic references. Availability is not live.',language)}</p></div><div className="kit-stats"><div className="kit-stat"><strong>06</strong><span>{t('Sample kits',language)}</span></div><div className="kit-stat"><strong>1–6+ hrs</strong><span>{t('Example build duration',language)}</span></div></div></div></div></section>
      <div className="container"><div className="kit-toolbar surface"><div className="chip-row"><span className="eyebrow" style={{marginRight:4}}>{t('Filter kits',language)}</span>{['All levels','Beginner','Intermediate','Advanced'].map(l=><button key={l} className={`filter-chip ${level===l?'active':''}`} onClick={()=>setLevel(l)} data-testid={`filter-kit-level-${l.toLowerCase()}`}>{t(l,language)}</button>)}</div><div className="chip-row">{kitDomains.map(d=><button key={d} className={`filter-chip ${domain===d?'active':''}`} onClick={()=>setDomain(d)} data-testid={`filter-kit-domain-${d.toLowerCase().replaceAll(' ','-').replace('&-','')}`}>{t(d,language)}</button>)}</div></div>
-       <div className="search-field" style={{marginTop:17}}><Search size={17}/><input placeholder={t('Search kits by project, part or domain…',language)} value={query} onChange={e=>setQuery(e.target.value)} aria-label={t('Search project kits',language)} data-testid="input-kit-search"/></div>
+       <div className="search-field" style={{marginTop:17}}><Search size={17}/><input placeholder={t('Search kits…',language)} value={query} onChange={e=>setQuery(e.target.value)} aria-label={t('Search project kits',language)} data-testid="input-kit-search"/></div>
           {shown.length?<div className="kits-grid">{shown.map(k=>{const kitDescription=t(k.desc,language);return <article className="kit-card surface" key={k.id} data-testid={`card-kit-${k.id}`}><KitArt kit={k}/><div className="kit-body"><div className="kit-code"><span>{k.code}</span><span>{t(k.level==='All levels'?'All Experience Levels':k.level,language)}</span></div><span className="tag" style={{width:'max-content'}}>{t(k.category,language)} · {t(k.duration,language)}</span><h3>{t(k.title,language)}</h3><p className={`kit-description ${expandedKitId===k.id?'expanded':''}`} id={`kit-description-${k.id}`}><span className={`description-copy ${animatedKitId===k.id?'animated':''}`} key={expandedKitId===k.id?'full':'preview'}>{expandedKitId===k.id?kitDescription:kitDescriptionPreview(kitDescription)}</span></p><button className="product-more kit-more" type="button" aria-expanded={expandedKitId===k.id} aria-controls={`kit-description-${k.id}`} onClick={()=>{setExpandedKitId(expandedKitId===k.id?null:k.id);setAnimatedKitId(k.id)}} data-testid={`button-kit-more-${k.id}`}>{t(expandedKitId===k.id?'Show less':'Show more',language)} <span aria-hidden="true">{expandedKitId===k.id?'−':'+'}</span></button><div><div className="filter-title" style={{fontSize:9}}>{t('Core hardware BOM',language)}</div><div className="kit-bom">{k.parts.map(p=><span key={p}>{p}</span>)}</div></div><div className="kit-manual"><BookOpen size={13}/> {t(k.manual,language)}</div><div className="kit-bottom"><span className="mono" style={{fontSize:9,color:'#687680'}}>{t('ILLUSTRATIVE KIT PRICE',language)}</span><span className="price">{fmt(k.price)}</span></div><div className="kit-actions"><button className="button button-outline small-button" onClick={()=>setSelectedKit(k)} data-testid={`button-schematic-${k.id}`}><CircuitBoard size={14}/> {t('Schematic / BOM',language)}</button><button className="button button-primary small-button" onClick={()=>add({id:k.id,name:k.title,price:k.price,kind:'kit',sku:k.code})} data-testid={`button-add-kit-${k.id}`}><ShoppingCart size={14}/> {t('Add Rig',language)}</button></div></div></article>})}</div>:<div className="surface empty-state"><h3>{t('No kits match those filters',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto'}}>{t('Choose another domain or search term.',language)}</p></div>}
     </div>
        {selectedKit&&<div className="dialog-scrim" role="presentation" onClick={e=>{if(e.target===e.currentTarget)setSelectedKit(null)}}><section className="kit-dialog surface" role="dialog" aria-modal="true" aria-labelledby="kit-dialog-title"><button className="icon-button kit-dialog-close" aria-label={t('Close schematic details',language)} onClick={()=>setSelectedKit(null)}><X size={17}/></button><div className="eyebrow">{t('SCHEMATIC REFERENCE · LOCAL DEMO',language)}</div><h2 id="kit-dialog-title">{t(selectedKit.title,language)}</h2><p>{t(selectedKit.desc,language)}</p><div className="schematic-flow"><span>{t('Power / controller',language)}</span><ArrowRight size={15}/><span>{t('Core modules',language)}</span><ArrowRight size={15}/><span>{t('Project output',language)}</span></div><h3>{t('Core hardware BOM',language)} · {t(selectedKit.count,language)}</h3><div className="kit-dialog-bom">{selectedKit.parts.map((part,i)=><div key={part}><span className="mono">0{i+1}</span><b>{part}</b></div>)}</div><p className="disclosure-note">{t('Illustrative only; no downloadable wiring or physical kit.',language)}</p><button className="button button-primary" onClick={()=>{add({id:selectedKit.id,name:selectedKit.title,price:selectedKit.price,kind:'kit',sku:selectedKit.code});setSelectedKit(null)}} data-testid={`button-add-dialog-${selectedKit.id}`}><ShoppingCart size={15}/> {t('Add kit',language)} · {fmt(selectedKit.price)}</button></section></div>}
@@ -301,16 +300,8 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const [generated,setGenerated]=useState(false);
   const [notice,setNotice]=useState('');
   const [preview,setPreview]=useState<'wiring'|'code'|null>(null);
-  const [priceList,setPriceList]=useState<PriceListState|null>(readSavedPriceList);
-  const [priceSource,setPriceSource]=useState('');
-  const [priceUpdatedAt,setPriceUpdatedAt]=useState(()=>new Date().toISOString().slice(0,10));
-  const [priceFile,setPriceFile]=useState<File|null>(null);
-  const [priceImportError,setPriceImportError]=useState('');
+  const [priceList]=useState<PriceListState|null>(readSavedPriceList);
   const priceListIsStale=priceList!==null&&isPriceListStale(priceList.updatedAt);
-  useEffect(()=>{
-    if(priceList) localStorage.setItem(PRICE_LIST_STORAGE_KEY,JSON.stringify(priceList));
-    else localStorage.removeItem(PRICE_LIST_STORAGE_KEY);
-  },[priceList]);
   useEffect(()=>{setAssemblyOverride(null);setPartQuantities({});setGenerated(false);setNotice('');setPreview(null)},[selectedProjectId]);
   const plan=useMemo(()=>buildPlanFromPrompt(prompt,voltage,products),[prompt,voltage]);
   const bom=plan.parts.map(part=>({
@@ -330,30 +321,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const generate=()=>{
     if(prompt.trim().length<8){setNotice(t('Add a little more detail to describe your hardware idea.',language));return}
     setGenerated(true);
-    setNotice(priceList?t('Estimate recalculated from saved price list and requested quantities.',language):t('Parts list refreshed. No saved price list is available, so parts remain unpriced.',language));
-  };
-  const importPriceList=async()=>{
-    if(!priceFile){
-      setPriceImportError(t('Choose a CSV price file first.',language));
-      return;
-    }
-    if(!priceSource.trim()||!priceUpdatedAt){
-      setPriceImportError(t('Enter the supplier or price-list source and its last-updated date.',language));
-      return;
-    }
-    try{
-      const imported=parseAuthorizedPriceCsv(await priceFile.text());
-      setPriceList({...imported,source:priceSource.trim(),updatedAt:priceUpdatedAt});
-      setPriceImportError('');
-      setNotice(t('Price list imported successfully.',language));
-    }catch{
-      setPriceImportError(t('Could not read this CSV price list.',language));
-    }
-  };
-  const removePriceList=()=>{
-    setPriceList(null);
-    setPriceImportError('');
-    setNotice(t('Saved price list removed.',language));
+    setNotice(priceList?t('Estimate recalculated from saved price list and requested quantities.',language):t('Updated. No saved prices; parts stay unpriced.',language));
   };
   const addBom=()=>{
     const items=buildBomCartItems(bom,quantityFor,assemblies);
@@ -363,27 +331,12 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   return <div className="container page-top">
     <div className="eyebrow">{t('LOCAL PROJECT PLANNER · KUWAIT',language)}</div>
     <h1 style={{fontSize:'clamp(33px,4vw,48px)'}}>{t('Build Assist:',language)} <span style={{color:'#00687b'}}>{t('choose a project.',language)}</span></h1>
-     <p className="lead">{t('Choose a project to preview parts and estimates. Not live stock or engineering advice.',language)}</p>
+     <p className="lead">{t('Choose a project to see parts and estimates. Stock and compatibility are not verified.',language)}</p>
      <div className="tag" style={{margin:'13px 0 20px'}}><Info size={13}/> {t('Sample data · saved prices when available · verify electrical compatibility.',language)}</div>
     <div className="assist-layout">
       <section>
         <div className="assist-form surface">
           <div className="eyebrow">{t('PROJECT SPECIFICATION',language)}</div>
-          <div className="assist-section" data-testid="section-price-list-import">
-            <label>{t('Use your current KWD prices',language)}</label>
-            <p className="assist-input-hint">{t('Import an authorized supplier CSV. Required columns: sku and price (or unit_price); optional currency values must be KWD. Unmatched SKUs stay unpriced.',language)}</p>
-            <label htmlFor="price-list-source">{t('Supplier or price-list source',language)}</label>
-            <input className="assist-number-input" id="price-list-source" value={priceSource} onChange={event=>setPriceSource(event.target.value)} placeholder={t('Supplier name or price list',language)} data-testid="input-price-list-source"/>
-            <label htmlFor="price-list-updated">{t('Price list last updated',language)}</label>
-            <input className="assist-number-input" id="price-list-updated" type="date" value={priceUpdatedAt} onChange={event=>setPriceUpdatedAt(event.target.value)} data-testid="input-price-list-updated"/>
-            <label htmlFor="price-list-file">{t('CSV price file',language)}</label>
-            <input className="assist-number-input" id="price-list-file" type="file" accept=".csv,text/csv" onChange={event=>setPriceFile(event.target.files?.[0]??null)} data-testid="input-price-list-file"/>
-            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:8}}>
-              <button type="button" className="button button-primary small-button" onClick={importPriceList} data-testid="button-import-price-csv">{t('Import price CSV',language)}</button>
-              {priceList&&<button type="button" className="button button-outline small-button" onClick={removePriceList} data-testid="button-remove-price-list">{t('Remove saved price list',language)}</button>}
-            </div>
-            {priceImportError&&<p role="alert" className="notice" data-testid="error-price-list-import">{priceImportError}</p>}
-          </div>
           <div className="assist-section">
             <div className="assist-project-label" id="ready-project-heading">{t('Choose a ready-to-build project',language)}</div>
              <p className="assist-project-hint">{t('Catalog parts only. Choose a card to update the estimate.',language)}</p>
@@ -427,7 +380,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
       </section>
       <section className="bom-panel surface" aria-label={t('Demo bill of materials',language)} data-testid="panel-demo-bom">
         <div className="assist-output-head">
-          <div><div className="eyebrow" style={{color:'#9a4600'}}>{t('SAMPLE OUTPUT · NOT VERIFIED',language)}</div><h2>{t(selectedProject.title,language)}</h2><p>{generated?t(selectedProject.description,language):t('Select a project card to preview its catalog parts. No external service is involved.',language)}</p></div>
+          <div><div className="eyebrow" style={{color:'#9a4600'}}>{t('SAMPLE OUTPUT · NOT VERIFIED',language)}</div><h2>{t(selectedProject.title,language)}</h2><p>{generated?t(selectedProject.description,language):t('Choose a project to preview catalog parts.',language)}</p></div>
           <span className="demo-stamp">{t('LOCAL DEMO',language)}</span>
         </div>
         <div className="diagram">
@@ -457,12 +410,12 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
         })}</div>
         <div className="bom-total"><span>{t('Priced parts subtotal',language)} · {assemblies} {t('assemblies',language)}</span><span className="mono" data-testid="text-build-assist-total">{pricedBom.length?fmt(total):'—'}</span></div>
         {priceListIsStale&&<div className="notice" role="alert" data-testid="notice-stale-price-list"><strong>{t('Stale price warning:',language)}</strong> {t('Price list is',language)} {PRICE_LIST_FRESHNESS_DAYS} {t('days old. Verify with the supplier.',language)}</div>}
-        <div className="bom-calculation-note" data-testid="text-price-source">{priceList?<><strong>{t('Price source:',language)}</strong> {priceList.source} · <strong>{t('Last updated:',language)}</strong> {priceList.updatedAt}</>:t('No saved price list is available; parts without prices are excluded from the subtotal.',language)}</div>
+   <div className="bom-calculation-note" data-testid="text-price-source">{priceList?<><strong>{t('Price source:',language)}</strong> {priceList.source} · <strong>{t('Last updated:',language)}</strong> {priceList.updatedAt}</>:t('No saved prices. Unpriced parts are excluded.',language)}</div>
         {unpricedBom.length>0&&<div className="notice" data-testid="notice-unpriced-parts"><strong>{t('Unpriced parts excluded from subtotal:',language)}</strong> {unpricedBom.map(part=>`${part.name} (${part.sku})`).join(', ')}</div>}
         {plan.unpricedRequirements.length>0&&<div className="notice" data-testid="notice-unpriced-requirements"><strong>{t('Not included in parts subtotal:',language)}</strong> {plan.unpricedRequirements.map(requirement=>t(requirement,language)).join(', ')}</div>}
         {pricedBom.length>0&&total>budget&&<div className="notice" data-testid="notice-over-budget">{t('Above budget. Review quantities or choose alternatives.',language)}</div>}
-        {plan.isSolar&&<div className="notice"><strong>{t('Solar charging note:',language)}</strong> {t('Use a TP4056 panel at ≤6V open-circuit. Example: 5V, 1–2W. Verify charging, protection and heat; this is not validated.',language)}</div>}
-        <div className="notice"><strong>{t('Electrical safety:',language)}</strong> {t('Illustrative only. Verify voltage, current, wiring and datasheets before powering hardware.',language)}</div>
+        {plan.isSolar&&<div className="notice"><strong>{t('Solar charging note:',language)}</strong> {t('TP4056: panel ≤6V open-circuit (example 5V, 1–2W). Verify charging, protection and heat; design unvalidated.',language)}</div>}
+         <div className="notice"><strong>{t('Electrical safety:',language)}</strong> {t('Illustrative only. Verify voltage, current, wiring and datasheets before powering hardware.',language)}</div>
         <div className="assist-output-actions">
           <button className="button button-outline small-button" onClick={()=>setPreview(preview==='wiring'?null:'wiring')} data-testid="button-preview-wiring"><CircuitBoard size={14}/> {t('Wiring diagram',language)}</button>
           <button className="button button-outline small-button" onClick={()=>setPreview(preview==='code'?null:'code')} data-testid="button-preview-code"><BookOpen size={14}/> {t('Starter code preview',language)}</button>
@@ -474,7 +427,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
         <button className="button button-primary" style={{width:'100%'}} onClick={addBom} disabled={!pricedBom.length} data-testid="button-add-bom-cart"><ShoppingCart size={16}/> {t('Add priced BOM items to cart',language)} · {pricedBom.length?fmt(total):'—'}</button>
       </section>
     </div>
-    <div className="assist-delivery-reference"><div><span className="eyebrow">{t('KUWAIT DELIVERY REFERENCE',language)}</span><strong>{t('Same-day dispatch concept · 15:00 AST cutoff',language)}</strong><span>{t('Shuwaikh hub is a reference only; delivery and pickup are not connected.',language)}</span></div><Link href="/about#delivery" className="button button-outline small-button" data-testid="link-assist-delivery">{t('View sample zones',language)} <ArrowRight size={13}/></Link></div>
+     <div className="assist-delivery-reference"><div><span className="eyebrow">{t('KUWAIT DELIVERY REFERENCE',language)}</span><strong>{t('Same-day dispatch concept · 15:00 AST cutoff',language)}</strong><span>{t('Shuwaikh hub is a reference only; delivery and pickup are not connected.',language)}</span></div><Link href="/about#delivery" className="button button-outline small-button" data-testid="link-assist-delivery">{t('View sample zones',language)} <ArrowRight size={13}/></Link></div>
   </div>;
 }
 
@@ -483,11 +436,11 @@ function AboutPage() {
   useDocument(t('About Circuits KW',language),t('Parts, kits and local operations information for Kuwait.',language));
   const pillars=[['100% Genuine OEM Components','Source from authorized distributors; avoid gray-market and counterfeit parts.'],['Lab-Verified Datasheets & Pinouts','Key specs and pinouts for sensors, boards and level shifters.'],['Same-Day Local Dispatch','Sample 15:00 dispatch concept. No courier service is active.'],['Maker & University Support','For student projects, labs and local hardware teams.']];
   return <>
-      <section className="about-hero"><div className="container"><div className="eyebrow">{t('STATE OF KUWAIT · HARDWARE & LOCAL OPERATIONS',language)}</div><div className="about-grid"><div><h1>{t('Hardware innovation in Kuwait, from labs to prototypes.',language)}</h1><p className="lead">{t('Parts, kits and engineering info for Kuwait’s makers and teams. Prices, stock and operations are illustrative.',language)}</p><span className="mono" style={{fontSize:10,color:'#64727d'}}>{t('LOCAL-FIRST · KWD · ENGLISH / العربية-READY',language)}</span></div><div className="about-stats surface"><div className="filter-title">{t('Kuwait operations reference',language)}</div><div className="stat-pair"><div><strong>Shuwaikh</strong><span>{t('Example hub location',language)}</span></div><div><strong>AST +03</strong><span>{t('Kuwait local time',language)}</span></div></div><span className="mono">{t('No account, shipping service, payment or live inventory is connected.',language)}</span></div></div>
+      <section className="about-hero"><div className="container"><div className="eyebrow">{t('STATE OF KUWAIT · HARDWARE & LOCAL OPERATIONS',language)}</div><div className="about-grid"><div><h1>{t('Hardware innovation in Kuwait, from labs to prototypes.',language)}</h1><p className="lead">{t('Parts, kits and specs for Kuwait’s makers. Prices, stock and operations are illustrative.',language)}</p><span className="mono" style={{fontSize:10,color:'#64727d'}}>{t('LOCAL-FIRST · KWD · ENGLISH / العربية-READY',language)}</span></div><div className="about-stats surface"><div className="filter-title">{t('Kuwait operations reference',language)}</div><div className="stat-pair"><div><strong>Shuwaikh</strong><span>{t('Example hub location',language)}</span></div><div><strong>AST +03</strong><span>{t('Kuwait local time',language)}</span></div></div><span className="mono">{t('No account, shipping service, payment or live inventory is connected.',language)}</span></div></div>
        <div className="photo-strip"><div className="photo-panel"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuAOTORl_9CZpLmAwLhwVfBFB5ybinplJ3eM55r1M3DB4wK4b__OijqgC13WzPx7prHaXyIn3LVD74MEVX4lbJclBczJwnnSDJ31wQEMQTbupW9DM0WWW-h-LXxhPxSYsf0XU8Qu9e51ulGkefIzX4IMY3FYTRAn8N0ms2n5afBPDXzEGT7qFQ1NtJlyNnuNux_lsjfhhxf9iLZwfSAGI00TZb6uq5HYff0YVW8jOLws7qvRhI91LPeGtg" alt="" loading="lazy"/><div className="photo-caption"><span>{t('Local engineering context',language)}</span><b>{t('Test-bench thinking',language)}</b></div></div><div className="photo-panel"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuBent9Os7OUsL5ECe-pfG3Oq-_zTnZEr1c_pC8299wpEF8XlcsXukh-lOfP0n5kQeFikYA0gsAKNZ3eKBaHYj3uWEJyoPIQS9fhQMIRSWOgNrMCfeFVnFrbrGzT0hfu6_JdQP3r3tYVFXz3CLcbKNu3pAXBsz9G-l0szXlPSPoGf4ot5LOnkO_ARQb8tCvAgUkkFhWhsWdIt16cjkkXxdYfZ7487xGWc8qMKy3cw50A4SFP0IjgA5X1ZQ" alt="" loading="lazy"/><div className="photo-caption"><span>{t('Parts organization',language)}</span><b>{t('Ready for the workbench',language)}</b></div></div><div className="photo-panel"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPST6SmLa4prqF2kH9-dLdulQoTHGwTkYaFiJhhQhet5MFJLjY8IK-HNA7FCsaz0esaijTWJB6RbiQ7pfwHodNHq6KSwvK59ovbvxBnf2qUptZz6_-LJdDcbXlYwffjTyc85DgWqvH8NNmoD5400DiXPv57LmO0M-A80qeIcmV4vKVt8DHm_CTZbZUYRPJlUcwwGuwS6GMPNKxqSjf0z1-p1fAGQZQsueCLqdlVrqV0xEdoaxHsI-PWw" alt="" loading="lazy"/><div className="photo-caption"><span>{t('Academia & makers',language)}</span><b>{t('Capstone build support',language)}</b></div></div></div>
     </div></section>
-      <section className="section" id="delivery"><div className="container mission-layout"><div><div className="eyebrow">{t('SECTION 01 // CORE MISSION',language)}</div><h2>{t('Hardware sourcing, closer to the workbench.',language)}</h2><p className="lead" style={{fontSize:14}}>{t('Overseas orders can be slow and costly. This demo presents a local sourcing concept.',language)}</p><p style={{fontSize:13,lineHeight:1.7,color:'#576671'}}><strong>Circuits KW</strong> {t('aims to make parts and engineering details easier to find. Fulfillment and pickup are demo concepts only.',language)}</p><div className="arabic-note" dir={language==='ar'?'rtl':'ltr'} lang={language}><strong style={{color:'#00687b'}}>{t('Our mission in Kuwait',language)}</strong><p style={{fontSize:13,margin:'6px 0 0'}}>{t('Clear parts, kits and KWD pricing for Kuwait’s engineers, students and makers.',language)}</p></div></div>
-        <div className="surface" style={{padding:19}}><div className="eyebrow">{t('KUWAIT DELIVERY OVERVIEW · REFERENCE ONLY',language)}</div><h3 style={{margin:'11px 0 5px'}}>{t('Kuwait Same-Day Dispatch Map',language)}</h3><p style={{fontSize:11,color:'#67747e',marginBottom:15}}>{t('Sample routes only. No courier or live order data; cutoff 15:00 AST.',language)}</p><div className="coverage-grid">{[['Capital & Hawalli','Sharq · Shuwaikh · Jabriya · Hawalli · Salmiya','~2–3 hours · sample evening express'],['Ahmadi & Mubarak','Fintas · Egaila · Mahboula · Mangaf · Sabah Al-Salem','Same afternoon · sample scheduled route'],['Jahra & outlying','Jahra · Saad Al-Abdullah · Amghara · Sulaibiya','18:00 route · illustrative timing']].map(([a,b,c])=><div className="coverage-card surface" key={a}><strong>{t(a,language)}</strong><p>{t(b,language)}</p><span>{t(c,language)}</span></div>)}</div><div className="sample-performance"><div><strong>99.4%</strong><span>{t('sample on-schedule reference figure',language)}</span></div><div className="sample-bar"><i/></div><p>{t('Illustrative timing only—not live service data.',language)}</p></div><div style={{marginTop:13,padding:12,background:'#f2f5f7',borderRadius:7,fontSize:11,color:'#51616d'}}><Truck size={14} style={{verticalAlign:'middle',marginRight:6}}/>{t('Shuwaikh pickup and courier logistics are reference details, not a connected fulfillment service.',language)}</div></div>
+      <section className="section" id="delivery"><div className="container mission-layout"><div><div className="eyebrow">{t('SECTION 01 // CORE MISSION',language)}</div><h2>{t('Hardware sourcing, closer to the workbench.',language)}</h2><p className="lead" style={{fontSize:14}}>{t('Overseas orders can be slow and costly. This demo shows local sourcing.',language)}</p><p style={{fontSize:13,lineHeight:1.7,color:'#576671'}}><strong>Circuits KW</strong> {t('brings parts and engineering details closer to makers. Fulfillment and pickup are demo concepts only.',language)}</p><div className="arabic-note" dir={language==='ar'?'rtl':'ltr'} lang={language}><strong style={{color:'#00687b'}}>{t('Our mission in Kuwait',language)}</strong><p style={{fontSize:13,margin:'6px 0 0'}}>{t('Clear parts, kits and KWD pricing for Kuwait’s engineers, students and makers.',language)}</p></div></div>
+        <div className="surface" style={{padding:19}}><div className="eyebrow">{t('KUWAIT DELIVERY OVERVIEW · REFERENCE ONLY',language)}</div><h3 style={{margin:'11px 0 5px'}}>{t('Kuwait Same-Day Dispatch Map',language)}</h3><p style={{fontSize:11,color:'#67747e',marginBottom:15}}>{t('Sample routes only. No courier or live order data; cutoff 15:00 AST.',language)}</p><div className="coverage-grid">{[['Capital & Hawalli','Sharq · Shuwaikh · Jabriya · Hawalli · Salmiya','~2–3 hours · sample evening express'],['Ahmadi & Mubarak','Fintas · Egaila · Mahboula · Mangaf · Sabah Al-Salem','Same afternoon · sample scheduled route'],['Jahra & outlying','Jahra · Saad Al-Abdullah · Amghara · Sulaibiya','18:00 route · illustrative timing']].map(([a,b,c])=><div className="coverage-card surface" key={a}><strong>{t(a,language)}</strong><p>{t(b,language)}</p><span>{t(c,language)}</span></div>)}</div><div className="sample-performance"><div><strong>99.4%</strong><span>{t('sample on-schedule reference figure',language)}</span></div><div className="sample-bar"><i/></div><p>{t('Illustrative timing only—not live service data.',language)}</p></div><div style={{marginTop:13,padding:12,background:'#f2f5f7',borderRadius:7,fontSize:11,color:'#51616d'}}><Truck size={14} style={{verticalAlign:'middle',marginRight:6}}/>{t('Shuwaikh pickup and courier are demo concepts, not active services.',language)}</div></div>
     </div></section>
       <section className="section feature-section"><div className="container"><div className="eyebrow">{t('SECTION 02 // ENGINEERING ASSURANCE',language)}</div><h2>{t('The Four Circuits KW Pillars',language)}</h2><div className="pillar-grid" style={{marginTop:20}}>{pillars.map(([title,desc],i)=><article className="surface pillar-card" key={title}><span className="feature-icon"><span className="mono">0{i+1}</span></span><h3>{t(title,language)}</h3><p>{t(desc,language)}</p><span className="mono" style={{fontSize:9,color:'#007b91'}}>{t('CIRCUITS KW / FIELD NOTE',language)}</span></article>)}</div></div></section>
        <section className="section" id="hub"><div className="container"><div className="eyebrow">{t('SECTION 03 // PHYSICAL COUNTER & FACILITY',language)}</div><h2>{t('Shuwaikh Hub & Operations',language)}</h2><p className="disclosure-note">{t('Illustrative details only; no active hub, support, delivery or payment service.',language)}</p><div className="mission-layout" style={{marginTop:20}}><div style={{display:'grid',gap:12}}><article className="surface" style={{padding:17}}><h3><MapPin size={17} style={{verticalAlign:'middle',color:'#007b91',marginRight:7}}/>{t('Physical hub & express pickup',language)}</h3><p style={{fontSize:12,color:'#61717d',lineHeight:1.6,margin:0}}>{t('Reference address and facility concept; no physical hub or inspection service.',language)}</p><span className="ops-chip">{t('Reference zone · Industrial 1',language)}</span></article><article className="surface" style={{padding:17}}><h3><Gauge size={17} style={{verticalAlign:'middle',color:'#007b91',marginRight:7}}/>{t('Lab hours concept',language)}</h3><div className="summary-line"><span>{t('Saturday – Thursday',language)}</span><strong>09:00–21:00 AST</strong></div><div className="summary-line"><span>{t('Friday',language)}</span><strong>{t('Closed · restock reference',language)}</strong></div></article><article className="surface" style={{padding:17}}><h3><LifeBuoy size={17} style={{verticalAlign:'middle',color:'#007b91',marginRight:7}}/>{t('Technical contact lines',language)}</h3><p style={{fontSize:12,color:'#61717d',margin:0}}>{t('Contact details are not available in this demo.',language)}</p></article></div><div className="map-panel" aria-label={t('Illustrative Kuwait local delivery map',language)}><div className="map-route"/><span className="map-pin one"/><span className="map-pin two"/><span className="map-pin three"/><span className="tag" style={{position:'absolute',top:13,left:13}}><MapPin size={12}/> {t('KUWAIT · ROUTE ILLUSTRATION',language)}</span><span className="mono" style={{position:'absolute',bottom:14,right:14,fontSize:10,color:'#536972'}}>{t('SHUWAIKH HUB → GOVERNORATES',language)}</span></div></div><div className="partner-note">{t('University names are illustrative; no affiliation is implied.',language)}</div></div></section>
@@ -496,12 +449,12 @@ function AboutPage() {
 
 function CartPage({items,update,remove}:{items:Item[];update:(id:string,qty:number)=>void;remove:(id:string)=>void}) {
   const {language}=useLanguage();
-  useDocument(t('Shopping cart',language),t('Review and update your local Circuits KW cart. Demo orders are saved only in this browser; no payment is taken.',language));
+  useDocument(t('Shopping cart',language),t('Review your cart. Demo orders stay in this browser; no payment is taken.',language));
   const subtotal=calculateCartSubtotal(items);
-  return <div className="container page-top"><div className="eyebrow">{t('YOUR BUILD / LOCAL CART',language)}</div><h1 style={{fontSize:38}}>{t('Cart review',language)}</h1><p className="lead" style={{fontSize:14}}>{t('You can place a local demo order. No payment, shipping or real fulfillment is connected.',language)}</p>
-    {!items.length?<div className="surface empty-state"><div className="empty-icon"><ShoppingCart size={23}/></div><h3>{t('Your cart is ready for a build.',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Add components, a project kit or a demo BOM to keep your parts list together.',language)}</p><div style={{display:'flex',justifyContent:'center',gap:9,flexWrap:'wrap'}}><Link className="button button-primary" href="/components" data-testid="link-empty-cart-components">{t('Browse components',language)}</Link><Link className="button button-outline" href="/project-kits" data-testid="link-empty-cart-kits">{t('Explore kits',language)}</Link></div></div>:
+  return <div className="container page-top"><div className="eyebrow">{t('YOUR BUILD / LOCAL CART',language)}</div><h1 style={{fontSize:38}}>{t('Cart review',language)}</h1><p className="lead" style={{fontSize:14}}>{t('Place a demo order. Payment and shipping are not connected.',language)}</p>
+    {!items.length?<div className="surface empty-state"><div className="empty-icon"><ShoppingCart size={23}/></div><h3>{t('Your cart is ready for a build.',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Add parts or a kit to your cart.',language)}</p><div style={{display:'flex',justifyContent:'center',gap:9,flexWrap:'wrap'}}><Link className="button button-primary" href="/components" data-testid="link-empty-cart-components">{t('Browse components',language)}</Link><Link className="button button-outline" href="/project-kits" data-testid="link-empty-cart-kits">{t('Explore kits',language)}</Link></div></div>:
       <div className="cart-layout"><section className="cart-list surface" aria-label={t('Cart items',language)}>{items.map(i=><article className="cart-row" key={i.id} data-testid={`row-cart-${i.id}`}><div className="cart-product"><span className="cart-thumb">{i.kind==='kit'?<PackageCheck size={22}/>:i.kind==='bom'?<CircuitBoard size={22}/>:<Cpu size={22}/>}</span><span><strong>{t(i.name,language)}</strong><span>{i.sku} · {t(i.kind==='kit'?'Project kit':i.kind==='bom'?'Build Assist demo item':'Component',language)}</span></span></div><div className="quantity" aria-label={`${t('Quantity',language)} ${t(i.name,language)}`}><button aria-label={t('Decrease quantity',language)} onClick={()=>update(i.id,i.qty-1)} data-testid={`button-decrease-${i.id}`}><Minus size={12}/></button><input aria-label={`${t('Quantity',language)} ${t(i.name,language)}`} type="number" min="1" value={i.qty} onChange={e=>update(i.id,Math.max(1,Number(e.target.value)||1))} data-testid={`input-quantity-${i.id}`}/><button aria-label={t('Increase quantity',language)} onClick={()=>update(i.id,i.qty+1)} data-testid={`button-increase-${i.id}`}><Plus size={12}/></button></div><span className="price">{fmt(i.price*i.qty)}</span><button className="remove" aria-label={`${t('Remove',language)} ${t(i.name,language)}`} onClick={()=>remove(i.id)} data-testid={`button-remove-${i.id}`}><Trash2 size={16}/></button></article>)}</section>
-        <aside className="summary-card surface"><div className="eyebrow">{t('CART SUMMARY',language)}</div><div className="summary-line"><span>{t('Items',language)}</span><strong>{items.reduce((n,i)=>n+i.qty,0)}</strong></div><div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono">{fmt(subtotal)}</strong></div><div className="summary-line"><span>{t('Delivery',language)}</span><span>{t('Not connected',language)}</span></div><div className="summary-line summary-total"><span>{t('Estimated total',language)}</span><span className="mono">{fmt(subtotal)}</span></div><p style={{fontSize:10,lineHeight:1.5,color:'#6c7880'}}>{t('Demo orders are saved in this browser only. No payment or fulfillment is connected.',language)}</p><Link className="button button-primary" style={{width:'100%'}} href="/checkout" data-testid="link-checkout"><ArrowRight size={14}/> {t('Continue to checkout',language)}</Link><Link className="button button-outline" style={{width:'100%',marginTop:8}} href="/components" data-testid="link-continue-shopping"><ArrowDown size={14}/> {t('Continue shopping',language)}</Link><button className="button button-quiet" style={{width:'100%',marginTop:8}} onClick={()=>items.forEach(i=>remove(i.id))} data-testid="button-clear-cart"><Trash2 size={14}/> {t('Clear cart',language)}</button></aside>
+         <aside className="summary-card surface"><div className="eyebrow">{t('CART SUMMARY',language)}</div><div className="summary-line"><span>{t('Items',language)}</span><strong>{items.reduce((n,i)=>n+i.qty,0)}</strong></div><div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono">{fmt(subtotal)}</strong></div><div className="summary-line"><span>{t('Delivery',language)}</span><span>{t('Not connected',language)}</span></div><div className="summary-line summary-total"><span>{t('Estimated total',language)}</span><span className="mono">{fmt(subtotal)}</span></div><p style={{fontSize:10,lineHeight:1.5,color:'#6c7880'}}>{t('Demo order only. No payment or fulfillment.',language)}</p><Link className="button button-primary" style={{width:'100%'}} href="/checkout" data-testid="link-checkout"><ArrowRight size={14}/> {t('Continue to checkout',language)}</Link><Link className="button button-outline" style={{width:'100%',marginTop:8}} href="/components" data-testid="link-continue-shopping"><ArrowDown size={14}/> {t('Continue shopping',language)}</Link><button className="button button-quiet" style={{width:'100%',marginTop:8}} onClick={()=>items.forEach(i=>remove(i.id))} data-testid="button-clear-cart"><Trash2 size={14}/> {t('Clear cart',language)}</button></aside>
       </div>}
   </div>;
 }
@@ -544,7 +497,7 @@ function checkoutFieldError(field:string,value:string):string|undefined {
 
 function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
   const {language}=useLanguage();
-  useDocument(t('Checkout',language),t('Place a local Circuits KW demo order. Only the item summary is saved in this browser.',language));
+  useDocument(t('Checkout',language),t('Demo orders are saved in this browser.',language));
   const [placedOrder,setPlacedOrder]=useState<DemoOrder|null>(null);
   const [orderError,setOrderError]=useState('');
   const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
@@ -567,7 +520,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
     });
     setFieldErrors(errors);
     if(Object.keys(errors).length){
-      setOrderError(t('Checkout couldn’t be completed. Fix the highlighted fields below.',language));
+       setOrderError(t('Check the highlighted fields.',language));
       const firstInvalid=form.elements.namedItem(Object.keys(errors)[0]);
       window.requestAnimationFrame(()=>{
         if(firstInvalid instanceof HTMLElement){
@@ -589,7 +542,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
       if(!Array.isArray(previous)) throw new Error('Saved demo orders are not a list.');
       localStorage.setItem('circuits-kw-demo-orders',JSON.stringify([order,...previous].slice(0,20)));
     } catch {
-      setOrderError(t('This browser could not save the demo order. Your cart is unchanged; check local storage and try again.',language));
+      setOrderError(t('Could not save the order. Your cart is unchanged; try again.',language));
       return;
     }
     setPlacedOrder(order);
@@ -600,17 +553,17 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
     <div className="checkout-confirmation-card surface">
       <div className="checkout-confirmation-icon"><CheckCircle2 size={26}/></div>
       <h1>{t('Order placed.',language)}</h1>
-      <p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Your demo order was saved in this browser. No real order was sent, and no payment was taken.',language)}</p>
+       <p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Saved in this browser. No real order or payment.',language)}</p>
       <div className="demo-order-number"><span>{t('DEMO ORDER NUMBER',language)}</span><strong data-testid="text-demo-order-number">{placedOrder.orderNumber}</strong><small>{new Date(placedOrder.placedAt).toLocaleString(language==='ar'?'ar-KW':'en-KW')}</small></div>
       <div className="demo-order-items">{placedOrder.items.map(item=><div key={item.id}><span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span><strong>{fmt(item.price*item.qty)}</strong></div>)}</div>
       <div className="summary-line summary-total"><span>{t('Demo total',language)}</span><span className="mono">{fmt(placedOrder.subtotal)}</span></div>
-      <p className="checkout-order-disclaimer">{t('Only the item summary and total are saved locally. Your contact and address details were not stored or sent. Shipping and fulfillment are not connected.',language)}</p>
+       <p className="checkout-order-disclaimer">{t('Only items and totals are saved. Contact details stay private; delivery is not connected.',language)}</p>
       <Link className="button button-primary" href="/components" data-testid="link-confirmation-shop">{t('Continue browsing',language)} <ArrowRight size={15}/></Link>
     </div>
   </div>;
-  if(!items.length) return <div className="container page-top"><div className="eyebrow">{t('ORDER REVIEW · CHECKOUT PREVIEW',language)}</div><div className="surface empty-state"><div className="empty-icon"><ShoppingCart size={23}/></div><h3>{t('Your cart is empty.',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Add a component or project kit before starting checkout.',language)}</p><Link className="button button-primary" href="/components">{t('Browse components',language)}</Link></div></div>;
+  if(!items.length) return <div className="container page-top"><div className="eyebrow">{t('ORDER REVIEW · CHECKOUT PREVIEW',language)}</div><div className="surface empty-state"><div className="empty-icon"><ShoppingCart size={23}/></div><h3>{t('Your cart is empty.',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Add parts or a kit before checkout.',language)}</p><Link className="button button-primary" href="/components">{t('Browse components',language)}</Link></div></div>;
   return <div className="container page-top">
-    <div className="checkout-heading"><div><div className="eyebrow">{t('ORDER REVIEW · LOCAL DEMO',language)}</div><h1>{t('Checkout',language)}</h1><p className="lead" style={{fontSize:13}}>{t('Place a sample order and get a demo receipt. Your contact and address details aren’t saved or sent.',language)}</p></div><span className="tag"><ShieldCheck size={13}/> {t('No payment connected',language)}</span></div>
+    <div className="checkout-heading"><div><div className="eyebrow">{t('ORDER REVIEW · LOCAL DEMO',language)}</div><h1>{t('Checkout',language)}</h1><p className="lead" style={{fontSize:13}}>{t('Sample order only. Contact and address details are not saved or sent.',language)}</p></div><span className="tag"><ShieldCheck size={13}/> {t('No payment connected',language)}</span></div>
     <form className="checkout-layout" noValidate onSubmit={submitDemoOrder} onChange={event=>{
       const changedTarget=event.nativeEvent.target;
       const field=changedTarget instanceof HTMLInputElement||changedTarget instanceof HTMLSelectElement||changedTarget instanceof HTMLTextAreaElement?changedTarget.name:'';
@@ -629,7 +582,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
     }} data-testid="form-checkout">
       <div className="checkout-form-column">
         <section className="surface checkout-panel">
-          <div className="checkout-section-heading"><span className="checkout-step">01</span><div><h2>{t('Contact details',language)}</h2><p>{t('How can we reach you about this preview?',language)}</p></div></div>
+           <div className="checkout-section-heading"><span className="checkout-step">01</span><div><h2>{t('Contact details',language)}</h2><p>{t('For this demo order.',language)}</p></div></div>
           <div className="checkout-fields">
             <label className="checkout-field"><span>{t('Full name',language)}</span><input name="name" type="text" autoComplete="name" placeholder={t('Your name',language)} required aria-invalid={Boolean(fieldErrors.name)} aria-describedby={fieldErrors.name?'checkout-error-name':undefined} data-testid="input-checkout-name"/><CheckoutFieldError field="name" message={fieldErrors.name?t(fieldErrors.name,language):undefined}/></label>
             <label className="checkout-field"><span>{t('Email address',language)}</span><input name="email" type="email" autoComplete="email" placeholder="name@example.com" required aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email?'checkout-error-email':undefined} data-testid="input-checkout-email"/><CheckoutFieldError field="email" message={fieldErrors.email?t(fieldErrors.email,language):undefined}/></label>
@@ -637,7 +590,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
           </div>
         </section>
         <section className="surface checkout-panel">
-          <div className="checkout-section-heading"><span className="checkout-step">02</span><div><h2>{t('Delivery address',language)}</h2><p>{t('Kuwait address details for this local preview.',language)}</p></div></div>
+           <div className="checkout-section-heading"><span className="checkout-step">02</span><div><h2>{t('Delivery address',language)}</h2><p>{t('Kuwait delivery address.',language)}</p></div></div>
           <div className="checkout-fields">
             <label className="checkout-field"><span>{t('Governorate',language)}</span><select name="governorate" defaultValue="" required aria-invalid={Boolean(fieldErrors.governorate)} aria-describedby={fieldErrors.governorate?'checkout-error-governorate':undefined} data-testid="select-checkout-governorate"><option value="" disabled>{t('Select governorate',language)}</option><option>{t('Capital',language)}</option><option>{t('Hawalli',language)}</option><option>{t('Farwaniya',language)}</option><option>{t('Mubarak Al-Kabeer',language)}</option><option>{t('Ahmadi',language)}</option><option>{t('Jahra',language)}</option></select><CheckoutFieldError field="governorate" message={fieldErrors.governorate?t(fieldErrors.governorate,language):undefined}/></label>
             <label className="checkout-field"><span>{t('Area',language)}</span><input name="area" type="text" autoComplete="address-level2" placeholder={t('Area',language)} required aria-invalid={Boolean(fieldErrors.area)} aria-describedby={fieldErrors.area?'checkout-error-area':undefined} data-testid="input-checkout-area"/><CheckoutFieldError field="area" message={fieldErrors.area?t(fieldErrors.area,language):undefined}/></label>
@@ -649,11 +602,11 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
           </div>
         </section>
         <section className="checkout-payment-note">
-          <ShieldCheck size={18}/><div><strong>{t('Local demo order only',language)}</strong><p>{t('Submitting creates a browser-only receipt and clears the cart. No card details, payment or real fulfillment are involved.',language)}</p></div>
+          <ShieldCheck size={18}/><div><strong>{t('Local demo order only',language)}</strong><p>{t('Creates a local receipt and clears the cart. No payment or fulfillment.',language)}</p></div>
         </section>
         {orderError&&<div className="checkout-error" role="alert" data-testid="checkout-order-error">{orderError}</div>}
         <button type="submit" className="button button-primary checkout-submit" data-testid="button-place-demo-order">{t('Place demo order',language)} <ArrowRight size={15}/></button>
-        <p className="checkout-privacy">{t('Contact and address fields stay in this page only. They aren’t stored or transmitted.',language)}</p>
+        <p className="checkout-privacy">{t('Contact and address details stay on this page; they are not saved or sent.',language)}</p>
       </div>
       <aside className="surface checkout-summary">
         <div className="eyebrow">{t('YOUR PARTS LIST',language)}</div><h2>{t('Order summary',language)}</h2>
@@ -661,7 +614,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
         <div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono">{fmt(subtotal)}</strong></div>
         <div className="summary-line"><span>{t('Delivery',language)}</span><span>{t('Not connected',language)}</span></div>
         <div className="summary-line summary-total"><span>{t('Estimated total',language)}</span><span className="mono">{fmt(subtotal)}</span></div>
-        <p className="checkout-total-note">{t('KWD prices and stock are illustrative. Delivery fees are not included.',language)}</p>
+        <p className="checkout-total-note">{t('Sample KWD prices; delivery fees excluded.',language)}</p>
         <Link className="checkout-edit-link" href="/cart">← {t('Edit cart',language)}</Link>
       </aside>
     </form>
