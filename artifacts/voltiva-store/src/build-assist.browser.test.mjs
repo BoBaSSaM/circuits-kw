@@ -91,6 +91,10 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     page.on('pageerror', (error) => pageErrors.push(error.message));
 
     await page.goto(`${baseUrl}/build-assist`);
+    assert.equal(await page.getByTestId('row-bom-esp32').count(), 0);
+    await page.getByTestId('button-generate-bom').click();
+    await page.getByTestId('text-unpriced-esp32').waitFor();
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '—');
     const staleUpdatedAt = dateDaysAgo(freshnessPeriodDays);
     const stalePriceList = {
       pricesBySku: { 'ESP32-WRM-32D': 1.625 },
@@ -102,6 +106,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
       value: stalePriceList,
     });
     await page.reload();
+    await page.getByTestId('button-generate-bom').click();
     await page.getByTestId('input-assembly-count').fill('2');
     await page.getByTestId('notice-stale-price-list').waitFor();
     assert.match(await page.getByTestId('notice-stale-price-list').innerText(), /90/);
@@ -117,6 +122,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.deepEqual(savedPriceList, stalePriceList);
 
     await page.reload();
+    await page.getByTestId('button-generate-bom').click();
     await page.getByTestId('text-unpriced-soil').waitFor();
     await page.getByTestId('text-unpriced-bme280').waitFor();
     await page.getByTestId('input-assembly-count').fill('2');
@@ -133,6 +139,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
       value: freshPriceList,
     });
     await page.reload();
+    await page.getByTestId('button-generate-bom').click();
     await page.getByTestId('input-assembly-count').fill('2');
     assert.equal(await page.getByTestId('notice-stale-price-list').count(), 0);
     assert.match(await page.getByTestId('text-price-source').innerText(), /Fresh supplier list/);
@@ -212,6 +219,8 @@ test('imports a zero-cost supplier CSV row and keeps the BOM item in the cart', 
     });
     await page.getByTestId('button-import-price-csv').click();
     await page.getByTestId('status-build-assist').waitFor();
+    assert.equal(await page.getByTestId('row-bom-esp32').count(), 0);
+    await page.getByTestId('button-generate-bom').click();
 
     assert.equal(await page.getByTestId('text-unpriced-soil').count(), 0);
     assert.equal(await page.getByTestId('text-line-total-soil').innerText(), '0.000 KWD');

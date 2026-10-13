@@ -476,6 +476,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
           <div><div className="eyebrow" style={{color:'#9a4600'}}>{t('SAMPLE OUTPUT · NOT VERIFIED',language)}</div><h2>{t(selectedProject.title,language)}</h2><p>{generated?t(selectedProject.description,language):t('Choose a project to preview catalog parts.',language)}</p></div>
           <span className="demo-stamp">{t('LOCAL DEMO',language)}</span>
         </div>
+        {generated?<>
         <div className="diagram">
           <div className="diagram-label"><span>{t('Illustrative connection flow',language)}</span><span>{voltage} {t('logic target',language)}</span></div>
           <div className="diagram-flow"><div className="diagram-node">{plan.isSolar?t('Solar PV',language):t('Power',language)}<br/>{t('source',language)}</div><ArrowRight className="diagram-arrow" size={18}/><div className="diagram-node core">{t(controller?.name??'ESP32-WROOM-32D',language)}<br/>{t('controller',language)}</div><ArrowRight className="diagram-arrow" size={18}/><div className="diagram-node">{plan.isGreenhouse?t('Soil capacitive',language):t('Sensor',language)}<br/>{t('module',language)}</div></div>
@@ -518,6 +519,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
           {preview==='wiring'?<p>{t(controller?.name??'ESP32-WROOM-32D',language)} inputs connect to the selected sensor modules following their datasheets. Power components shown in the BOM require independent compatibility checks; this is illustrative only, not a generated schematic.</p>:<pre>{`# Local example outline — not downloadable firmware\nread_sensor()\ncheck_threshold()\nnotify_placeholder()  # no messaging service connected`}</pre>}
         </div>}
         <button className="button button-primary" style={{width:'100%'}} onClick={addBom} disabled={!pricedBom.length} data-testid="button-add-bom-cart"><ShoppingCart size={16}/> {t('Add priced BOM items to cart',language)} · {pricedBom.length?fmt(total):'—'}</button>
+        </>:<div className="bom-empty-state" role="status" data-testid="state-build-assist-empty"><CircuitBoard size={24}/><p>{t('Generate a BOM to see its parts.',language)}</p></div>}
       </section>
     </div>
      <div className="assist-delivery-reference"><div><span className="eyebrow">{t('KUWAIT DELIVERY REFERENCE',language)}</span><strong>{t('Same-day dispatch concept · 15:00 AST cutoff',language)}</strong><span>{t('Shuwaikh hub is a reference only; delivery and pickup are not connected.',language)}</span></div><Link href="/about#delivery" className="button button-outline small-button" data-testid="link-assist-delivery">{t('View sample zones',language)} <ArrowRight size={13}/></Link></div>
