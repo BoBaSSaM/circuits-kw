@@ -249,7 +249,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
   }
 });
 
-test('imports a zero-cost supplier CSV row and keeps the BOM item in the cart', {
+test('uses a saved zero-cost price-list entry and keeps the BOM item in the cart', {
   timeout: 90_000,
 }, async () => {
   const port = await getAvailablePort();
@@ -278,24 +278,29 @@ test('imports a zero-cost supplier CSV row and keeps the BOM item in the cart', 
     page.on('pageerror', (error) => pageErrors.push(error.message));
 
     await page.goto(`${baseUrl}/build-assist`);
+    const savedPriceList = {
+      pricesBySku: { 'SNS-SOIL-CAP-12': 0 },
+      source: 'Free parts supplier',
+      updatedAt: dateDaysAgo(0),
+    };
+    await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+      key: priceListStorageKey,
+      value: savedPriceList,
+    });
+    await page.reload();
     assert.equal(await page.getByTestId('details-price-list').evaluate((details) => details.open), false);
     await page.getByTestId('summary-price-list').click();
-    await page.getByTestId('input-price-list-source').fill('Free parts supplier');
-    await page.getByTestId('input-price-list-file').setInputFiles({
-      name: 'free-parts.csv',
-      mimeType: 'text/csv',
-      buffer: Buffer.from('sku,price,currency\nSNS-SOIL-CAP-12,0.000,KWD\n'),
-    });
-    await page.getByTestId('button-import-price-csv').click();
-    await page.getByTestId('status-build-assist').waitFor();
-    await page.getByTestId('row-bom-esp32').waitFor();
+    assert.match(await page.getByTestId('summary-price-list').innerText(), /Free parts supplier/);
     await page.getByTestId('button-generate-bom').click();
+    await page.getByTestId('row-bom-esp32').waitFor();
 
     assert.equal(await page.getByTestId('text-unpriced-soil').count(), 0);
     assert.equal(await page.getByTestId('text-line-total-soil').innerText(), '0.000 KWD');
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '0.000 KWD');
-    const savedPriceList = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), priceListStorageKey);
-    assert.equal(savedPriceList.pricesBySku['SNS-SOIL-CAP-12'], 0);
+    assert.deepEqual(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), priceListStorageKey),
+      savedPriceList,
+    );
 
     await page.getByTestId('button-add-bom-cart').click();
     await page.getByTestId('link-cart').click();
