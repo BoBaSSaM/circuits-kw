@@ -158,6 +158,15 @@ function writeBrowserStorage(key: string, value: string): boolean {
   }
 }
 
+function removeBrowserStorage(key: string): boolean {
+  try {
+    window.localStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isSavedCartItem(value: unknown): value is Item {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
@@ -475,10 +484,6 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const [priceImportError,setPriceImportError]=useState('');
   const priceFileInputRef=useRef<HTMLInputElement>(null);
   const priceListIsStale=priceList!==null&&isPriceListStale(priceList.updatedAt);
-  useEffect(()=>{
-    if(priceList) localStorage.setItem(PRICE_LIST_STORAGE_KEY,JSON.stringify(priceList));
-    else localStorage.removeItem(PRICE_LIST_STORAGE_KEY);
-  },[priceList]);
   useEffect(()=>{setAssemblyOverride(null);setPartQuantities({});setGenerated(false);setPriceListRemoved(false);setNotice('');setPreview(null)},[selectedProjectId]);
   const plan=useMemo(()=>buildPlanFromPrompt(prompt,voltage,products),[prompt,voltage]);
   const bom=plan.parts.map(part=>({
@@ -521,17 +526,22 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
     }
     try{
       const imported=parseAuthorizedPriceCsv(csv);
-      setPriceList({...imported,source:priceSource.trim(),updatedAt:priceUpdatedAt});
+      const nextPriceList={...imported,source:priceSource.trim(),updatedAt:priceUpdatedAt};
+      const saved=writeBrowserStorage(PRICE_LIST_STORAGE_KEY,JSON.stringify(nextPriceList));
+      setPriceList(nextPriceList);
       setPriceListRemoved(false);
       setPriceImportError('');
       setPriceFile(null);
       if(priceFileInputRef.current) priceFileInputRef.current.value='';
-      setNotice(t('Price list imported.',language));
+      setNotice(saved
+        ?t('Price list imported.',language)
+        :t('Price list imported for this estimate, but browser storage rejected the save. It will not be available after refresh.',language));
     }catch(error){
       setPriceImportError(getPriceCsvImportError(error, language));
     }
   };
   const removePriceList=()=>{
+    const removed=removeBrowserStorage(PRICE_LIST_STORAGE_KEY);
     setPriceList(null);
     setPriceListRemoved(true);
     setPriceSource('');
@@ -540,7 +550,9 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
     setPriceFile(null);
     if(priceFileInputRef.current) priceFileInputRef.current.value='';
     setPriceImportError('');
-    setNotice(t('Price list removed.',language));
+    setNotice(removed
+      ?t('Price list removed.',language)
+      :t('Price list removed from this estimate, but browser storage rejected the removal. It may return after refresh.',language));
   };
   const addBom=()=>{
     const items=buildBomCartItems(bom,quantityFor,assemblies);

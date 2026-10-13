@@ -387,7 +387,7 @@ test('reports rejected supplier price imports without replacing saved prices', {
     await page.getByTestId('button-import-price-csv').click();
     const importError = page.getByTestId('error-price-list-import');
     await importError.waitFor();
-    assert.match(await importError.innerText(), /Could not import CSV/);
+    assert.match(await importError.innerText(), /CSV could not be imported/);
     assert.deepEqual(
       await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), priceListStorageKey),
       savedPriceList,
@@ -649,6 +649,75 @@ test('keeps cart interactions usable when browser storage reads or writes fail',
     assert.equal(await writeFailurePage.getByTestId('input-quantity-storage-test-item').inputValue(), '2');
     assert.equal(await savedRow.locator('.price').innerText(), '4.000 KWD');
     assert.deepEqual(writeFailureErrors, []);
+
+    const priceListWriteFailurePage = await browser.newPage();
+    const priceListWriteFailureErrors = [];
+    priceListWriteFailurePage.on('pageerror', (error) => priceListWriteFailureErrors.push(error.message));
+    await priceListWriteFailurePage.addInitScript((key) => {
+      const originalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (storageKey, value) {
+        if (storageKey === key) throw new DOMException('Storage is full', 'QuotaExceededError');
+        return originalSetItem.call(this, storageKey, value);
+      };
+    }, priceListStorageKey);
+    await priceListWriteFailurePage.goto(`${baseUrl}/build-assist`);
+    await priceListWriteFailurePage.getByTestId('summary-price-list').click();
+    await priceListWriteFailurePage.getByTestId('input-price-list-source').fill('In-memory supplier');
+    await priceListWriteFailurePage.getByTestId('input-price-list-updated').fill(dateDaysAgo(0));
+    await priceListWriteFailurePage.getByTestId('input-price-list-file').setInputFiles({
+      name: 'supplier-prices.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('sku,price,currency\nESP32-WRM-32D,1.625,KWD\n'),
+    });
+    await priceListWriteFailurePage.getByTestId('button-import-price-csv').click();
+    await priceListWriteFailurePage.getByTestId('status-build-assist').waitFor();
+    assert.match(
+      await priceListWriteFailurePage.getByTestId('status-build-assist').innerText(),
+      /browser storage rejected the save.*not be available after refresh/i,
+    );
+    assert.match(await priceListWriteFailurePage.getByTestId('text-price-source').innerText(), /In-memory supplier/);
+    assert.equal(await priceListWriteFailurePage.getByTestId('text-line-total-esp32').innerText(), '1.625 KWD');
+    await priceListWriteFailurePage.getByTestId('input-part-quantity-esp32').fill('2');
+    assert.equal(await priceListWriteFailurePage.getByTestId('text-line-total-esp32').innerText(), '3.250 KWD');
+    await priceListWriteFailurePage.getByTestId('button-generate-bom').click();
+    assert.match(await priceListWriteFailurePage.getByTestId('status-build-assist').innerText(), /Estimate recalculated/);
+    assert.deepEqual(priceListWriteFailureErrors, []);
+
+    const priceListRemoveFailurePage = await browser.newPage();
+    const priceListRemoveFailureErrors = [];
+    priceListRemoveFailurePage.on('pageerror', (error) => priceListRemoveFailureErrors.push(error.message));
+    await priceListRemoveFailurePage.addInitScript(({ key, value }) => {
+      localStorage.setItem(key, JSON.stringify(value));
+      const originalRemoveItem = Storage.prototype.removeItem;
+      Storage.prototype.removeItem = function (storageKey) {
+        if (storageKey === key) throw new DOMException('Storage is unavailable', 'SecurityError');
+        return originalRemoveItem.call(this, storageKey);
+      };
+    }, {
+      key: priceListStorageKey,
+      value: {
+        pricesBySku: { 'ESP32-WRM-32D': 1.625 },
+        source: 'Stored supplier',
+        updatedAt: dateDaysAgo(0),
+      },
+    });
+    await priceListRemoveFailurePage.goto(`${baseUrl}/build-assist`);
+    await priceListRemoveFailurePage.getByTestId('summary-price-list').click();
+    await priceListRemoveFailurePage.getByTestId('button-remove-price-list').click();
+    assert.match(
+      await priceListRemoveFailurePage.getByTestId('status-build-assist').innerText(),
+      /removed from this estimate.*browser storage rejected the removal.*may return after refresh/i,
+    );
+    assert.equal(await priceListRemoveFailurePage.getByTestId('text-build-assist-total').innerText(), '—');
+    assert.match(
+      await priceListRemoveFailurePage.getByTestId('text-price-source').innerText(),
+      /No current price list loaded/,
+    );
+    await priceListRemoveFailurePage.getByTestId('input-assembly-count').fill('2');
+    await priceListRemoveFailurePage.getByTestId('input-part-quantity-esp32').fill('3');
+    assert.equal(await priceListRemoveFailurePage.getByTestId('input-assembly-count').inputValue(), '2');
+    assert.equal(await priceListRemoveFailurePage.getByTestId('input-part-quantity-esp32').inputValue(), '3');
+    assert.deepEqual(priceListRemoveFailureErrors, []);
   } catch (error) {
     error.message += `\nVite output:\n${serverOutput}`;
     throw error;
