@@ -784,13 +784,36 @@ function App() {
   const [cartNotice,setCartNotice]=useState<{id:number;name:string}|null>(null);
   const cartNoticeId=useRef(0);
   const firstCartSave=useRef(true);
+  const lastCartWrite=useRef<string|null>(null);
   useEffect(()=>{
+    const serialized=JSON.stringify(items);
     if(firstCartSave.current) {
       firstCartSave.current=false;
       if(!initialCart.storageAvailable) return;
     }
-    setCartStorageUnavailable(!initialCart.storageAvailable || !writeBrowserStorage('circuits-kw-cart',JSON.stringify(items)));
+    if(serialized===lastCartWrite.current) return;
+    const saved=writeBrowserStorage('circuits-kw-cart',serialized);
+    if(saved) lastCartWrite.current=serialized;
+    setCartStorageUnavailable(!initialCart.storageAvailable || !saved);
   },[items,initialCart.storageAvailable]);
+  useEffect(()=>{
+    const syncCartFromOtherTab=(event:StorageEvent)=>{
+      if(event.key!=='circuits-kw-cart') return;
+      let nextItems:Item[]=[];
+      if(event.newValue) {
+        try {
+          const value:unknown=JSON.parse(event.newValue);
+          nextItems=Array.isArray(value)?value.filter(isSavedCartItem):[];
+        } catch {
+          nextItems=[];
+        }
+      }
+      lastCartWrite.current=JSON.stringify(nextItems);
+      setItemsState(nextItems);
+    };
+    window.addEventListener('storage',syncCartFromOtherTab);
+    return ()=>window.removeEventListener('storage',syncCartFromOtherTab);
+  },[]);
   useEffect(()=>{
     writeBrowserStorage('circuits-kw-language',language);
     document.documentElement.lang=language;

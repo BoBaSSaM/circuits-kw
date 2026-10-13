@@ -486,3 +486,73 @@ test('keeps cart interactions usable when browser storage reads or writes fail',
     }
   }
 });
+
+test('syncs cart quantity edits and item removal across open tabs', {
+  timeout: 90_000,
+}, async () => {
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+    cwd: artifactDir,
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let serverOutput = '';
+  serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+  serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+
+  let browser;
+  let context;
+  try {
+    await waitForServer(serverProcess, baseUrl);
+    const executablePath = await findChromiumPath();
+    assert.ok(executablePath, 'Set CHROMIUM_PATH or install Chromium to run browser tests.');
+    browser = await chromium.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    context = await browser.newContext();
+    const firstTab = await context.newPage();
+    const secondTab = await context.newPage();
+    const pageErrors = [];
+    firstTab.on('pageerror', (error) => pageErrors.push(error.message));
+    secondTab.on('pageerror', (error) => pageErrors.push(error.message));
+    const startingCart = [
+      { id: 'sync-item-one', name: 'First sync component', price: 2.5, kind: 'component', sku: 'SYNC-001', qty: 1 },
+      { id: 'sync-item-two', name: 'Second sync component', price: 1, kind: 'component', sku: 'SYNC-002', qty: 2 },
+    ];
+
+    await firstTab.goto(`${baseUrl}/cart`);
+    await firstTab.evaluate((items) => localStorage.setItem('circuits-kw-cart', JSON.stringify(items)), startingCart);
+    await firstTab.reload();
+    await firstTab.getByTestId('row-cart-sync-item-one').waitFor();
+    await secondTab.goto(`${baseUrl}/cart`);
+    await secondTab.getByTestId('row-cart-sync-item-one').waitFor();
+
+    await firstTab.getByTestId('button-increase-sync-item-one').click();
+    await secondTab.waitForFunction(() => document.querySelector('[data-testid="input-quantity-sync-item-one"]')?.value === '2');
+    await secondTab.waitForFunction(() => document.querySelector('.summary-card .summary-total')?.textContent?.includes('7.000 KWD'));
+    assert.equal(await secondTab.getByTestId('row-cart-sync-item-one').locator('.price').innerText(), '5.000 KWD');
+
+    await firstTab.getByTestId('button-remove-sync-item-two').click();
+    await secondTab.getByTestId('row-cart-sync-item-two').waitFor({ state: 'detached' });
+    await secondTab.waitForFunction(() => document.querySelector('.summary-card .summary-total')?.textContent?.includes('5.000 KWD'));
+    assert.equal(await secondTab.getByTestId('row-cart-sync-item-one').locator('.price').innerText(), '5.000 KWD');
+    assert.match(await secondTab.locator('.summary-line').nth(0).innerText(), /Items\s*2/);
+    assert.deepEqual(pageErrors, []);
+  } catch (error) {
+    error.message += `\nVite output:\n${serverOutput}`;
+    throw error;
+  } finally {
+    await context?.close();
+    await browser?.close();
+    serverProcess.kill('SIGTERM');
+    if (serverProcess.exitCode === null) {
+      await Promise.race([
+        new Promise((resolve) => serverProcess.once('exit', resolve)),
+        delay(2_000),
+      ]);
+    }
+  }
+});
