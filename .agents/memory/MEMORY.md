@@ -1,0 +1,1 @@
+- [Catalog database target](catalog-database-target.md) — Seed Circuits KW catalog data to MongoDB Atlas, not the scaffold's Replit PostgreSQL database.
