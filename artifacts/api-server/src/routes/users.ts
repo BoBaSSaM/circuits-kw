@@ -3,6 +3,18 @@ import { Router, type IRouter } from "express";
 import { logger } from "../lib/logger";
 import { getMongoDatabase } from "../lib/mongo";
 
+type UserProfileDocument = {
+  _id: string;
+  clerkUserId: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  clerkCreatedAt: Date;
+  clerkUpdatedAt: Date;
+  lastSyncedAt: Date;
+  createdAt: Date;
+};
+
 const router: IRouter = Router();
 
 router.put("/users/me", async (req, res) => {
@@ -19,8 +31,9 @@ router.put("/users/me", async (req, res) => {
     )?.emailAddress;
     const now = new Date();
     const database = await getMongoDatabase();
+    const users = database.collection<UserProfileDocument>("users");
 
-    await database.collection("users").updateOne(
+    await users.updateOne(
       { _id: user.id },
       {
         $set: {
