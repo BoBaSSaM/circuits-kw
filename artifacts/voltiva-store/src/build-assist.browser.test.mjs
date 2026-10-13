@@ -802,3 +802,96 @@ test('syncs cart quantity edits and item removal across open tabs', {
     }
   }
 });
+
+test('confirms demo orders when order history reads or writes are rejected', {
+  timeout: 90_000,
+}, async () => {
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+    cwd: artifactDir,
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let serverOutput = '';
+  serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+  serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+
+  let browser;
+  const contexts = [];
+  try {
+    await waitForServer(serverProcess, baseUrl);
+    const executablePath = await findChromiumPath();
+    assert.ok(executablePath, 'Set CHROMIUM_PATH or install Chromium to run browser tests.');
+    browser = await chromium.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+
+    for (const rejectedOperation of ['read', 'write']) {
+      const context = await browser.newContext();
+      contexts.push(context);
+      await context.addInitScript(({ operation, item }) => {
+        const originalGetItem = Storage.prototype.getItem;
+        const originalSetItem = Storage.prototype.setItem;
+        originalSetItem.call(localStorage, 'circuits-kw-cart', JSON.stringify([item]));
+        window.readOriginalStorageItem = (key) => originalGetItem.call(localStorage, key);
+        Storage.prototype.getItem = function (key) {
+          if (key === 'circuits-kw-demo-orders' && operation === 'read') {
+            throw new DOMException('Order history read rejected.', 'SecurityError');
+          }
+          return originalGetItem.call(this, key);
+        };
+        Storage.prototype.setItem = function (key, value) {
+          if (key === 'circuits-kw-demo-orders' && operation === 'write') {
+            throw new DOMException('Order history write rejected.', 'QuotaExceededError');
+          }
+          return originalSetItem.call(this, key, value);
+        };
+      }, {
+        operation: rejectedOperation,
+        item: { id: 'storage-failure-item', name: 'Storage failure test item', price: 2.5, kind: 'component', sku: 'STORAGE-001', qty: 2 },
+      });
+
+      const page = await context.newPage();
+      const pageErrors = [];
+      page.on('pageerror', (error) => pageErrors.push(error.message));
+      await page.goto(`${baseUrl}/checkout`);
+      await page.getByTestId('row-checkout-storage-failure-item').waitFor();
+      await page.getByTestId('input-checkout-name').fill('Demo Buyer');
+      await page.getByTestId('input-checkout-email').fill('buyer@example.com');
+      await page.getByTestId('input-checkout-phone').fill('+965 5555 5555');
+      await page.getByTestId('select-checkout-governorate').selectOption({ label: 'Capital' });
+      await page.getByTestId('input-checkout-area').fill('Kuwait City');
+      await page.getByTestId('input-checkout-block').fill('1');
+      await page.getByTestId('input-checkout-street').fill('Main Street');
+      await page.getByTestId('input-checkout-building').fill('10');
+      await page.getByTestId('button-place-demo-order').click();
+
+      await page.getByTestId('demo-order-confirmation').waitFor();
+      assert.match(await page.getByRole('heading', { name: 'Order placed.' }).innerText(), /Order placed/);
+      assert.match(
+        await page.getByTestId('text-order-storage-status').innerText(),
+        /could not be saved.*lost if you leave or reload/i,
+      );
+      assert.match(await page.getByTestId('text-demo-order-number').innerText(), /^CKW-DEMO-/);
+      assert.deepEqual(pageErrors, []);
+      assert.equal(await page.evaluate(() => window.readOriginalStorageItem('circuits-kw-demo-orders')), null);
+      assert.equal(await page.evaluate(() => JSON.parse(window.readOriginalStorageItem('circuits-kw-cart') || '[]').length), 0);
+    }
+  } catch (error) {
+    error.message += `\nVite output:\n${serverOutput}`;
+    throw error;
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+    await browser?.close();
+    serverProcess.kill('SIGTERM');
+    if (serverProcess.exitCode === null) {
+      await Promise.race([
+        new Promise((resolve) => serverProcess.once('exit', resolve)),
+        delay(2_000),
+      ]);
+    }
+  }
+});

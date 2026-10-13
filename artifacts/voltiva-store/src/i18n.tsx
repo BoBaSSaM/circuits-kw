@@ -478,6 +478,7 @@ const arabic: Record<string, string> = {
   'Your parts list': 'قائمة القطع',
   'DEMO ORDER PLACED · LOCAL ONLY': 'تم إرسال الطلب التجريبي · محلي فقط',
   'Order placed.': 'تم إرسال الطلب.',
+  'This order could not be saved in this browser. Its confirmation will be lost if you leave or reload this page.': 'تعذر حفظ هذا الطلب في هذا المتصفح. ستفقد التأكيد إذا غادرت هذه الصفحة أو أعدت تحميلها.',
   'Continue browsing': 'متابعة التصفح',
   'YOUR PARTS LIST': 'قائمة القطع',
   'Added to cart': 'تمت الإضافة إلى السلة',

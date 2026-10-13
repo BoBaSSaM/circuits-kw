@@ -804,6 +804,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
   const {isLoaded,isSignedIn,user}=useUser();
   useDocument(t('Checkout',language),t('Demo orders are saved in this browser.',language));
   const [placedOrder,setPlacedOrder]=useState<DemoOrder|null>(null);
+  const [orderSaved,setOrderSaved]=useState(true);
   const [orderError,setOrderError]=useState('');
   const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
   useEffect(()=>{
@@ -846,9 +847,9 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
       const previous=stored?JSON.parse(stored) as DemoOrder[]:[];
       if(!Array.isArray(previous)) throw new Error('Saved demo orders are not a list.');
       localStorage.setItem('circuits-kw-demo-orders',JSON.stringify([order,...previous].slice(0,20)));
+      setOrderSaved(true);
     } catch {
-      setOrderError(t('Could not save the order. Your cart is unchanged; try again.',language));
-      return;
+      setOrderSaved(false);
     }
     setPlacedOrder(order);
     clearCart();
@@ -858,7 +859,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
     <div className="checkout-confirmation-card surface">
       <div className="checkout-confirmation-icon"><CheckCircle2 size={26}/></div>
       <h1>{t('Order placed.',language)}</h1>
-       <p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Saved in this browser. No real order or payment.',language)}</p>
+       <p className="lead" style={{fontSize:13,margin:'0 auto 18px'}} data-testid="text-order-storage-status">{orderSaved?t('Saved in this browser. No real order or payment.',language):t('This order could not be saved in this browser. Its confirmation will be lost if you leave or reload this page.',language)}</p>
       <div className="demo-order-number"><span>{t('DEMO ORDER NUMBER',language)}</span><strong data-testid="text-demo-order-number">{placedOrder.orderNumber}</strong><small>{new Date(placedOrder.placedAt).toLocaleString(language==='ar'?'ar-KW':'en-KW')}</small></div>
       <div className="demo-order-items">{placedOrder.items.map(item=><div key={item.id}><span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span><strong>{fmt(item.price*item.qty)}</strong></div>)}</div>
       <div className="summary-line summary-total"><span>{t('Demo total',language)}</span><span className="mono">{fmt(placedOrder.subtotal)}</span></div>
