@@ -11,7 +11,7 @@ import {
   parseAuthorizedPriceCsv,
   PRICE_LIST_FRESHNESS_DAYS,
 } from './build-assist-model.ts';
-import { addCartItem, calculateCartSubtotal } from './cart-model.ts';
+import { addCartItem, calculateCartSubtotal, removeSupplierPricedBomItems } from './cart-model.ts';
 
 const catalog = [
   { id: 'esp32', name: 'ESP32-WROOM-32D', sku: 'ESP32-WRM-32D', price: 2.85, category: 'Microcontrollers' },
@@ -156,4 +156,21 @@ test('adding an estimate merges quantities into an existing matching cart line',
   assert.equal(cart.length, 1);
   assert.equal(cart[0].qty, 7);
   assert.equal(calculateCartSubtotal(cart), catalog[0].price * 7);
+});
+
+test('removing a supplier list clears only supplier-priced BOM cart entries', () => {
+  const items = [
+    { id: 'bom-esp32', kind: 'bom', sku: 'ESP32-WRM-32D', price: 1.625, priceSource: 'supplier-list', qty: 2 },
+    { id: 'bom-soil', kind: 'bom', sku: 'SNS-SOIL-CAP-12', price: 1.2, priceSource: 'catalog', qty: 1 },
+    { id: 'bom-bme280', kind: 'bom', sku: 'SNS-BME280-I2C', price: 1.95, qty: 1 },
+    { id: 'component-esp32', kind: 'component', sku: 'ESP32-WRM-32D', price: 2.85, qty: 1 },
+  ];
+
+  const remaining = removeSupplierPricedBomItems(items, {
+    'ESP32-WRM-32D': 1.625,
+    'SNS-BME280-I2C': 1.95,
+  });
+
+  assert.deepEqual(remaining.map(({ id }) => id), ['bom-soil', 'component-esp32']);
+  assert.equal(calculateCartSubtotal(remaining), 4.05);
 });

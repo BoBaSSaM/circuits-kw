@@ -342,6 +342,7 @@ const arabic: Record<string, string> = {
   'Could not read the selected CSV file. Try again or save it as UTF-8 CSV.': 'تعذرت قراءة ملف CSV المحدد. حاول مرة أخرى أو احفظه بترميز UTF-8.',
   'CSV could not be imported. Check required columns, row values, KWD prices, and duplicate SKUs.': 'تعذر استيراد CSV. تحقق من الأعمدة المطلوبة وقيم الصفوف وأسعار الدينار الكويتي وعدم تكرار أرقام SKU.',
   'Price list removed.': 'تمت إزالة قائمة الأسعار.',
+  'supplier-priced BOM cart item(s) were removed.': 'تمت إزالة عناصر قائمة المكوّنات المسعّرة من المورد من سلة التسوق.',
   'Preview parts; generate to confirm.': 'عاين القطع؛ أنشئ القائمة للتأكيد.',
   'Update local demo BOM': 'حدّث قائمة القطع التجريبية',
   'Import current part prices': 'استيراد أسعار القطع الحالية',

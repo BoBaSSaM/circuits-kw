@@ -449,6 +449,15 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     await page.goto(`${baseUrl}/build-assist`);
     await page.getByTestId('row-bom-esp32').waitFor();
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '1.625 KWD');
+    await page.getByTestId('button-add-bom-cart').click();
+    await page.getByTestId('link-cart').click();
+    const supplierPricedCartRow = page.getByTestId('row-cart-bom-esp32');
+    await supplierPricedCartRow.waitFor();
+    assert.equal(await supplierPricedCartRow.locator('.price').innerText(), '1.625 KWD');
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '1.625 KWD');
+
+    await page.goto(`${baseUrl}/build-assist`);
+    await page.getByTestId('row-bom-esp32').waitFor();
     const previewBeforePriceListRemoval = await page.locator('.assist-output-head p').innerText();
     await page.getByTestId('button-generate-bom').click();
     assert.notEqual(await page.locator('.assist-output-head p').innerText(), previewBeforePriceListRemoval);
@@ -459,9 +468,21 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.match(await page.getByTestId('text-price-source').innerText(), /No current price list loaded/);
     assert.equal(await page.locator('.assist-output-head p').innerText(), previewBeforePriceListRemoval);
     assert.match(await page.getByTestId('status-build-assist').innerText(), /Price list removed/);
+    assert.match(await page.getByTestId('status-build-assist').innerText(), /1 supplier-priced BOM cart item/);
     assert.match(await page.getByTestId('button-generate-bom').innerText(), /Generate local demo BOM/);
     await page.waitForFunction((key) => localStorage.getItem(key) === null, priceListStorageKey);
+    assert.deepEqual(
+      await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]')),
+      [],
+      'removing the list should not retain its copied price in the saved cart',
+    );
 
+    await page.goto(`${baseUrl}/cart`);
+    await page.getByTestId('link-empty-cart-components').waitFor();
+    assert.equal(await page.locator('[data-testid^="row-cart-"]').count(), 0);
+    assert.equal(await page.locator('.summary-card .summary-total').count(), 0);
+
+    await page.goto(`${baseUrl}/build-assist`);
     await page.reload();
     await page.getByTestId('row-bom-esp32').waitFor();
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '6.000 KWD');
