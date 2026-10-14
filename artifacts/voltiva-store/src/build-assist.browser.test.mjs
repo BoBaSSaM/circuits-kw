@@ -373,14 +373,42 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.getByTestId('row-checkout-removed-before-checkout').count(), 0);
     assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '6.500 KWD');
 
+    let checkoutOrderRequests = 0;
+    page.on('request', request => {
+      if (request.url().endsWith('/api/orders') && request.method() === 'POST') checkoutOrderRequests += 1;
+    });
+    await page.getByTestId('button-place-demo-order').click();
+    const missingNameError = page.getByTestId('error-checkout-name');
+    await missingNameError.waitFor();
+    const nameInput = page.getByTestId('input-checkout-name');
+    assert.equal(await missingNameError.innerText(), 'Enter your full name.');
+    assert.equal(await nameInput.getAttribute('aria-invalid'), 'true');
+    assert.equal(await nameInput.evaluate(element => document.activeElement === element), true);
+    assert.equal(await page.getByTestId('demo-order-confirmation').count(), 0);
+    assert.equal(checkoutOrderRequests, 0, 'missing details must not create an order request');
+
     await page.getByTestId('input-checkout-name').fill('Demo Buyer');
-    await page.getByTestId('input-checkout-email').fill('buyer@example.com');
+    await page.getByTestId('input-checkout-email').fill('not-an-email');
     await page.getByTestId('input-checkout-phone').fill('+965 5555 5555');
     await page.getByTestId('select-checkout-governorate').selectOption({ label: 'Capital' });
     await page.getByTestId('input-checkout-area').fill('Kuwait City');
     await page.getByTestId('input-checkout-block').fill('1');
     await page.getByTestId('input-checkout-street').fill('Main Street');
     await page.getByTestId('input-checkout-building').fill('10');
+    await page.getByTestId('button-place-demo-order').click();
+    const malformedEmailError = page.getByTestId('error-checkout-email');
+    await malformedEmailError.waitFor();
+    const emailInput = page.getByTestId('input-checkout-email');
+    assert.equal(
+      await malformedEmailError.innerText(),
+      'Enter a valid email address, such as name@example.com.',
+    );
+    assert.equal(await emailInput.getAttribute('aria-invalid'), 'true');
+    assert.equal(await emailInput.evaluate(element => document.activeElement === element), true);
+    assert.equal(await page.getByTestId('demo-order-confirmation').count(), 0);
+    assert.equal(checkoutOrderRequests, 0, 'malformed details must not create an order request');
+
+    await emailInput.fill('buyer@example.com');
     const savedOrderResponse = page.waitForResponse(response =>
       response.url().endsWith('/api/orders') && response.request().method() === 'POST',
     );
