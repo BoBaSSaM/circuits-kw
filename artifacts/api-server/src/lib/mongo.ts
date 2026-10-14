@@ -2,6 +2,7 @@ import { MongoClient, type Db } from "mongodb";
 
 const databaseName = "circuits_kw";
 let clientPromise: Promise<MongoClient> | undefined;
+let indexesPromise: Promise<void> | undefined;
 
 export async function getMongoDatabase(): Promise<Db> {
   const uri = process.env.MONGODB_URL;
@@ -19,5 +20,23 @@ export async function getMongoDatabase(): Promise<Db> {
   }
 
   const client = await clientPromise;
-  return client.db(databaseName);
+  const database = client.db(databaseName);
+
+  if (!indexesPromise) {
+    indexesPromise = Promise.all([
+      database.collection("products").createIndex({ sku: 1 }, { unique: true }),
+      database.collection("project_kits").createIndex({ code: 1 }, { unique: true }),
+      database.collection("orders").createIndex({ orderNumber: 1 }, { unique: true }),
+      database.collection("orders").createIndex({ placedAt: -1 }),
+      database.collection("users").createIndex({ role: 1 }),
+    ])
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        indexesPromise = undefined;
+        throw error;
+      });
+  }
+
+  await indexesPromise;
+  return database;
 }

@@ -5,7 +5,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
-import { chromium } from 'playwright';
+import { chromium as playwrightChromium } from 'playwright';
 
 const artifactDir = path.resolve(import.meta.dirname, '..');
 const priceListStorageKey = 'circuits-kw-build-assist-prices';
@@ -61,6 +61,87 @@ async function findChromiumPath() {
     }
   }
 }
+
+const catalogFixture = {
+  products: [
+    { id: 'esp32', name: 'ESP32-WROOM-32D', sku: 'ESP32-WRM-32D', category: 'Microcontrollers', price: 2.85, stock: 142, package: 'DIP-38', description: 'Dual-core 240MHz MCU with integrated RF and PCB antenna.', voltage: '2.7V–3.6V (3.3V nom.)', interface: 'SPI · I²C · UART · PWM', icon: 'cpu', imageUrl: null, isActive: true },
+    { id: 'nucleo', name: 'STM32 Nucleo-F401RE', sku: 'NUCLEO-F401RE', category: 'Microcontrollers', price: 6.2, stock: 28, package: 'Nucleo-64', description: 'Cortex-M4 board with ST-LINK and 512KB flash.', voltage: '3.3V / 5V Vin', interface: 'USB · UART · SPI', icon: 'board', imageUrl: null, isActive: true },
+    { id: 'bme280', name: 'BME280 Sensor Module', sku: 'SNS-BME280-I2C', category: 'Sensors', price: 1.95, stock: 65, package: 'LGA-8 breakout', description: 'Measures temperature, humidity and air pressure.', voltage: '1.8V–3.6V', interface: 'I²C · SPI', icon: 'sensor', imageUrl: null, isActive: true },
+    { id: 'hcsr04', name: 'HC-SR04 Ultrasonic Sensor', sku: 'SNS-HCSR04-5V', category: 'Sensors', price: 0.85, stock: 210, package: 'Through-hole', description: 'Ultrasonic sensor for distance and obstacle detection.', voltage: '5V DC', interface: 'GPIO · trigger', icon: 'sensor', imageUrl: null, isActive: true },
+    { id: 'pico', name: 'Raspberry Pi Pico W', sku: 'RPI-PICOW-2024', category: 'Microcontrollers', price: 2.1, stock: 0, package: 'DIP-40', description: 'Dual-core RP2040 board with Wi-Fi and 2MB flash.', voltage: '1.8V–5.5V VSYS', interface: 'PIO · SPI · I²C', icon: 'board', imageUrl: null, isActive: true },
+    { id: 'lcd', name: '16x2 I2C Character LCD', sku: 'DIS-LCD-1602I2C', category: 'Displays', price: 1.45, stock: 54, package: '1602 module', description: '16×2 character LCD with I²C backpack.', voltage: '5V DC', interface: 'I²C address 0x27', icon: 'display', imageUrl: null, isActive: true },
+    { id: 'level', name: 'Logic Level Converter 4-Ch', sku: 'MOD-LLC-4CH-BI', category: 'ICs & Logic Translators', price: 0.65, stock: 320, package: '4-channel board', description: 'Bidirectional logic shifting for 3.3V and 5V systems.', voltage: 'Up to 5V DC', interface: 'I²C · SPI · UART', icon: 'power', imageUrl: null, isActive: true },
+    { id: 'resistor', name: 'Metal Film Resistors Kit', sku: 'PAS-RES-KIT-600', category: 'Passives', price: 2.5, stock: 75, package: '600 pieces', description: '600-piece resistor kit with 1% tolerance.', voltage: '250mW · 0.25W', interface: 'E12 series', icon: 'parts', imageUrl: null, isActive: true },
+    { id: 'soil', name: 'Capacitive Soil Moisture Sensor v1.2', sku: 'SNS-SOIL-CAP-12', category: 'Sensors', price: 1.2, stock: 48, package: 'Analog module', description: 'Corrosion-resistant probe with 3.3V analog output.', voltage: '3.3V analog', interface: 'ADC output', icon: 'sensor', imageUrl: null, isActive: true },
+    { id: 'tp4056', name: 'TP4056 1A Li-Ion Solar Battery Charger', sku: 'PWR-TP4056-C', category: 'Power & Battery', price: 0.75, stock: 92, package: 'USB-C module', description: 'USB-C Li-ion charger with DW01A protection.', voltage: '4.2V charge', interface: 'USB-C · Li-ion', icon: 'power', imageUrl: null, isActive: true },
+    { id: 'battery', name: '18650 3000mAh Battery Cell with Holder', sku: 'BAT-18650-3000', category: 'Power & Battery', price: 2.2, stock: 39, package: '18650 + holder', description: '3000mAh 18650 cell with holder and clip leads.', voltage: '3.7V nominal', interface: 'Li-ion · holder', icon: 'power', imageUrl: null, isActive: true },
+  ],
+  kits: [
+    { id: 'weather-kit', code: 'CKW-KIT-0101', title: 'IoT Weather Station Kit', category: 'IoT & Smart Home', level: 'Intermediate', domain: 'iot', duration: '1.5–2 hrs', price: 12.5, desc: 'Measure pressure, temperature and humidity; stream over Wi-Fi.', parts: ['ESP32 NodeMCU', 'BME280 Sensor'], count: '6 Items', manual: 'PDF Manual', icon: 'weather', isActive: true },
+  ],
+};
+
+async function installApiMocks(context) {
+  await context.route('**/api/catalog', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(catalogFixture),
+  }));
+  await context.route('**/api/orders', async route => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const input = route.request().postDataJSON();
+    const items = input.items.map(item => {
+      const source = item.kind === 'kit'
+        ? catalogFixture.kits.find(kit => kit.id === item.id || kit.code === item.sku)
+        : catalogFixture.products.find(product => product.id === item.id || product.sku === item.sku);
+      const price = item.kind === 'bom' && item.estimateUnitPrice !== undefined
+        ? item.estimateUnitPrice
+        : source?.price ?? 2.5;
+      return {
+        id: item.id,
+        kind: item.kind,
+        sku: item.sku,
+        name: source?.name ?? source?.title ?? item.sku,
+        price,
+        qty: item.qty,
+      };
+    });
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'mock-order-id',
+        orderNumber: 'CKW-MOCK-0001',
+        placedAt: new Date().toISOString(),
+        items,
+        subtotal: items.reduce((total, item) => total + item.price * item.qty, 0),
+        status: 'new',
+      }),
+    });
+  });
+}
+
+const chromium = {
+  async launch(options) {
+    const browser = await playwrightChromium.launch(options);
+    return {
+      newPage: async (...args) => {
+        const page = await browser.newPage(...args);
+        await installApiMocks(page.context());
+        return page;
+      },
+      newContext: async (...args) => {
+        const context = await browser.newContext(...args);
+        await installApiMocks(context);
+        return context;
+      },
+      close: () => browser.close(),
+    };
+  },
+};
 
 test('stale saved price lists warn on Build Assist, fresh lists clear the warning, and priced items reach the cart', {
   timeout: 90_000,
@@ -609,8 +690,12 @@ test('keeps cart interactions usable when browser storage reads or writes fail',
     const readFailureErrors = [];
     readFailurePage.on('pageerror', (error) => readFailureErrors.push(error.message));
     await readFailurePage.addInitScript(() => {
-      Storage.prototype.getItem = () => {
-        throw new DOMException('Storage is unavailable', 'SecurityError');
+      const originalGetItem = Storage.prototype.getItem;
+      Storage.prototype.getItem = function (key) {
+        if (key === 'circuits-kw-cart') {
+          throw new DOMException('Cart storage is unavailable', 'SecurityError');
+        }
+        return originalGetItem.call(this, key);
       };
     });
     await readFailurePage.goto(`${baseUrl}/cart`);
@@ -630,8 +715,12 @@ test('keeps cart interactions usable when browser storage reads or writes fail',
     writeFailurePage.on('pageerror', (error) => writeFailureErrors.push(error.message));
     await writeFailurePage.addInitScript((items) => {
       localStorage.setItem('circuits-kw-cart', JSON.stringify(items));
-      Storage.prototype.setItem = () => {
-        throw new DOMException('Storage is full', 'QuotaExceededError');
+      const originalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === 'circuits-kw-cart') {
+          throw new DOMException('Cart storage is full', 'QuotaExceededError');
+        }
+        return originalSetItem.call(this, key, value);
       };
     }, [{
       id: 'storage-test-item',
@@ -937,7 +1026,7 @@ test('merges overlapping cart edits across tabs and keeps the first saved value 
   }
 });
 
-test('confirms demo orders when order history reads or writes are rejected', {
+test('saves demo orders through the order API when browser order-history storage is unavailable', {
   timeout: 90_000,
 }, async () => {
   const port = await getAvailablePort();
@@ -1007,9 +1096,9 @@ test('confirms demo orders when order history reads or writes are rejected', {
       assert.match(await page.getByRole('heading', { name: 'Order placed.' }).innerText(), /Order placed/);
       assert.match(
         await page.getByTestId('text-order-storage-status').innerText(),
-        /could not be saved.*lost if you leave or reload/i,
+        /Saved for demo order management/i,
       );
-      assert.match(await page.getByTestId('text-demo-order-number').innerText(), /^CKW-DEMO-/);
+      assert.match(await page.getByTestId('text-demo-order-number').innerText(), /^CKW-MOCK-/);
       assert.deepEqual(pageErrors, []);
       assert.equal(await page.evaluate(() => window.readOriginalStorageItem('circuits-kw-demo-orders')), null);
       assert.equal(await page.evaluate(() => JSON.parse(window.readOriginalStorageItem('circuits-kw-cart') || '[]').length), 0);

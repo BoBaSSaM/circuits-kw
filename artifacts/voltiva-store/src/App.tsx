@@ -9,6 +9,8 @@ import { ClerkProvider, SignIn, SignUp, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { arSA, enUS } from '@clerk/localizations';
 import { shadcn } from '@clerk/themes';
+import { getGetAdminAccessQueryKey, getGetCatalogQueryKey, setBaseUrl, useCreateCheckoutOrder, useGetAdminAccess, useGetCatalog, useSyncCurrentUser } from '@workspace/api-client-react';
+import type { CatalogKit, CatalogProduct } from '@workspace/api-client-react';
 import { LanguageProvider, t, useLanguage, type Language } from './i18n';
 import {
   buildPlanFromPrompt,
@@ -22,6 +24,7 @@ import {
   PRICE_LIST_FRESHNESS_DAYS,
 } from './build-assist-model';
 import { addCartItem, calculateCartSubtotal } from './cart-model';
+import { AdminDashboardPage } from './AdminDashboardPage';
 import {
   ArrowDown, ArrowRight, BatteryCharging, BookOpen, Bot,
   CheckCircle2, CircuitBoard, Cpu, Gauge, GraduationCap, Grid2X2,
@@ -32,12 +35,13 @@ import {
 type Item = { id: string; name: string; price: number; kind: 'component' | 'kit' | 'bom'; sku: string; qty: number };
 type AddItem = Omit<Item, 'qty'> & { qty?: number };
 type DemoOrder = { orderNumber:string; placedAt:string; items:Item[]; subtotal:number };
-type Product = { id: string; name: string; sku: string; category: string; price: number; stock: number; package: string; description: string; voltage: string; interface: string; icon: 'cpu' | 'sensor' | 'power' | 'display' | 'board' | 'parts'; };
-type Kit = { id: string; code:string; title: string; category: string; level: 'Beginner' | 'Intermediate' | 'Advanced' | 'All levels'; domain: string; duration: string; price: number; desc: string; parts: string[]; count:string; manual:string; icon: 'weather' | 'robot' | 'energy' | 'lab' | 'plant' | 'logic'; };
+type Product = CatalogProduct;
+type Kit = CatalogKit;
 type PriceListState = { pricesBySku: Record<string, number>; source: string; updatedAt: string };
 const PRICE_LIST_STORAGE_KEY = 'circuits-kw-build-assist-prices';
 const normalizePriceSku = (sku: string) => sku.trim().toLocaleUpperCase('en-US');
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+setBaseUrl(basePath || null);
 const clerkPublishableKey = publishableKeyFromHost(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
@@ -106,6 +110,7 @@ function ClerkProfileSync() {
   const { language } = useLanguage();
   const [syncError, setSyncError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const { mutateAsync: syncCurrentUser } = useSyncCurrentUser();
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user) {
@@ -115,13 +120,8 @@ function ClerkProfileSync() {
 
     let active = true;
     setSyncError(false);
-    void fetch(`${basePath}/api/users/me`, {
-      method: 'PUT',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-    })
-      .then(response => {
-        if (!response.ok) throw new Error('profile_sync_failed');
+    void syncCurrentUser()
+      .then(() => {
         if (active) setSyncError(false);
       })
       .catch(() => {
@@ -131,7 +131,7 @@ function ClerkProfileSync() {
     return () => {
       active = false;
     };
-  }, [isLoaded, isSignedIn, user?.id, user?.updatedAt, retryCount]);
+  }, [isLoaded, isSignedIn, user?.id, user?.updatedAt, retryCount, syncCurrentUser]);
 
   if (!isLoaded || !isSignedIn || !syncError) return null;
 
@@ -301,20 +301,6 @@ function readSavedPriceList(): PriceListState | null {
   }
 }
 
-const products: Product[] = [
-  { id:'esp32', name:'ESP32-WROOM-32D', sku:'ESP32-WRM-32D', category:'Microcontrollers', price:2.850, stock:142, package:'DIP-38', description:'Dual-core 240MHz MCU with integrated RF and PCB antenna.', voltage:'2.7V–3.6V (3.3V nom.)', interface:'SPI · I²C · UART · PWM', icon:'cpu' },
-  { id:'nucleo', name:'STM32 Nucleo-F401RE', sku:'NUCLEO-F401RE', category:'Microcontrollers', price:6.200, stock:28, package:'Nucleo-64', description:'Cortex-M4 board with ST-LINK and 512KB flash.', voltage:'3.3V / 5V Vin', interface:'USB · UART · SPI', icon:'board' },
-  { id:'bme280', name:'BME280 Sensor Module', sku:'SNS-BME280-I2C', category:'Sensors', price:1.950, stock:65, package:'LGA-8 breakout', description:'Measures temperature, humidity and air pressure.', voltage:'1.8V–3.6V', interface:'I²C · SPI', icon:'sensor' },
-  { id:'hcsr04', name:'HC-SR04 Ultrasonic Sensor', sku:'SNS-HCSR04-5V', category:'Sensors', price:0.850, stock:210, package:'Through-hole', description:'Ultrasonic sensor for distance and obstacle detection.', voltage:'5V DC', interface:'GPIO · trigger', icon:'sensor' },
-  { id:'pico', name:'Raspberry Pi Pico W', sku:'RPI-PICOW-2024', category:'Microcontrollers', price:2.100, stock:0, package:'DIP-40', description:'Dual-core RP2040 board with Wi-Fi and 2MB flash.', voltage:'1.8V–5.5V VSYS', interface:'PIO · SPI · I²C', icon:'board' },
-  { id:'lcd', name:'16x2 I2C Character LCD', sku:'DIS-LCD-1602I2C', category:'Displays', price:1.450, stock:54, package:'1602 module', description:'16×2 character LCD with I²C backpack.', voltage:'5V DC', interface:'I²C address 0x27', icon:'display' },
-  { id:'level', name:'Logic Level Converter 4-Ch', sku:'MOD-LLC-4CH-BI', category:'ICs & Logic Translators', price:0.650, stock:320, package:'4-channel board', description:'Bidirectional logic shifting for 3.3V and 5V systems.', voltage:'Up to 5V DC', interface:'I²C · SPI · UART', icon:'power' },
-  { id:'resistor', name:'Metal Film Resistors Kit', sku:'PAS-RES-KIT-600', category:'Passives', price:2.500, stock:75, package:'600 pieces', description:'600-piece resistor kit with 1% tolerance.', voltage:'250mW · 0.25W', interface:'E12 series', icon:'parts' },
-  { id:'soil', name:'Capacitive Soil Moisture Sensor v1.2', sku:'SNS-SOIL-CAP-12', category:'Sensors', price:1.200, stock:48, package:'Analog module', description:'Corrosion-resistant probe with 3.3V analog output.', voltage:'3.3V analog', interface:'ADC output', icon:'sensor' },
-  { id:'tp4056', name:'TP4056 1A Li-Ion Solar Battery Charger', sku:'PWR-TP4056-C', category:'Power & Battery', price:0.750, stock:92, package:'USB-C module', description:'USB-C Li-ion charger with DW01A protection.', voltage:'4.2V charge', interface:'USB-C · Li-ion', icon:'power' },
-  { id:'battery', name:'18650 3000mAh Battery Cell with Holder', sku:'BAT-18650-3000', category:'Power & Battery', price:2.200, stock:39, package:'18650 + holder', description:'3000mAh 18650 cell with holder and clip leads.', voltage:'3.7V nominal', interface:'Li-ion · holder', icon:'power' },
-];
-
 type BuildOption = { id:string; title:string; description:string; prompt:string; partIds:string[] };
 const buildOptions: BuildOption[] = [
   { id:'greenhouse', title:'Greenhouse Monitor', description:'Monitor soil moisture and local climate using the ESP32, BME280, and capacitive probe.', prompt:'Greenhouse monitor with soil moisture and temperature humidity pressure readings.', partIds:['esp32','bme280','soil'] },
@@ -327,16 +313,6 @@ const buildOptions: BuildOption[] = [
   { id:'stm32-weather-node', title:'STM32 Weather Node', description:'Build an STM32-based station for temperature, humidity, and pressure.', prompt:'STM32 Nucleo weather monitor measuring temperature humidity and pressure with BME280.', partIds:['nucleo','bme280'] },
 ];
 
-const kits: Kit[] = [
-  { id:'weather-kit', code:'CKW-KIT-0101', title:'IoT Weather Station Kit', category:'IoT & Smart Home', level:'Intermediate', domain:'iot', duration:'1.5–2 hrs', price:12.500, desc:'Measure pressure, temperature and humidity; stream over Wi-Fi to MQTT or Home Assistant.', parts:['ESP32 NodeMCU','BME280 Sensor','0.96" I2C OLED','Breadboard + Jumpers'], count:'6 Items', manual:'PDF Manual & GitHub Arduino IDE Sketch', icon:'weather' },
-  { id:'rover-kit', code:'CKW-KIT-0205', title:'Autonomous Obstacle Avoiding Robot', category:'Robotics', level:'Beginner', domain:'robotics', duration:'3–4 hrs', price:18.750, desc:'Build a two-wheel rover with PWM speed control and ultrasonic obstacle detection.', parts:['2WD Smart Chassis','Arduino Uno R3','L298N Dual Bridge','HC-SR04 Sonar','4xAA Carrier'], count:'9 Items', manual:'Color Wire Chart + Ultrasonic Sweep Code', icon:'robot' },
-  { id:'energy-kit', code:'CKW-KIT-0312', title:'Smart Home Power & Energy Meter', category:'IoT & Automation', level:'Intermediate', domain:'iot', duration:'2–3 hrs', price:14.200, desc:'Non-invasive AC current sensing for an example ESPHome or MQTT dashboard.', parts:['SCT-013 CT Clamp','ESP32 Dual-Core','Burden Resistor Mod','3.3V Voltage Bias'], count:'7 Items', manual:'ESPHome YAML config + Calibration Guide', icon:'energy' },
-  { id:'university-kit', code:'CKW-KIT-KU-EE1', title:'KU Electrical Eng Starter Lab Kit', category:'University Labs', level:'All levels', domain:'university', duration:'Semester-long', price:24.500, desc:'Core parts for standard KU and AUK electrical engineering lab projects.', parts:['Auto DMM Multimeter','830-Pt Breadboard','Dual 3.3/5V Rail','LM358 & 741 Op-Amps','BJT & MOSFET Assort.'], count:'320+ Parts', manual:'12 Standard Experiment Worksheets', icon:'lab' },
-  { id:'plant-kit', code:'CKW-KIT-0408', title:'Plant Soil Telemetry & Auto-Watering', category:'Automation', level:'Beginner', domain:'automation', duration:'1–1.5 hrs', price:8.900, desc:'Soil sensing and relay control for an indoor garden watering example.', parts:['Capacitive Moisture V1.2','5V Submersible Pump','1-Ch Opto Relay','Arduino Nano (Type-C)'], count:'5 Items', manual:'Auto Calibration Firmware + Tubing Fixture', icon:'plant' },
-  { id:'fpga-kit', code:'CKW-KIT-0550', title:'FPGA & Digital Logic Bundle', category:'Digital Logic', level:'Advanced', domain:'university', duration:'6+ hrs', price:32.000, desc:'Explore Verilog and VHDL with an FPGA, displays, switches and logic gates.', parts:['FPGA Eval Board','4x 7-Segment Modules','8-Bit DIP Switch Array','74HC00/08/32 ICs','USB-JTAG Blaster'], count:'14 Items', manual:'Verilog Starter Templates + Quartus Lab Manual', icon:'logic' },
-];
-
-const categories = ['All components','Microcontrollers','Sensors','Power & Battery','Passives','ICs & Logic Translators','Displays'];
 const kitDomains = ['All domains','Robotics','IoT & Smart Home','IoT & Automation','University Labs','Automation'];
 const fmt = (value:number) => `${value.toFixed(3)} KWD`;
 const queryClient = new QueryClient();
@@ -367,6 +343,7 @@ function Header({ count, search, onSearch }:{count:number; search:string; onSear
   const [open,setOpen] = useState(false);
   const {language,setLanguage}=useLanguage();
   const {isLoaded,isSignedIn}=useUser();
+  const access=useGetAdminAccess({query:{enabled:Boolean(isLoaded&&isSignedIn),retry:false,queryKey:getGetAdminAccessQueryKey()}});
   const [cartPulse,setCartPulse]=useState(false);
   const previousCount=useRef(count);
   useEffect(()=>{
@@ -377,7 +354,8 @@ function Header({ count, search, onSearch }:{count:number; search:string; onSear
     const timer=window.setTimeout(()=>setCartPulse(false),650);
     return ()=>window.clearTimeout(timer);
   },[count]);
-  const nav = [['Components','/components'],['Project Kits','/project-kits'],['Build Assist','/build-assist'],['About','/about']] as const;
+  const canManage=access.data?.role==='admin'||access.data?.role==='editor';
+  const nav = [['Components','/components'],['Project Kits','/project-kits'],['Build Assist','/build-assist'],['About','/about'],...(canManage?[['Dashboard','/dashboard'] as const]:[])] as const;
   const accountHref=isLoaded&&isSignedIn?'/account':'/sign-in';
   const accountLabel=isLoaded&&isSignedIn?t('Account',language):t('Sign in',language);
   const accountActive=path.startsWith('/account')||path.startsWith('/sign-in')||path.startsWith('/sign-up')||path==='/sign-out';
@@ -473,19 +451,26 @@ function HomePage() {
   </>;
 }
 
-function CatalogPage({ add, globalSearch }:{add:(item:AddItem)=>void;globalSearch:string}) {
+function CatalogLoadState({ loading, retry }:{loading:boolean;retry:()=>void}) {
+  const {language}=useLanguage();
+  return <div className="container page-top"><div className="surface empty-state" role={loading?'status':'alert'} data-testid="catalog-load-state"><div className="empty-icon"><PackageCheck size={23}/></div><h3>{t(loading?'Loading catalog':'Catalog unavailable',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t(loading?'Products and kits are being loaded.':'The saved catalog could not be reached. Try again.',language)}</p>{!loading&&<button className="button button-outline" onClick={retry} data-testid="button-retry-catalog">{t('Retry',language)}</button>}</div></div>;
+}
+
+function CatalogPage({ add, globalSearch, products, loading, error, retry }:{add:(item:AddItem)=>void;globalSearch:string;products:Product[];loading:boolean;error:boolean;retry:()=>void}) {
   const {language}=useLanguage();
    useDocument(t('Components catalog',language),t('Browse components with key specs and sample KWD prices.',language));
   const [query,setQuery]=useState(globalSearch); const [category,setCategory]=useState('All components'); const [stockOnly,setStockOnly]=useState(false); const [voltage,setVoltage]=useState<string[]>([]); const [mount,setMount]=useState<string[]>([]); const [sort,setSort]=useState('verified');
    useEffect(()=>{setQuery(globalSearch)},[globalSearch]);
+   const categories=useMemo(()=>['All components',...Array.from(new Set(products.map(product=>product.category)))],[products]);
   const toggle=(values:string[],setter:(v:string[])=>void,value:string)=>setter(values.includes(value)?values.filter(x=>x!==value):[...values,value]);
    const filtered=useMemo(()=>products.filter(p=>{
      const searchValues=[p.name,p.sku,p.category,p.interface,p.description,t(p.name,'ar'),t(p.category,'ar'),t(p.description,'ar')];
      const matchesQuery=!query||searchValues.some(value=>value.toLowerCase().includes(query.toLowerCase()));
      return (category==='All components'||p.category===category)&&(!stockOnly||p.stock>0)&&matchesQuery&&(!voltage.length||voltage.some(v=>p.voltage.toLowerCase().includes(v.toLowerCase().replace(' dc',''))||p.voltage.toLowerCase().includes(v.toLowerCase())))&&(!mount.length||(mount.includes('Through-hole')&&/(dip|through|resistor)/i.test(`${p.package} ${p.category}`))||(mount.includes('Surface mount')&&/(smd|surface|lga)/i.test(`${p.package} ${p.category}`)));
-   }),[category,stockOnly,query,voltage,mount]);
+    }),[products,category,stockOnly,query,voltage,mount]);
   const sorted=[...filtered].sort((a,b)=>sort==='low'?a.price-b.price:sort==='high'?b.price-a.price:sort==='stock'?b.stock-a.stock:products.indexOf(a)-products.indexOf(b));
   function reset(){setCategory('All components');setStockOnly(false);setVoltage([]);setMount([]);setQuery('');}
+   if(loading||error) return <CatalogLoadState loading={loading} retry={retry}/>;
    return <div className="container page-top">
      <div className="catalog-breadcrumb"><Link href="/">{t('Home',language)}</Link><span>/</span><span>{t('Components',language)}</span><span>/</span><b>{t('Catalog',language)}</b><span className="sample-sync"><i/> {t('SAMPLE CATALOG DATA',language)}</span></div>
       <div className="page-heading-row"><div><div className="eyebrow">{t('LOCAL INVENTORY · KUWAIT REFERENCE',language)}</div><h1>{t('Electronic components.',language)}</h1><p className="lead" style={{fontSize:14,marginBottom:20}}>{t('Search parts and compare specs. Prices and stock are samples.',language)}</p></div><span className="tag"><MapPin size={12}/> {t('KWD · Kuwait-focused',language)}</span></div>
@@ -526,7 +511,7 @@ function kitDescriptionPreview(description:string) {
   return words.length>11?`${words.slice(0,11).join(' ')}…`:description;
 }
 
-function KitsPage({add}:{add:(item:AddItem)=>void}) {
+function KitsPage({add,kits,loading,error,retry}:{add:(item:AddItem)=>void;kits:Kit[];loading:boolean;error:boolean;retry:()=>void}) {
   const {language}=useLanguage();
    useDocument(t('Project kits',language),t('Sample kits for robotics, IoT, automation and university labs.',language));
    const [level,setLevel]=useState('All levels');const [domain,setDomain]=useState('All domains');const [query,setQuery]=useState('');const [selectedKit,setSelectedKit]=useState<Kit|null>(null);const [expandedKitId,setExpandedKitId]=useState<string|null>(null);const [animatedKitId,setAnimatedKitId]=useState<string|null>(null);
@@ -534,8 +519,9 @@ function KitsPage({add}:{add:(item:AddItem)=>void}) {
      const searchValues=[k.title,k.desc,k.category,k.level,k.parts.join(' '),t(k.title,'ar'),t(k.desc,'ar'),t(k.category,'ar'),t(k.level,'ar')];
      return (level==='All levels'||k.level===level||k.level==='All levels')&&(domain==='All domains'||k.category===domain)&&(!query||searchValues.some(value=>value.toLowerCase().includes(query.toLowerCase())));
    });
+   if(loading||error) return <CatalogLoadState loading={loading} retry={retry}/>;
   return <>
-       <section className="kit-hero"><div className="container"><div className="eyebrow" style={{color:'#55d7e9'}}>{t('CURATED PROJECT STARTERS · KUWAIT',language)}</div><div className="page-heading-row" style={{alignItems:'center'}}><div><h1>{t('Curated Project Kits.',language)}</h1><p>{t('Six sample kits with BOMs and schematic references. Availability is not live.',language)}</p></div><div className="kit-stats"><div className="kit-stat"><strong>06</strong><span>{t('Sample kits',language)}</span></div><div className="kit-stat"><strong>1–6+ hrs</strong><span>{t('Example build duration',language)}</span></div></div></div></div></section>
+        <section className="kit-hero"><div className="container"><div className="eyebrow" style={{color:'#55d7e9'}}>{t('CURATED PROJECT STARTERS · KUWAIT',language)}</div><div className="page-heading-row" style={{alignItems:'center'}}><div><h1>{t('Curated Project Kits.',language)}</h1><p>{t('Sample kits with BOMs and schematic references. Availability is not live.',language)}</p></div><div className="kit-stats"><div className="kit-stat"><strong>{String(kits.length).padStart(2,'0')}</strong><span>{t('Saved kits',language)}</span></div><div className="kit-stat"><strong>1–6+ hrs</strong><span>{t('Example build duration',language)}</span></div></div></div></div></section>
      <div className="container"><div className="kit-toolbar surface"><div className="chip-row"><span className="eyebrow" style={{marginRight:4}}>{t('Filter kits',language)}</span>{['All levels','Beginner','Intermediate','Advanced'].map(l=><button key={l} className={`filter-chip ${level===l?'active':''}`} onClick={()=>setLevel(l)} data-testid={`filter-kit-level-${l.toLowerCase()}`}>{t(l,language)}</button>)}</div><div className="chip-row">{kitDomains.map(d=><button key={d} className={`filter-chip ${domain===d?'active':''}`} onClick={()=>setDomain(d)} data-testid={`filter-kit-domain-${d.toLowerCase().replaceAll(' ','-').replace('&-','')}`}>{t(d,language)}</button>)}</div></div>
        <div className="search-field" style={{marginTop:17}}><Search size={17}/><input placeholder={t('Search kits…',language)} value={query} onChange={e=>setQuery(e.target.value)} aria-label={t('Search project kits',language)} data-testid="input-kit-search"/></div>
           {shown.length?<div className="kits-grid">{shown.map(k=>{const kitDescription=t(k.desc,language);return <article className="kit-card surface" key={k.id} data-testid={`card-kit-${k.id}`}><KitArt kit={k}/><div className="kit-body"><div className="kit-code"><span>{k.code}</span><span>{t(k.level==='All levels'?'All Experience Levels':k.level,language)}</span></div><span className="tag" style={{width:'max-content'}}>{t(k.category,language)} · {t(k.duration,language)}</span><h3>{t(k.title,language)}</h3><p className={`kit-description ${expandedKitId===k.id?'expanded':''}`} id={`kit-description-${k.id}`}><span className={`description-copy ${animatedKitId===k.id?'animated':''}`} key={expandedKitId===k.id?'full':'preview'}>{expandedKitId===k.id?kitDescription:kitDescriptionPreview(kitDescription)}</span></p><button className="product-more kit-more" type="button" aria-expanded={expandedKitId===k.id} aria-controls={`kit-description-${k.id}`} onClick={()=>{setExpandedKitId(expandedKitId===k.id?null:k.id);setAnimatedKitId(k.id)}} data-testid={`button-kit-more-${k.id}`}>{t(expandedKitId===k.id?'Show less':'Show more',language)} <span aria-hidden="true">{expandedKitId===k.id?'−':'+'}</span></button><div><div className="filter-title" style={{fontSize:9}}>{t('Core hardware BOM',language)}</div><div className="kit-bom">{k.parts.map(p=><span key={p}>{p}</span>)}</div></div><div className="kit-manual"><BookOpen size={13}/> {t(k.manual,language)}</div><div className="kit-bottom"><span className="mono" style={{fontSize:9,color:'#687680'}}>{t('ILLUSTRATIVE KIT PRICE',language)}</span><span className="price">{fmt(k.price)}</span></div><div className="kit-actions"><button className="button button-outline small-button" onClick={()=>setSelectedKit(k)} data-testid={`button-schematic-${k.id}`}><CircuitBoard size={14}/> {t('Schematic / BOM',language)}</button><button className="button button-primary small-button" onClick={()=>add({id:k.id,name:k.title,price:k.price,kind:'kit',sku:k.code})} data-testid={`button-add-kit-${k.id}`}><ShoppingCart size={14}/> {t('Add Rig',language)}</button></div></div></article>})}</div>:<div className="surface empty-state"><h3>{t('No kits match those filters',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto'}}>{t('Choose another domain or search term.',language)}</p></div>}
@@ -559,7 +545,7 @@ function getPriceCsvImportError(error: unknown, language: Language) {
     : t('CSV could not be imported. Check required columns, row values, KWD prices, and duplicate SKUs.', language);
 }
 
-function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
+function BuildAssistPage({add,products,loading,error,retry}:{add:(item:AddItem)=>void;products:Product[];loading:boolean;error:boolean;retry:()=>void}) {
   const {language}=useLanguage();
    useDocument(t('Build Assist',language),t('Choose a project and preview its parts and saved prices.',language));
   const [selectedProjectId,setSelectedProjectId]=useState(buildOptions[0].id);
@@ -582,7 +568,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
   const priceFileInputRef=useRef<HTMLInputElement>(null);
   const priceListIsStale=priceList!==null&&isPriceListStale(priceList.updatedAt);
   useEffect(()=>{setAssemblyOverride(null);setPartQuantities({});setGenerated(false);setPriceListRemoved(false);setNotice('');setPreview(null)},[selectedProjectId]);
-  const plan=useMemo(()=>buildPlanFromPrompt(prompt,voltage,products),[prompt,voltage]);
+   const plan=useMemo(()=>buildPlanFromPrompt(prompt,voltage,products),[prompt,voltage,products]);
   const bom=plan.parts.map(part=>({
     ...part,
     price:priceList
@@ -597,6 +583,7 @@ function BuildAssistPage({add}:{add:(item:AddItem)=>void}) {
     pricedBom.map(part=>({unitPrice:part.price,quantityPerAssembly:quantityFor(part)})),
     assemblies,
   );
+  if(loading||error) return <CatalogLoadState loading={loading} retry={retry}/>;
   const controller=bom.find(part=>['esp32','nucleo','pico'].includes(part.id));
   const bomName=(product:{name:string})=>product.name;
   const generate=()=>{
@@ -857,9 +844,9 @@ function checkoutFieldError(field:string,value:string):string|undefined {
 function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
   const {language}=useLanguage();
   const {isLoaded,isSignedIn,user}=useUser();
-  useDocument(t('Checkout',language),t('Demo orders are saved in this browser.',language));
+  useDocument(t('Checkout',language),t('Demo orders are saved for Circuits KW order management.',language));
+  const createOrder=useCreateCheckoutOrder();
   const [placedOrder,setPlacedOrder]=useState<DemoOrder|null>(null);
-  const [orderSaved,setOrderSaved]=useState(true);
   const [orderError,setOrderError]=useState('');
   const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
   useEffect(()=>{
@@ -891,40 +878,76 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
       });
       return;
     }
-    const order:DemoOrder={
-      orderNumber:`CKW-DEMO-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`,
-      placedAt:new Date().toISOString(),
-      items:items.map(item=>({...item})),
-      subtotal,
-    };
-    try {
-      const stored=localStorage.getItem('circuits-kw-demo-orders');
-      const previous=stored?JSON.parse(stored) as DemoOrder[]:[];
-      if(!Array.isArray(previous)) throw new Error('Saved demo orders are not a list.');
-      localStorage.setItem('circuits-kw-demo-orders',JSON.stringify([order,...previous].slice(0,20)));
-      setOrderSaved(true);
-    } catch {
-      setOrderSaved(false);
-    }
-    setPlacedOrder(order);
-    clearCart();
+    createOrder.mutate({
+      data:{
+        customer:{name:value('name'),email:value('email'),phone:value('phone')},
+        shipping:{
+          governorate:value('governorate'),
+          area:value('area'),
+          block:value('block'),
+          street:value('street'),
+          building:value('building'),
+          ...(value('unit')?{unit:value('unit')}:{ }),
+          ...(value('notes')?{notes:value('notes')}:{ }),
+        },
+        items:items.map(item=>({
+          id:item.id,
+          kind:item.kind,
+          sku:item.sku,
+          qty:item.qty,
+          ...(item.kind==='bom'?{estimateUnitPrice:item.price}:{}),
+        })),
+      },
+    },{
+      onSuccess:saved=>{
+        setPlacedOrder({
+          orderNumber:saved.orderNumber,
+          placedAt:new Date(saved.placedAt).toISOString(),
+          items:saved.items.map(item=>({id:item.id,name:item.name,price:item.price,kind:item.kind,sku:item.sku,qty:item.qty})),
+          subtotal:saved.subtotal,
+        });
+        clearCart();
+      },
+      onError:error=>{
+        const data=(error as {data?:unknown}).data;
+        const payload=data&&typeof data==='object'?data as {error?:unknown;details?:unknown}:null;
+        if(payload?.error==='catalog_item_unavailable'){
+          setOrderError(t('One or more items are no longer available. Refresh the catalog and update your cart.',language));
+          return;
+        }
+        if(payload?.error==='invalid_order'&&Array.isArray(payload.details)){
+          const fieldByPath:Record<string,string>={'customer.name':'name','customer.email':'email','customer.phone':'phone','shipping.governorate':'governorate','shipping.area':'area','shipping.block':'block','shipping.street':'street','shipping.building':'building'};
+          const fields=Array.from(new Set(payload.details.flatMap(issue=>{
+            if(!issue||typeof issue!=='object'||!('path' in issue)||!Array.isArray(issue.path))return [];
+            const field=fieldByPath[issue.path.join('.')];
+            return field?[field]:[];
+          })));
+          if(fields.length){
+            setFieldErrors(current=>({...current,...Object.fromEntries(fields.map(field=>[field,checkoutFieldError(field,value(field))||t('Please check this field.',language)]))}));
+            setOrderError(t('The server could not validate some details. Review the highlighted fields.',language));
+            return;
+          }
+        }
+        setOrderError(t('The order could not be saved. Your cart is still here; please try again shortly.',language));
+      },
+    });
   };
   if(placedOrder) return <div className="container page-top checkout-confirmation" data-testid="demo-order-confirmation">
-    <div className="eyebrow">{t('DEMO ORDER PLACED · LOCAL ONLY',language)}</div>
+    <div className="eyebrow">{t('DEMO ORDER PLACED · SAVED',language)}</div>
     <div className="checkout-confirmation-card surface">
       <div className="checkout-confirmation-icon"><CheckCircle2 size={26}/></div>
       <h1>{t('Order placed.',language)}</h1>
-       <p className="lead" style={{fontSize:13,margin:'0 auto 18px'}} data-testid="text-order-storage-status">{orderSaved?t('Saved in this browser. No real order or payment.',language):t('This order could not be saved in this browser. Its confirmation will be lost if you leave or reload this page.',language)}</p>
+       <p className="lead" style={{fontSize:13,margin:'0 auto 18px'}} data-testid="text-order-storage-status">{t('Saved for demo order management. No payment or fulfillment is connected.',language)}</p>
       <div className="demo-order-number"><span>{t('DEMO ORDER NUMBER',language)}</span><strong data-testid="text-demo-order-number">{placedOrder.orderNumber}</strong><small>{new Date(placedOrder.placedAt).toLocaleString(language==='ar'?'ar-KW':'en-KW')}</small></div>
       <div className="demo-order-items">{placedOrder.items.map(item=><div key={item.id}><span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span><strong>{fmt(item.price*item.qty)}</strong></div>)}</div>
       <div className="summary-line summary-total"><span>{t('Demo total',language)}</span><span className="mono">{fmt(placedOrder.subtotal)}</span></div>
-       <p className="checkout-order-disclaimer">{t('Only items and totals are saved. Contact details stay private; delivery is not connected.',language)}</p>
+        <p className="checkout-order-disclaimer">{t('Order contact and delivery details are saved for admin review. Payment and fulfillment are not connected.',language)}</p>
       <Link className="button button-primary" href="/components" data-testid="link-confirmation-shop">{t('Continue browsing',language)} <ArrowRight size={15}/></Link>
     </div>
   </div>;
   if(!items.length) return <div className="container page-top"><div className="eyebrow">{t('ORDER REVIEW · CHECKOUT PREVIEW',language)}</div><div className="surface empty-state"><div className="empty-icon"><ShoppingCart size={23}/></div><h3>{t('Your cart is empty.',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Add parts or a kit before checkout.',language)}</p><Link className="button button-primary" href="/components">{t('Browse components',language)}</Link></div></div>;
   return <div className="container page-top">
-    <div className="checkout-heading"><div><div className="eyebrow">{t('ORDER REVIEW · LOCAL DEMO',language)}</div><h1>{t('Checkout',language)}</h1><p className="lead" style={{fontSize:13}}>{t('Sample order only. Contact and address details are not saved or sent.',language)}</p></div><span className="tag"><ShieldCheck size={13}/> {t('No payment connected',language)}</span></div>
+     <div className="checkout-heading"><div><div className="eyebrow">{t('ORDER REVIEW · LOCAL DEMO',language)}</div><h1>{t('Checkout',language)}</h1><p className="lead" style={{fontSize:13}}>{t('Demo order only. Contact and delivery details are saved for order management.',language)}</p></div><span className="tag"><ShieldCheck size={13}/> {t('No payment connected',language)}</span></div>
     <form className="checkout-layout" noValidate onSubmit={submitDemoOrder} onChange={event=>{
       const changedTarget=event.nativeEvent.target;
       const field=changedTarget instanceof HTMLInputElement||changedTarget instanceof HTMLSelectElement||changedTarget instanceof HTMLTextAreaElement?changedTarget.name:'';
@@ -957,7 +980,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
                   <Link href="/sign-up?returnTo=checkout" className="button button-primary small-button" data-testid="link-checkout-sign-up">{t('Create account',language)}</Link>
                 </>}
           </div>
-          <p className="checkout-account-note">{t('Guest checkout is available. Demo orders are not saved to your account.',language)}</p>
+          <p className="checkout-account-note">{t('Guest checkout is available. Signed-in orders are linked to your account.',language)}</p>
         </section>
         <section className="surface checkout-panel">
            <div className="checkout-section-heading"><span className="checkout-step">01</span><div><h2>{t('Contact details',language)}</h2><p>{t('For this demo order.',language)}</p></div></div>
@@ -980,11 +1003,11 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
           </div>
         </section>
         <section className="checkout-payment-note">
-          <ShieldCheck size={18}/><div><strong>{t('Local demo order only',language)}</strong><p>{t('Creates a local receipt and clears the cart. No payment or fulfillment.',language)}</p></div>
+          <ShieldCheck size={18}/><div><strong>{t('Local demo order only',language)}</strong><p>{t('Saves an order record for admin review. No payment or fulfillment.',language)}</p></div>
         </section>
         {orderError&&<div className="checkout-error" role="alert" data-testid="checkout-order-error">{orderError}</div>}
-        <button type="submit" className="button button-primary checkout-submit" data-testid="button-place-demo-order">{t('Place demo order',language)} <ArrowRight size={15}/></button>
-        <p className="checkout-privacy">{t('Contact and address details stay on this page; they are not saved or sent.',language)}</p>
+        <button type="submit" className="button button-primary checkout-submit" disabled={createOrder.isPending} data-testid="button-place-demo-order">{createOrder.isPending?t('Saving order',language):t('Place demo order',language)} <ArrowRight size={15}/></button>
+        <p className="checkout-privacy">{t('Contact and delivery details are saved with the demo order for admin order management.',language)}</p>
       </div>
       <aside className="surface checkout-summary">
         <div className="eyebrow">{t('YOUR PARTS LIST',language)}</div><h2>{t('Order summary',language)}</h2>
@@ -1139,6 +1162,13 @@ function RoutedErrorBoundary({children}:{children:ReactNode}) { const [location]
 function Router({items,add,update,remove,clearCart,search,setSearch,cartStorageUnavailable}:{items:Item[];add:(item:AddItem)=>void;update:(id:string,qty:number)=>void;remove:(id:string)=>void;clearCart:()=>void;search:string;setSearch:(v:string)=>void;cartStorageUnavailable:boolean}) {
   const [location]=useLocation();
   const count=items.reduce((n,i)=>n+i.qty,0);
+  const catalogEnabled=['/components','/project-kits','/build-assist'].includes(location);
+  const catalogQuery=useGetCatalog({query:{enabled:catalogEnabled,queryKey:getGetCatalogQueryKey()}});
+  const products=catalogQuery.data?.products??[];
+  const kits=catalogQuery.data?.kits??[];
+  const catalogLoading=catalogEnabled&&catalogQuery.isLoading;
+  const catalogError=catalogEnabled&&catalogQuery.isError;
+  const retryCatalog=()=>{void catalogQuery.refetch();};
   useEffect(()=>{
     const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({top:0,left:0,behavior:reducedMotion?'auto':'smooth'});
@@ -1161,9 +1191,10 @@ function Router({items,add,update,remove,clearCart,search,setSearch,cartStorageU
   },[location]);
   return <RoutedErrorBoundary><Shell count={count} globalSearch={search} setGlobalSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}><div className="page-transition" key={location}><Switch>
     <Route path="/" component={HomePage}/>
-    <Route path="/components"><CatalogPage add={add} globalSearch={search}/></Route>
-    <Route path="/project-kits"><KitsPage add={add}/></Route>
-    <Route path="/build-assist"><BuildAssistPage add={add}/></Route>
+    <Route path="/components"><CatalogPage add={add} globalSearch={search} products={products} loading={catalogLoading} error={catalogError} retry={retryCatalog}/></Route>
+    <Route path="/project-kits"><KitsPage add={add} kits={kits} loading={catalogLoading} error={catalogError} retry={retryCatalog}/></Route>
+    <Route path="/build-assist"><BuildAssistPage add={add} products={products} loading={catalogLoading} error={catalogError} retry={retryCatalog}/></Route>
+    <Route path="/dashboard" component={AdminDashboardPage}/>
     <Route path="/about"><AboutPage/></Route>
     <Route path="/cart"><CartPage items={items} update={update} remove={remove}/></Route>
     <Route path="/checkout"><CheckoutPage items={items} clearCart={clearCart}/></Route>

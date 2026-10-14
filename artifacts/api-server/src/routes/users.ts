@@ -1,19 +1,8 @@
-import { clerkClient, getAuth } from "@clerk/express";
+import { getAuth } from "@clerk/express";
+import { SyncCurrentUserResponse } from "@workspace/api-zod";
 import { Router, type IRouter } from "express";
 import { logger } from "../lib/logger";
-import { getMongoDatabase } from "../lib/mongo";
-
-type UserProfileDocument = {
-  _id: string;
-  clerkUserId: string;
-  email: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  clerkCreatedAt: Date;
-  clerkUpdatedAt: Date;
-  lastSyncedAt: Date;
-  createdAt: Date;
-};
+import { syncClerkUserProfile } from "../lib/user-profiles";
 
 const router: IRouter = Router();
 
@@ -25,34 +14,8 @@ router.put("/users/me", async (req, res) => {
   }
 
   try {
-    const user = await clerkClient.users.getUser(userId);
-    const primaryEmail = user.emailAddresses.find(
-      (address) => address.id === user.primaryEmailAddressId,
-    )?.emailAddress;
-    const now = new Date();
-    const database = await getMongoDatabase();
-    const users = database.collection<UserProfileDocument>("users");
-
-    await users.updateOne(
-      { _id: user.id },
-      {
-        $set: {
-          clerkUserId: user.id,
-          email: primaryEmail ?? null,
-          firstName: user.firstName ?? null,
-          lastName: user.lastName ?? null,
-          clerkCreatedAt: new Date(user.createdAt),
-          clerkUpdatedAt: new Date(user.updatedAt),
-          lastSyncedAt: now,
-        },
-        $setOnInsert: {
-          createdAt: now,
-        },
-      },
-      { upsert: true },
-    );
-
-    res.status(200).json({ ok: true });
+    const profile = await syncClerkUserProfile(userId);
+    res.status(200).json(SyncCurrentUserResponse.parse({ ok: true, role: profile.role }));
   } catch (error) {
     logger.error(
       { errorName: error instanceof Error ? error.name : "UnknownError" },
