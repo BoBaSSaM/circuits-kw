@@ -1214,7 +1214,7 @@ function App() {
   const [cartStorageUnavailable,setCartStorageUnavailable]=useState(!initialCart.storageAvailable);
   const [language,setLanguage]=useState<Language>(()=>readBrowserStorage('circuits-kw-language')==='ar'?'ar':'en');
   const [search,setSearch]=useState('');
-  const [cartNotice,setCartNotice]=useState<{id:number;name:string}|null>(null);
+  const [cartNotice,setCartNotice]=useState<{id:number;type:'added';name:string}|{id:number;type:'updated'}|null>(null);
   const cartNoticeId=useRef(0);
   const firstCartSave=useRef(true);
   useEffect(()=>{
@@ -1250,8 +1250,13 @@ function App() {
       if(!stored.storageAvailable) return;
       const nextItems=mergeConcurrentCartChanges(sharedCartRef.current,cartItemsRef.current,stored.items);
       sharedCartRef.current=stored.items;
+      const cartChanged=!sameCartItemList(nextItems,cartItemsRef.current);
       cartItemsRef.current=nextItems;
-      setItemsState(nextItems);
+      if(cartChanged) {
+        setItemsState(nextItems);
+        cartNoticeId.current+=1;
+        setCartNotice({id:cartNoticeId.current,type:'updated'});
+      }
     };
     window.addEventListener('storage',syncCartFromOtherTab);
     return ()=>window.removeEventListener('storage',syncCartFromOtherTab);
@@ -1274,12 +1279,12 @@ function App() {
   const add=(item:AddItem)=>{
     changeCart(old=>addCartItem(old,item));
     cartNoticeId.current+=1;
-    setCartNotice({id:cartNoticeId.current,name:item.name});
+    setCartNotice({id:cartNoticeId.current,type:'added',name:item.name});
   };
   const update=(id:string,qty:number)=>changeCart(old=>qty<=0?old.filter(x=>x.id!==id):old.map(x=>x.id===id?{...x,qty}:x));
   const remove=(id:string)=>changeCart(old=>old.filter(x=>x.id!==id));
   const clearCart=()=>changeCart(()=>[]);
-  return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ClerkRouterBridge><Router items={items} add={add} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t('Added to cart',language)}</strong><span>{t(cartNotice.name,language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</ClerkRouterBridge></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
+  return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ClerkRouterBridge><Router items={items} add={add} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t(cartNotice.type==='added'?'Added to cart':'Cart updated in another tab',language)}</strong><span>{cartNotice.type==='added'?t(cartNotice.name,language):t('Items, quantities, or totals may have changed.',language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</ClerkRouterBridge></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
 }
 
 export default App;

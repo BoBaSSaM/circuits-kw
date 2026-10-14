@@ -978,6 +978,13 @@ test('merges overlapping cart edits across tabs and keeps the first saved value 
       assert.equal(await page.getByTestId('input-quantity-race-item-one').inputValue(), '2');
       assert.equal(await page.getByTestId('input-quantity-race-item-two').inputValue(), '3');
     }
+    const cartUpdateNotice = firstTab.getByTestId('cart-add-feedback');
+    await cartUpdateNotice.waitFor();
+    assert.equal(await cartUpdateNotice.getAttribute('role'), 'status');
+    assert.equal(await cartUpdateNotice.getAttribute('aria-live'), 'polite');
+    assert.match(await cartUpdateNotice.innerText(), /Cart updated in another tab/);
+    await firstTab.getByTestId('button-increase-race-item-two').click();
+    assert.equal(await firstTab.getByTestId('input-quantity-race-item-two').inputValue(), '4');
     assert.deepEqual(pageErrors, []);
     await differentItemsContext.close();
 

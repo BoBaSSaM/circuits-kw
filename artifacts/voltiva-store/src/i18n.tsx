@@ -75,6 +75,8 @@ const arabic: Record<string, string> = {
   'Close navigation': 'إغلاق القائمة',
   'Cart': 'السلة',
   'Cart review': 'مراجعة السلة',
+  'Cart updated in another tab': 'تم تحديث السلة في علامة تبويب أخرى',
+  'Items, quantities, or totals may have changed.': 'قد تكون المنتجات أو الكميات أو الإجمالي قد تغيّرت.',
   'Electronic components and practical guidance for engineers, students, and makers in Kuwait.': 'مكوّنات إلكترونية وإرشادات عملية للمهندسين والطلاب والمبتكرين في الكويت.',
   'Shop': 'تسوّق',
   'Support': 'الدعم',
