@@ -40,3 +40,13 @@ export async function getMongoDatabase(): Promise<Db> {
   await indexesPromise;
   return database;
 }
+
+export async function closeMongoConnection(): Promise<void> {
+  const pendingClient = clientPromise;
+  clientPromise = undefined;
+  indexesPromise = undefined;
+
+  if (pendingClient) {
+    await (await pendingClient).close();
+  }
+}

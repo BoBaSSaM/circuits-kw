@@ -80,21 +80,54 @@ export async function syncClerkUserProfile(userId: string): Promise<UserProfileD
   return saveClerkUserProfile(user);
 }
 
-export async function syncAllClerkUserProfiles(): Promise<void> {
+export type UserProfileBackfillResult = {
+  succeededCount: number;
+  failedCount: number;
+  complete: boolean;
+};
+
+export async function backfillClerkUserProfiles(): Promise<UserProfileBackfillResult> {
   const pageSize = 100;
   let offset = 0;
   let totalCount = Number.POSITIVE_INFINITY;
+  let succeededCount = 0;
+  let failedCount = 0;
+  let complete = true;
 
   while (offset < totalCount) {
-    const page = await clerkClient.users.getUserList({ limit: pageSize, offset });
-    totalCount = page.totalCount;
-    if (!page.data.length) {
+    let page: Awaited<ReturnType<typeof clerkClient.users.getUserList>>;
+    try {
+      page = await clerkClient.users.getUserList({ limit: pageSize, offset });
+    } catch {
+      complete = false;
       break;
     }
 
-    await Promise.all(page.data.map(saveClerkUserProfile));
+    totalCount = page.totalCount;
+    if (!page.data.length) {
+      if (offset < totalCount) {
+        complete = false;
+      }
+      break;
+    }
+
+    const outcomes = await Promise.all(
+      page.data.map(async (user) => {
+        try {
+          await saveClerkUserProfile(user);
+          return true;
+        } catch {
+          return false;
+        }
+      }),
+    );
+    const succeededOnPage = outcomes.filter(Boolean).length;
+    succeededCount += succeededOnPage;
+    failedCount += outcomes.length - succeededOnPage;
     offset += page.data.length;
   }
+
+  return { succeededCount, failedCount, complete };
 }
 
 export async function getOrSyncUserProfile(userId: string): Promise<UserProfileDocument> {

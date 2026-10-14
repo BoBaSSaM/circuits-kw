@@ -14,7 +14,6 @@ import {
   getOrSyncUserProfile,
   isBootstrapAdmin,
   normalizeDashboardRole,
-  syncAllClerkUserProfiles,
   type UserProfileDocument,
 } from "../lib/user-profiles";
 
@@ -52,7 +51,6 @@ router.get(
   requireDashboardRoles("admin"),
   async (_req, res) => {
     try {
-      await syncAllClerkUserProfiles();
       const database = await getMongoDatabase();
       const users = await database
         .collection<UserProfileDocument>("users")
