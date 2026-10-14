@@ -121,9 +121,12 @@ export function mergeConcurrentCartChanges<T extends CartLine>(base: T[], local:
     const remoteChanged = !sameCartItem(remoteItem, baseItem);
 
     if (localChanged && remoteChanged) {
+      // A line removed by either tab stays removed when the other tab only edits it.
+      // This makes a clear-cart action win against stale quantity updates.
+      if (!localItem || !remoteItem) continue;
       const localAdd = additiveDetails(localItem, baseItem);
       const remoteAdd = additiveDetails(remoteItem, baseItem);
-      if (localItem && remoteItem && localAdd && remoteAdd && localAdd.baseQty === remoteAdd.baseQty) {
+      if (localAdd && remoteAdd && localAdd.baseQty === remoteAdd.baseQty) {
         const operations = { ...remoteAdd.operations, ...localAdd.operations };
         const merged = {
           ...remoteItem,

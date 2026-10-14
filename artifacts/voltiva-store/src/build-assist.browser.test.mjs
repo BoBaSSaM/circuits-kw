@@ -1177,6 +1177,55 @@ test('merges concurrent cart additions and edits across tabs without changing th
     assert.equal(await earlierTab.getByTestId('input-quantity-race-item-one').inputValue(), '3');
     assert.equal(await laterTab.getByTestId('input-quantity-race-item-one').inputValue(), '3');
 
+    const clearRaceContext = await browser.newContext();
+    contexts.push(clearRaceContext);
+    await delayStorageEvents(clearRaceContext);
+    const clearingTab = await clearRaceContext.newPage();
+    const editingTab = await clearRaceContext.newPage();
+    clearingTab.on('pageerror', (error) => pageErrors.push(error.message));
+    editingTab.on('pageerror', (error) => pageErrors.push(error.message));
+    await clearingTab.goto(`${baseUrl}/cart`);
+    await clearingTab.getByTestId('row-cart-race-item-one').waitFor();
+    await editingTab.goto(`${baseUrl}/cart`);
+    await editingTab.getByTestId('row-cart-race-item-one').waitFor();
+
+    // A stale quantity edit is already saved when the other tab clears.
+    await editingTab.getByTestId('button-increase-race-item-one').click();
+    await editingTab.waitForFunction(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return cart.find((item) => item.id === 'race-item-one')?.qty === 2;
+    });
+    await clearingTab.getByTestId('button-clear-cart').click();
+    await clearingTab.waitForFunction(() => localStorage.getItem('circuits-kw-cart') === '[]');
+    await Promise.all([
+      clearingTab.evaluate(() => window.flushCartStorageEvents()),
+      editingTab.evaluate(() => window.flushCartStorageEvents()),
+    ]);
+    for (const page of [clearingTab, editingTab]) {
+      await page.getByTestId('link-empty-cart-components').waitFor();
+      assert.equal(await page.locator('[data-testid^="row-cart-race-item-"]').count(), 0);
+      assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]')), []);
+    }
+
+    // Clear first, then make a quantity edit from the still-stale second tab.
+    await clearingTab.reload();
+    await clearingTab.getByTestId('row-cart-race-item-one').waitFor();
+    await editingTab.reload();
+    await editingTab.getByTestId('row-cart-race-item-one').waitFor();
+    await clearingTab.getByTestId('button-clear-cart').click();
+    await clearingTab.waitForFunction(() => localStorage.getItem('circuits-kw-cart') === '[]');
+    await editingTab.getByTestId('button-increase-race-item-one').click();
+    await editingTab.getByTestId('link-empty-cart-components').waitFor();
+    await Promise.all([
+      clearingTab.evaluate(() => window.flushCartStorageEvents()),
+      editingTab.evaluate(() => window.flushCartStorageEvents()),
+    ]);
+    for (const page of [clearingTab, editingTab]) {
+      await page.getByTestId('link-empty-cart-components').waitFor();
+      assert.equal(await page.locator('[data-testid^="row-cart-race-item-"]').count(), 0);
+      assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]')), []);
+    }
+
     const additionsContext = await browser.newContext();
     contexts.push(additionsContext);
     await installApiMocks(additionsContext);
