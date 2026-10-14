@@ -216,6 +216,79 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.deepEqual(sampleErrors, []);
     await sampleContext.close();
 
+    const replacementContext = await browser.newContext();
+    const replacementPage = await replacementContext.newPage();
+    const replacementErrors = [];
+    replacementPage.on('pageerror', (error) => replacementErrors.push(error.message));
+    await replacementPage.goto(`${baseUrl}/build-assist`);
+    await replacementPage.getByTestId('row-bom-esp32').waitFor();
+    await replacementPage.getByTestId('button-generate-bom').click();
+    await replacementPage.getByTestId('input-assembly-count').fill('2');
+    await replacementPage.getByTestId('summary-price-list').click();
+    await replacementPage.getByTestId('input-price-list-source').fill('Original supplier');
+    await replacementPage.getByTestId('input-price-list-updated').fill(dateDaysAgo(0));
+    await replacementPage.getByTestId('input-price-list-file').setInputFiles({
+      name: 'original-supplier-prices.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(
+        'sku,unit_price,currency\nESP32-WRM-32D,1.000,KWD\nSNS-BME280-I2C,2.000,KWD\nSNS-SOIL-CAP-12,0.500,KWD\n',
+      ),
+    });
+    await replacementPage.getByTestId('button-import-price-csv').click();
+    await replacementPage.waitForFunction(() =>
+      document.querySelector('[data-testid="text-price-source"]')?.textContent?.includes('Original supplier'),
+    );
+    assert.match(await replacementPage.getByTestId('text-price-source').innerText(), /Original supplier/);
+    assert.equal(await replacementPage.getByTestId('text-build-assist-total').innerText(), '7.000 KWD');
+
+    const priceListDetails = replacementPage.getByTestId('details-price-list');
+    if (!(await priceListDetails.evaluate(element => element.open))) {
+      await replacementPage.getByTestId('summary-price-list').click();
+    }
+    await replacementPage.getByTestId('input-price-list-source').fill('Replacement supplier');
+    await replacementPage.getByTestId('input-price-list-updated').fill(dateDaysAgo(0));
+    await replacementPage.getByTestId('input-price-list-file').setInputFiles({
+      name: 'replacement-supplier-prices.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(
+        'sku,unit_price,currency\nESP32-WRM-32D,1.500,KWD\nSNS-BME280-I2C,2.500,KWD\nSNS-SOIL-CAP-12,0.750,KWD\n',
+      ),
+    });
+    await replacementPage.getByTestId('button-import-price-csv').click();
+    await replacementPage.waitForFunction(() =>
+      document.querySelector('[data-testid="text-price-source"]')?.textContent?.includes('Replacement supplier'),
+    );
+    assert.match(await replacementPage.getByTestId('text-price-source').innerText(), /Replacement supplier/);
+    assert.equal(
+      await replacementPage.getByTestId('row-bom-esp32').locator('.bom-unit-price').innerText(),
+      'Unit cost: 1.500 KWD',
+    );
+    assert.equal(await replacementPage.getByTestId('text-line-total-esp32').innerText(), '3.000 KWD');
+    assert.equal(
+      await replacementPage.getByTestId('row-bom-bme280').locator('.bom-unit-price').innerText(),
+      'Unit cost: 2.500 KWD',
+    );
+    assert.equal(await replacementPage.getByTestId('text-line-total-bme280').innerText(), '5.000 KWD');
+    assert.equal(
+      await replacementPage.getByTestId('row-bom-soil').locator('.bom-unit-price').innerText(),
+      'Unit cost: 0.750 KWD',
+    );
+    assert.equal(await replacementPage.getByTestId('text-line-total-soil').innerText(), '1.500 KWD');
+    assert.equal(await replacementPage.getByTestId('text-build-assist-total').innerText(), '9.500 KWD');
+    assert.match(await replacementPage.getByTestId('button-add-bom-cart').innerText(), /9\.500 KWD/);
+
+    await replacementPage.getByTestId('button-add-bom-cart').click();
+    await replacementPage.getByTestId('link-cart').click();
+    for (const [part, price] of [['esp32', '3.000 KWD'], ['bme280', '5.000 KWD'], ['soil', '1.500 KWD']]) {
+      const cartRow = replacementPage.getByTestId(`row-cart-bom-${part}`);
+      await cartRow.waitFor();
+      assert.equal(await cartRow.locator('.price').innerText(), price);
+      assert.equal(await replacementPage.getByTestId(`input-quantity-bom-${part}`).inputValue(), '2');
+    }
+    assert.equal(await replacementPage.locator('.summary-card .summary-total .mono').innerText(), '9.500 KWD');
+    assert.deepEqual(replacementErrors, []);
+    await replacementContext.close();
+
     const page = await browser.newPage();
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
