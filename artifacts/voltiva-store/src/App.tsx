@@ -32,6 +32,7 @@ import {
   setCartItemQuantity,
 } from './cart-model';
 import { AdminDashboardPage } from './AdminDashboardPage';
+import { trackEvent } from './lib/analytics';
 import {
   ArrowDown, ArrowRight, BatteryCharging, BookOpen, Bot,
   CheckCircle2, CircuitBoard, Cpu, Gauge, GraduationCap, Grid2X2,
@@ -884,6 +885,10 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
       },
     },{
       onSuccess:saved=>{
+        trackEvent('demo_order_completed',{
+          line_count:saved.items.length,
+          subtotal_kwd:saved.subtotal,
+        });
         setPlacedOrder({
           orderNumber:saved.orderNumber,
           placedAt:new Date(saved.placedAt).toISOString(),

@@ -1320,6 +1320,15 @@ test('saves demo orders through the order API when browser order-history storage
     for (const rejectedOperation of ['read', 'write']) {
       const context = await browser.newContext();
       contexts.push(context);
+      await context.addInitScript(({ shouldThrow }) => {
+        window.demoAnalyticsEvents = [];
+        window.umami = {
+          track(name, data) {
+            if (shouldThrow) throw new Error('Analytics is unavailable.');
+            window.demoAnalyticsEvents.push({ name, data });
+          },
+        };
+      }, { shouldThrow: rejectedOperation === 'write' });
       await context.addInitScript(({ operation, item }) => {
         const originalGetItem = Storage.prototype.getItem;
         const originalSetItem = Storage.prototype.setItem;
@@ -1364,10 +1373,61 @@ test('saves demo orders through the order API when browser order-history storage
         /Saved for demo order management/i,
       );
       assert.match(await page.getByTestId('text-demo-order-number').innerText(), /^CKW-MOCK-/);
+      const analyticsEvents = await page.evaluate(() => window.demoAnalyticsEvents);
+      if (rejectedOperation === 'read') {
+        assert.deepEqual(analyticsEvents, [{
+          name: 'demo_order_completed',
+          data: { line_count: 1, subtotal_kwd: 5 },
+        }]);
+      } else {
+        assert.deepEqual(analyticsEvents, [], 'a tracker exception must not block checkout');
+      }
       assert.deepEqual(pageErrors, []);
       assert.equal(await page.evaluate(() => window.readOriginalStorageItem('circuits-kw-demo-orders')), null);
       assert.equal(await page.evaluate(() => JSON.parse(window.readOriginalStorageItem('circuits-kw-cart') || '[]').length), 0);
     }
+
+    const failedOrderContext = await browser.newContext();
+    contexts.push(failedOrderContext);
+    await failedOrderContext.addInitScript(() => {
+      localStorage.setItem('circuits-kw-cart', JSON.stringify([{
+        id: 'failed-order-item',
+        name: 'Failed order test item',
+        price: 2.5,
+        kind: 'component',
+        sku: 'FAILED-001',
+        qty: 2,
+      }]));
+      window.demoAnalyticsEvents = [];
+      window.umami = {
+        track(name, data) {
+          window.demoAnalyticsEvents.push({ name, data });
+        },
+      };
+    });
+    const failedOrderPage = await failedOrderContext.newPage();
+    const failedOrderPageErrors = [];
+    failedOrderPage.on('pageerror', error => failedOrderPageErrors.push(error.message));
+    await failedOrderPage.route('**/api/orders', route => route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'orders_unavailable' }),
+    }));
+    await failedOrderPage.goto(`${baseUrl}/checkout`);
+    await failedOrderPage.getByTestId('row-checkout-failed-order-item').waitFor();
+    await failedOrderPage.getByTestId('input-checkout-name').fill('Demo Buyer');
+    await failedOrderPage.getByTestId('input-checkout-email').fill('buyer@example.com');
+    await failedOrderPage.getByTestId('input-checkout-phone').fill('+965 5555 5555');
+    await failedOrderPage.getByTestId('select-checkout-governorate').selectOption({ label: 'Capital' });
+    await failedOrderPage.getByTestId('input-checkout-area').fill('Kuwait City');
+    await failedOrderPage.getByTestId('input-checkout-block').fill('1');
+    await failedOrderPage.getByTestId('input-checkout-street').fill('Main Street');
+    await failedOrderPage.getByTestId('input-checkout-building').fill('10');
+    await failedOrderPage.getByTestId('button-place-demo-order').click();
+    await failedOrderPage.getByTestId('checkout-order-error').waitFor();
+    assert.equal(await failedOrderPage.getByTestId('demo-order-confirmation').count(), 0);
+    assert.deepEqual(await failedOrderPage.evaluate(() => window.demoAnalyticsEvents), []);
+    assert.deepEqual(failedOrderPageErrors, []);
   } catch (error) {
     error.message += `\nVite output:\n${serverOutput}`;
     throw error;
