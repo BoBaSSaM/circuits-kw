@@ -7,10 +7,12 @@ import {
   DeleteAdminOrderParams,
   DeleteAdminOrderResponse,
   GetAdminOrdersResponse,
+  GetMyOrdersResponse,
   UpdateAdminOrderBody,
   UpdateAdminOrderParams,
   UpdateAdminOrderResponse,
   type AdminOrder,
+  type AccountOrder,
   type CheckoutOrderInput,
   type OrderItem,
   type OrderItemInput,
@@ -198,6 +200,45 @@ function toAdminOrder(document: OrderDocument): AdminOrder {
     adminNotes: document.adminNotes,
   };
 }
+
+function toAccountOrder(document: OrderDocument): AccountOrder {
+  return {
+    id: document._id.toHexString(),
+    orderNumber: document.orderNumber,
+    placedAt: document.placedAt,
+    items: document.items,
+    subtotal: document.subtotal,
+    isDemo: true,
+  };
+}
+
+router.get("/orders", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) {
+    res.status(401).json({ error: "authentication_required" });
+    return;
+  }
+
+  try {
+    const database = await getMongoDatabase();
+    const documents = await database
+      .collection<OrderDocument>("orders")
+      .find({ userId, isDemo: true })
+      .sort({ placedAt: -1 })
+      .toArray();
+    res.json(
+      GetMyOrdersResponse.parse({
+        orders: documents.map(toAccountOrder),
+      }),
+    );
+  } catch (error) {
+    req.log.error(
+      { errorName: error instanceof Error ? error.name : "UnknownError" },
+      "Could not load the signed-in buyer's demo orders",
+    );
+    res.status(503).json({ error: "orders_unavailable" });
+  }
+});
 
 router.post("/orders", async (req, res) => {
   const parsed = CreateCheckoutOrderBody.safeParse(req.body);

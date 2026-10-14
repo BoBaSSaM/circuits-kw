@@ -397,6 +397,19 @@ export interface CheckoutOrderResponse {
   status: OrderStatus;
 }
 
+export interface AccountOrder {
+  id: string;
+  orderNumber: string;
+  placedAt: string;
+  items: OrderItem[];
+  subtotal: number;
+  isDemo: true;
+}
+
+export interface AccountOrderListResponse {
+  orders: AccountOrder[];
+}
+
 export interface AdminOrder {
   id: string;
   orderNumber: string;

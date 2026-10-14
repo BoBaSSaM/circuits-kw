@@ -65,6 +65,28 @@ export const SyncCurrentUserResponse = zod.object({
 
 
 /**
+ * @summary List the signed-in buyer's demo orders
+ */
+export const GetMyOrdersResponse = zod.object({
+  "orders": zod.array(zod.object({
+  "id": zod.string(),
+  "orderNumber": zod.string(),
+  "placedAt": zod.coerce.date(),
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['component', 'kit', 'bom']),
+  "sku": zod.string(),
+  "name": zod.string(),
+  "price": zod.number(),
+  "qty": zod.number().int()
+})),
+  "subtotal": zod.number(),
+  "isDemo": zod.literal(true)
+}))
+})
+
+
+/**
  * @summary Place a demo order
  */
 export const createCheckoutOrderBodyCustomerNameMin = 2;

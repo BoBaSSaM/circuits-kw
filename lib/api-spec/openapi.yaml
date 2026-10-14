@@ -61,6 +61,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
   /orders:
+    get:
+      operationId: getMyOrders
+      tags: [orders]
+      summary: List the signed-in buyer's demo orders
+      responses:
+        "200":
+          description: Demo orders belonging to the signed-in buyer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountOrderListResponse"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Orders could not be loaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       operationId: createCheckoutOrder
       tags: [orders]
@@ -599,6 +622,21 @@ components:
         subtotal: { type: number }
         status: { $ref: "#/components/schemas/OrderStatus" }
       required: [id, orderNumber, placedAt, items, subtotal, status]
+    AccountOrder:
+      type: object
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        placedAt: { type: string, format: date-time }
+        items: { type: array, items: { $ref: "#/components/schemas/OrderItem" } }
+        subtotal: { type: number }
+        isDemo: { type: boolean, const: true }
+      required: [id, orderNumber, placedAt, items, subtotal, isDemo]
+    AccountOrderListResponse:
+      type: object
+      properties:
+        orders: { type: array, items: { $ref: "#/components/schemas/AccountOrder" } }
+      required: [orders]
     AdminOrder:
       type: object
       properties:

@@ -9,7 +9,7 @@ import { ClerkProvider, SignIn, SignUp, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { arSA, enUS } from '@clerk/localizations';
 import { shadcn } from '@clerk/themes';
-import { getGetAdminAccessQueryKey, getGetCatalogQueryKey, setBaseUrl, useCreateCheckoutOrder, useGetAdminAccess, useGetCatalog, useSyncCurrentUser } from '@workspace/api-client-react';
+import { getGetAdminAccessQueryKey, getGetCatalogQueryKey, getGetMyOrdersQueryKey, setBaseUrl, useCreateCheckoutOrder, useGetAdminAccess, useGetCatalog, useGetMyOrders, useSyncCurrentUser } from '@workspace/api-client-react';
 import type { CatalogKit, CatalogProduct } from '@workspace/api-client-react';
 import { LanguageProvider, t, useLanguage, type Language } from './i18n';
 import {
@@ -805,7 +805,7 @@ function AboutPage() {
 
 function CartPage({items,update,remove}:{items:Item[];update:(id:string,qty:number)=>void;remove:(id:string)=>void}) {
   const {language}=useLanguage();
-  useDocument(t('Shopping cart',language),t('Review your cart. Demo orders stay in this browser; no payment is taken.',language));
+  useDocument(t('Shopping cart',language),t('Review your cart. Signed-in demo orders are saved to your account; no payment is taken.',language));
   const subtotal=calculateCartSubtotal(items);
   return <div className="container page-top"><div className="eyebrow">{t('YOUR BUILD / LOCAL CART',language)}</div><h1 style={{fontSize:38}}>{t('Cart review',language)}</h1><p className="lead" style={{fontSize:14}}>{t('Place a demo order. Payment and shipping are not connected.',language)}</p>
     {!items.length?<div className="surface empty-state"><div className="empty-icon"><ShoppingCart size={23}/></div><h3>{t('Your cart is ready for a build.',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Add parts or a kit to your cart.',language)}</p><div style={{display:'flex',justifyContent:'center',gap:9,flexWrap:'wrap'}}><Link className="button button-primary" href="/components" data-testid="link-empty-cart-components">{t('Browse components',language)}</Link><Link className="button button-outline" href="/project-kits" data-testid="link-empty-cart-kits">{t('Explore kits',language)}</Link></div></div>:
@@ -1089,6 +1089,12 @@ function SignUpPage() {
 function AccountPage() {
   const {language}=useLanguage();
   const {isLoaded,isSignedIn,user}=useUser();
+  const ordersQuery=useGetMyOrders({
+    query:{
+      enabled:Boolean(isLoaded&&isSignedIn&&user),
+      queryKey:[...getGetMyOrdersQueryKey(),user?.id??'signed-out'],
+    },
+  });
   useDocument(t('Account',language),t('Your account',language));
 
   if(!isLoaded) return <AuthPageFrame title="Account"><div className="surface account-panel" aria-live="polite">{t('Loading account…',language)}</div></AuthPageFrame>;
@@ -1108,11 +1114,40 @@ function AccountPage() {
       <div className="eyebrow">{t('Account details',language)}</div>
       <h2>{user.fullName||t('Your account',language)}</h2>
       <p className="account-email">{user.primaryEmailAddress?.emailAddress}</p>
-      <p className="account-demo-note">{t('Demo orders are not saved to your account.',language)}</p>
+      <p className="account-demo-note">{t('Demo orders you place while signed in are saved here. Guest orders are not linked to your account.',language)}</p>
       <div className="account-actions">
         <Link href="/sign-out" className="button button-outline" data-testid="link-sign-out">{t('Sign out',language)}</Link>
         <Link href="/" className="button button-quiet">{t('Return to store',language)}</Link>
       </div>
+    </section>
+    <section className="surface account-panel account-orders-panel" data-testid="account-demo-orders">
+      <div className="eyebrow">{t('DEMO ORDER HISTORY',language)}</div>
+      <h2>{t('Your demo orders',language)}</h2>
+      <p className="account-orders-intro">{t('These saved records are demos only. No payment or fulfillment is connected.',language)}</p>
+      {ordersQuery.isLoading
+        ? <p className="account-orders-state" aria-live="polite">{t('Loading your demo orders…',language)}</p>
+        : ordersQuery.isError
+          ? <div className="account-orders-state" role="alert">
+              <p>{t('Your demo orders could not be loaded.',language)}</p>
+              <button className="button button-outline small-button" type="button" onClick={()=>void ordersQuery.refetch()}>{t('Retry',language)}</button>
+            </div>
+          : ordersQuery.data?.orders.length
+            ? <div className="account-orders-list">
+                {ordersQuery.data.orders.map(order=><article className="account-order-card" key={order.id} data-testid={`account-demo-order-${order.id}`}>
+                  <div className="account-order-heading">
+                    <div><span className="account-order-label">{t('Demo order',language)}</span><strong>{order.orderNumber}</strong></div>
+                    <time dateTime={new Date(order.placedAt).toISOString()}>{new Date(order.placedAt).toLocaleString(language==='ar'?'ar-KW':'en-KW')}</time>
+                  </div>
+                  <div className="account-order-items">
+                    {order.items.map((item,index)=><div key={`${item.id}-${index}`}>
+                      <span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span>
+                      <strong>{fmt(item.price*item.qty)}</strong>
+                    </div>)}
+                  </div>
+                  <div className="account-order-total"><span>{t('Demo total',language)}</span><strong>{fmt(order.subtotal)}</strong></div>
+                </article>)}
+              </div>
+            : <p className="account-orders-state">{t('No demo orders are linked to your account yet. Orders placed as a guest are not included.',language)}</p>}
     </section>
   </AuthPageFrame>;
 }
