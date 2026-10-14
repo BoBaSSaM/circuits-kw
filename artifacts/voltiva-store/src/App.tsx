@@ -23,7 +23,14 @@ import {
   parseAuthorizedPriceCsv,
   PRICE_LIST_FRESHNESS_DAYS,
 } from './build-assist-model';
-import { addCartItem, calculateCartSubtotal, removeSupplierPricedBomItems } from './cart-model';
+import {
+  addCartItem,
+  calculateCartSubtotal,
+  mergeConcurrentCartChanges,
+  removeSupplierPricedBomItems,
+  sameCartItemList,
+  setCartItemQuantity,
+} from './cart-model';
 import { AdminDashboardPage } from './AdminDashboardPage';
 import {
   ArrowDown, ArrowRight, BatteryCharging, BookOpen, Bot,
@@ -252,50 +259,6 @@ function readStoredCartSnapshot(): { items: Item[]; storageAvailable: boolean } 
   } catch {
     return { items: [], storageAvailable: false };
   }
-}
-
-function sameCartItemList(left: Item[], right: Item[]): boolean {
-  return left.length === right.length && left.every((item, index) => sameCartItem(item, right[index]));
-}
-
-function sameCartItem(left: Item | undefined, right: Item | undefined): boolean {
-  if (!left || !right) return left === right;
-  return left.id === right.id
-    && left.name === right.name
-    && left.price === right.price
-    && left.kind === right.kind
-    && left.sku === right.sku
-    && left.priceSource === right.priceSource
-    && left.qty === right.qty;
-}
-
-function mergeConcurrentCartChanges(base: Item[], local: Item[], remote: Item[]): Item[] {
-  const baseById = new Map(base.map(item => [item.id, item]));
-  const localById = new Map(local.map(item => [item.id, item]));
-  const remoteById = new Map(remote.map(item => [item.id, item]));
-  const mergedById = new Map<string, Item>();
-
-  for (const id of new Set([...remoteById.keys(), ...localById.keys(), ...baseById.keys()])) {
-    const baseItem = baseById.get(id);
-    const localItem = localById.get(id);
-    const remoteItem = remoteById.get(id);
-    const localChanged = !sameCartItem(localItem, baseItem);
-    const remoteChanged = !sameCartItem(remoteItem, baseItem);
-
-    // When both tabs changed the same line before seeing each other's update,
-    // the latest value already committed to storage wins consistently.
-    const chosen = localChanged && !remoteChanged ? localItem : remoteItem;
-    if (chosen) mergedById.set(id, chosen);
-  }
-
-  const orderedIds = [...remote.map(item => item.id), ...local.map(item => item.id), ...base.map(item => item.id)];
-  const seen = new Set<string>();
-  return orderedIds.flatMap(id => {
-    const item = mergedById.get(id);
-    if (!item || seen.has(id)) return [];
-    seen.add(id);
-    return [item];
-  });
 }
 
 function readSavedPriceList(): PriceListState | null {
@@ -1337,7 +1300,7 @@ function App() {
     cartNoticeId.current+=1;
     setCartNotice({id:cartNoticeId.current,type:'added',name:item.name});
   };
-  const update=(id:string,qty:number)=>changeCart(old=>qty<=0?old.filter(x=>x.id!==id):old.map(x=>x.id===id?{...x,qty}:x));
+  const update=(id:string,qty:number)=>changeCart(old=>qty<=0?old.filter(x=>x.id!==id):setCartItemQuantity(old,id,qty));
   const remove=(id:string)=>changeCart(old=>old.filter(x=>x.id!==id));
   const clearCart=()=>changeCart(()=>[]);
   const removeSupplierPricedItems=(pricesBySku:Readonly<Record<string,number>>)=>{

@@ -1052,7 +1052,7 @@ test('syncs cart quantity edits and item removal across open tabs', {
   }
 });
 
-test('merges overlapping cart edits across tabs and keeps the first saved value for same-item conflicts', {
+test('merges concurrent cart additions and edits across tabs without changing the saved-value conflict rule', {
   timeout: 90_000,
 }, async () => {
   const port = await getAvailablePort();
@@ -1072,7 +1072,7 @@ test('merges overlapping cart edits across tabs and keeps the first saved value 
     { id: 'race-item-one', name: 'First race component', price: 2.5, kind: 'component', sku: 'RACE-001', qty: 1 },
     { id: 'race-item-two', name: 'Second race component', price: 1, kind: 'component', sku: 'RACE-002', qty: 2 },
   ];
-  const delayStorageEvents = async (context) => {
+  const delayStorageEvents = async (context, initialItems = startingCart) => {
     await context.addInitScript((initialItems) => {
       localStorage.setItem('circuits-kw-cart', JSON.stringify(initialItems));
       const cartListeners = [];
@@ -1092,7 +1092,7 @@ test('merges overlapping cart edits across tabs and keeps the first saved value 
         });
         cartListeners.forEach((listener) => listener.call(window, event));
       };
-    }, startingCart);
+    }, initialItems);
   };
 
   try {
@@ -1176,6 +1176,55 @@ test('merges overlapping cart edits across tabs and keeps the first saved value 
     ]);
     assert.equal(await earlierTab.getByTestId('input-quantity-race-item-one').inputValue(), '3');
     assert.equal(await laterTab.getByTestId('input-quantity-race-item-one').inputValue(), '3');
+
+    const additionsContext = await browser.newContext();
+    contexts.push(additionsContext);
+    await installApiMocks(additionsContext);
+    await delayStorageEvents(additionsContext, [
+      { id: 'esp32', name: 'ESP32-WROOM-32D', price: 2.85, kind: 'component', sku: 'ESP32-WRM-32D', qty: 1 },
+    ]);
+    const firstAddingTab = await additionsContext.newPage();
+    const secondAddingTab = await additionsContext.newPage();
+    firstAddingTab.on('pageerror', (error) => pageErrors.push(error.message));
+    secondAddingTab.on('pageerror', (error) => pageErrors.push(error.message));
+    await firstAddingTab.goto(`${baseUrl}/components`);
+    await firstAddingTab.getByTestId('button-add-esp32').waitFor();
+    await secondAddingTab.goto(`${baseUrl}/components`);
+    await secondAddingTab.getByTestId('button-add-esp32').waitFor();
+
+    await firstAddingTab.getByTestId('button-add-esp32').click();
+    await firstAddingTab.waitForFunction(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return cart.find((item) => item.id === 'esp32')?.qty === 2;
+    });
+    await secondAddingTab.getByTestId('button-add-esp32').click();
+    await secondAddingTab.waitForFunction(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return cart.find((item) => item.id === 'esp32')?.qty === 3;
+    });
+    await Promise.all([
+      firstAddingTab.evaluate(() => window.flushCartStorageEvents()),
+      secondAddingTab.evaluate(() => window.flushCartStorageEvents()),
+    ]);
+    await firstAddingTab.getByTestId('link-cart').click();
+    await secondAddingTab.getByTestId('link-cart').click();
+    for (const page of [firstAddingTab, secondAddingTab]) {
+      try {
+        await page.getByTestId('row-cart-esp32').waitFor({ timeout: 10_000 });
+      } catch {
+        const state = await page.evaluate(() => ({
+          url: location.href,
+          cart: localStorage.getItem('circuits-kw-cart'),
+          text: document.body.innerText,
+        }));
+        assert.fail(`The merged item was not shown in the cart: ${JSON.stringify(state)}`);
+      }
+      assert.equal(await page.getByTestId('input-quantity-esp32').inputValue(), '3');
+    }
+    assert.equal(await firstAddingTab.evaluate(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return Object.keys(cart.find((item) => item.id === 'esp32')?.cartAddOperations ?? {}).length;
+    }), 2);
     assert.deepEqual(pageErrors, []);
   } catch (error) {
     error.message += `\nVite output:\n${serverOutput}`;

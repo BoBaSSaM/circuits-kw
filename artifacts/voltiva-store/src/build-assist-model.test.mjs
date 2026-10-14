@@ -11,7 +11,13 @@ import {
   parseAuthorizedPriceCsv,
   PRICE_LIST_FRESHNESS_DAYS,
 } from './build-assist-model.ts';
-import { addCartItem, calculateCartSubtotal, removeSupplierPricedBomItems } from './cart-model.ts';
+import {
+  addCartItem,
+  calculateCartSubtotal,
+  mergeConcurrentCartChanges,
+  removeSupplierPricedBomItems,
+  setCartItemQuantity,
+} from './cart-model.ts';
 
 const catalog = [
   { id: 'esp32', name: 'ESP32-WROOM-32D', sku: 'ESP32-WRM-32D', price: 2.85, category: 'Microcontrollers' },
@@ -156,6 +162,29 @@ test('adding an estimate merges quantities into an existing matching cart line',
   assert.equal(cart.length, 1);
   assert.equal(cart[0].qty, 7);
   assert.equal(calculateCartSubtotal(cart), catalog[0].price * 7);
+});
+
+test('merges unique concurrent add operations once, including new matching lines', () => {
+  const base = [{ id: 'esp32', name: catalog[0].name, sku: catalog[0].sku, kind: 'component', price: catalog[0].price, qty: 1 }];
+  const item = { ...base[0], qty: 2 };
+  const localAdd = addCartItem(base, item);
+  const remoteAdd = addCartItem(base, item);
+
+  const merged = mergeConcurrentCartChanges(base, localAdd, remoteAdd);
+  assert.equal(merged[0].qty, 5);
+  assert.equal(mergeConcurrentCartChanges(base, localAdd, merged)[0].qty, 5);
+
+  const localNewItem = addCartItem([], { ...item, qty: 2 });
+  const remoteNewItem = addCartItem([], { ...item, qty: 3 });
+  assert.equal(mergeConcurrentCartChanges([], localNewItem, remoteNewItem)[0].qty, 5);
+});
+
+test('keeps the saved-value conflict rule for explicit quantity edits', () => {
+  const base = [{ id: 'esp32', name: catalog[0].name, sku: catalog[0].sku, kind: 'component', price: catalog[0].price, qty: 1 }];
+  const localEdit = setCartItemQuantity(base, 'esp32', 3);
+  const remoteEdit = setCartItemQuantity(base, 'esp32', 4);
+
+  assert.equal(mergeConcurrentCartChanges(base, localEdit, remoteEdit)[0].qty, 4);
 });
 
 test('removing a supplier list clears only supplier-priced BOM cart entries', () => {

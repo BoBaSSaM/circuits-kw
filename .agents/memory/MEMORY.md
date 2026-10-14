@@ -1,3 +1,4 @@
 - [Catalog database target](catalog-database-target.md) — Seed Circuits KW catalog data to MongoDB Atlas, not the scaffold's Replit PostgreSQL database.
 - [Supplier CSV browser tests](supplier-csv-browser-tests.md) — Wait for visible state after file imports and reopen the price-list disclosure before subsequent uploads.
+- [Cart sync browser tests](browser-cart-sync-tests.md) — Cart-seeding init scripts run on each navigation; avoid unintended storage resets while exercising tab-sync flows.
 - [Checkout auth redirect preservation](checkout-auth-redirects.md) — Preserve checkout return intent across Clerk's internal sign-in and verification routes.
