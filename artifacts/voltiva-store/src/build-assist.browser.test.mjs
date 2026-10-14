@@ -803,6 +803,140 @@ test('syncs cart quantity edits and item removal across open tabs', {
   }
 });
 
+test('merges overlapping cart edits across tabs and keeps the first saved value for same-item conflicts', {
+  timeout: 90_000,
+}, async () => {
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+    cwd: artifactDir,
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let serverOutput = '';
+  serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+  serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+
+  let browser;
+  const contexts = [];
+  const startingCart = [
+    { id: 'race-item-one', name: 'First race component', price: 2.5, kind: 'component', sku: 'RACE-001', qty: 1 },
+    { id: 'race-item-two', name: 'Second race component', price: 1, kind: 'component', sku: 'RACE-002', qty: 2 },
+  ];
+  const delayStorageEvents = async (context) => {
+    await context.addInitScript((initialItems) => {
+      localStorage.setItem('circuits-kw-cart', JSON.stringify(initialItems));
+      const cartListeners = [];
+      const originalAddEventListener = window.addEventListener.bind(window);
+      window.addEventListener = function (type, listener, options) {
+        if (type === 'storage' && typeof listener === 'function'
+          && String(listener).includes('circuits-kw-cart')) {
+          cartListeners.push(listener);
+          return;
+        }
+        return originalAddEventListener(type, listener, options);
+      };
+      window.flushCartStorageEvents = () => {
+        const event = new StorageEvent('storage', {
+          key: 'circuits-kw-cart',
+          newValue: localStorage.getItem('circuits-kw-cart'),
+        });
+        cartListeners.forEach((listener) => listener.call(window, event));
+      };
+    }, startingCart);
+  };
+
+  try {
+    await waitForServer(serverProcess, baseUrl);
+    const executablePath = await findChromiumPath();
+    assert.ok(executablePath, 'Set CHROMIUM_PATH or install Chromium to run browser tests.');
+    browser = await chromium.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+
+    const differentItemsContext = await browser.newContext();
+    contexts.push(differentItemsContext);
+    await delayStorageEvents(differentItemsContext);
+    const firstTab = await differentItemsContext.newPage();
+    const secondTab = await differentItemsContext.newPage();
+    const pageErrors = [];
+    firstTab.on('pageerror', (error) => pageErrors.push(error.message));
+    secondTab.on('pageerror', (error) => pageErrors.push(error.message));
+    await firstTab.goto(`${baseUrl}/cart`);
+    await firstTab.getByTestId('row-cart-race-item-one').waitFor();
+    await secondTab.goto(`${baseUrl}/cart`);
+    await secondTab.getByTestId('row-cart-race-item-two').waitFor();
+
+    await firstTab.getByTestId('button-increase-race-item-one').click();
+    await firstTab.waitForFunction(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return cart.find((item) => item.id === 'race-item-one')?.qty === 2;
+    });
+    await secondTab.getByTestId('button-increase-race-item-two').click();
+    await secondTab.waitForFunction(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return cart.find((item) => item.id === 'race-item-one')?.qty === 2
+        && cart.find((item) => item.id === 'race-item-two')?.qty === 3;
+    });
+
+    await Promise.all([
+      firstTab.evaluate(() => window.flushCartStorageEvents()),
+      secondTab.evaluate(() => window.flushCartStorageEvents()),
+    ]);
+    for (const page of [firstTab, secondTab]) {
+      assert.equal(await page.getByTestId('input-quantity-race-item-one').inputValue(), '2');
+      assert.equal(await page.getByTestId('input-quantity-race-item-two').inputValue(), '3');
+    }
+    assert.deepEqual(pageErrors, []);
+    await differentItemsContext.close();
+
+    const sameItemContext = await browser.newContext();
+    contexts.push(sameItemContext);
+    await delayStorageEvents(sameItemContext);
+    const earlierTab = await sameItemContext.newPage();
+    const laterTab = await sameItemContext.newPage();
+    earlierTab.on('pageerror', (error) => pageErrors.push(error.message));
+    laterTab.on('pageerror', (error) => pageErrors.push(error.message));
+    await earlierTab.goto(`${baseUrl}/cart`);
+    await earlierTab.getByTestId('row-cart-race-item-one').waitFor();
+    await laterTab.goto(`${baseUrl}/cart`);
+    await laterTab.getByTestId('row-cart-race-item-one').waitFor();
+
+    await earlierTab.getByTestId('input-quantity-race-item-one').fill('3');
+    await earlierTab.waitForFunction(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return cart.find((item) => item.id === 'race-item-one')?.qty === 3;
+    });
+    await laterTab.getByTestId('input-quantity-race-item-one').fill('4');
+    await laterTab.waitForFunction(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return cart.find((item) => item.id === 'race-item-one')?.qty === 3;
+    });
+    await Promise.all([
+      earlierTab.evaluate(() => window.flushCartStorageEvents()),
+      laterTab.evaluate(() => window.flushCartStorageEvents()),
+    ]);
+    assert.equal(await earlierTab.getByTestId('input-quantity-race-item-one').inputValue(), '3');
+    assert.equal(await laterTab.getByTestId('input-quantity-race-item-one').inputValue(), '3');
+    assert.deepEqual(pageErrors, []);
+  } catch (error) {
+    error.message += `\nVite output:\n${serverOutput}`;
+    throw error;
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+    await browser?.close();
+    serverProcess.kill('SIGTERM');
+    if (serverProcess.exitCode === null) {
+      await Promise.race([
+        new Promise((resolve) => serverProcess.once('exit', resolve)),
+        delay(2_000),
+      ]);
+    }
+  }
+});
+
 test('confirms demo orders when order history reads or writes are rejected', {
   timeout: 90_000,
 }, async () => {

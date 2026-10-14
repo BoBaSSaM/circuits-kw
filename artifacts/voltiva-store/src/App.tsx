@@ -231,6 +231,61 @@ function readSavedCart(): { items: Item[]; storageAvailable: boolean } {
   }
 }
 
+function readStoredCartSnapshot(): { items: Item[]; storageAvailable: boolean } {
+  try {
+    const saved = window.localStorage.getItem('circuits-kw-cart')
+      ?? window.localStorage.getItem('voltiva-cart')
+      ?? '[]';
+    const value: unknown = JSON.parse(saved);
+    return { items: Array.isArray(value) ? value.filter(isSavedCartItem) : [], storageAvailable: true };
+  } catch {
+    return { items: [], storageAvailable: false };
+  }
+}
+
+function sameCartItemList(left: Item[], right: Item[]): boolean {
+  return left.length === right.length && left.every((item, index) => sameCartItem(item, right[index]));
+}
+
+function sameCartItem(left: Item | undefined, right: Item | undefined): boolean {
+  if (!left || !right) return left === right;
+  return left.id === right.id
+    && left.name === right.name
+    && left.price === right.price
+    && left.kind === right.kind
+    && left.sku === right.sku
+    && left.qty === right.qty;
+}
+
+function mergeConcurrentCartChanges(base: Item[], local: Item[], remote: Item[]): Item[] {
+  const baseById = new Map(base.map(item => [item.id, item]));
+  const localById = new Map(local.map(item => [item.id, item]));
+  const remoteById = new Map(remote.map(item => [item.id, item]));
+  const mergedById = new Map<string, Item>();
+
+  for (const id of new Set([...remoteById.keys(), ...localById.keys(), ...baseById.keys()])) {
+    const baseItem = baseById.get(id);
+    const localItem = localById.get(id);
+    const remoteItem = remoteById.get(id);
+    const localChanged = !sameCartItem(localItem, baseItem);
+    const remoteChanged = !sameCartItem(remoteItem, baseItem);
+
+    // When both tabs changed the same line before seeing each other's update,
+    // the latest value already committed to storage wins consistently.
+    const chosen = localChanged && !remoteChanged ? localItem : remoteItem;
+    if (chosen) mergedById.set(id, chosen);
+  }
+
+  const orderedIds = [...remote.map(item => item.id), ...local.map(item => item.id), ...base.map(item => item.id)];
+  const seen = new Set<string>();
+  return orderedIds.flatMap(id => {
+    const item = mergedById.get(id);
+    if (!item || seen.has(id)) return [];
+    seen.add(id);
+    return [item];
+  });
+}
+
 function readSavedPriceList(): PriceListState | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -1123,37 +1178,48 @@ function Router({items,add,update,remove,clearCart,search,setSearch,cartStorageU
 function App() {
   const [initialCart] = useState(readSavedCart);
   const [items,setItemsState]=useState<Item[]>(initialCart.items);
+  const cartItemsRef=useRef<Item[]>(initialCart.items);
+  const sharedCartRef=useRef<Item[]>(initialCart.items);
   const [cartStorageUnavailable,setCartStorageUnavailable]=useState(!initialCart.storageAvailable);
   const [language,setLanguage]=useState<Language>(()=>readBrowserStorage('circuits-kw-language')==='ar'?'ar':'en');
   const [search,setSearch]=useState('');
   const [cartNotice,setCartNotice]=useState<{id:number;name:string}|null>(null);
   const cartNoticeId=useRef(0);
   const firstCartSave=useRef(true);
-  const lastCartWrite=useRef<string|null>(null);
   useEffect(()=>{
-    const serialized=JSON.stringify(items);
-    if(firstCartSave.current) {
+    const isFirstSave=firstCartSave.current;
+    if(isFirstSave) {
       firstCartSave.current=false;
       if(!initialCart.storageAvailable) return;
     }
-    if(serialized===lastCartWrite.current) return;
-    const saved=writeBrowserStorage('circuits-kw-cart',serialized);
-    if(saved) lastCartWrite.current=serialized;
+    const stored=readStoredCartSnapshot();
+    const nextItems=stored.storageAvailable
+      ? mergeConcurrentCartChanges(sharedCartRef.current,items,stored.items)
+      : items;
+    if(stored.storageAvailable) sharedCartRef.current=stored.items;
+    const serialized=JSON.stringify(nextItems);
+    const storedSerialized=stored.storageAvailable?JSON.stringify(stored.items):null;
+    if(!sameCartItemList(nextItems,items)) {
+      cartItemsRef.current=nextItems;
+      setItemsState(nextItems);
+    }
+    const saved=serialized===storedSerialized
+      && !isFirstSave
+      ? true
+      : writeBrowserStorage('circuits-kw-cart',serialized);
+    if(saved) {
+      sharedCartRef.current=nextItems;
+    }
     setCartStorageUnavailable(!initialCart.storageAvailable || !saved);
   },[items,initialCart.storageAvailable]);
   useEffect(()=>{
     const syncCartFromOtherTab=(event:StorageEvent)=>{
       if(event.key!=='circuits-kw-cart') return;
-      let nextItems:Item[]=[];
-      if(event.newValue) {
-        try {
-          const value:unknown=JSON.parse(event.newValue);
-          nextItems=Array.isArray(value)?value.filter(isSavedCartItem):[];
-        } catch {
-          nextItems=[];
-        }
-      }
-      lastCartWrite.current=JSON.stringify(nextItems);
+      const stored=readStoredCartSnapshot();
+      if(!stored.storageAvailable) return;
+      const nextItems=mergeConcurrentCartChanges(sharedCartRef.current,cartItemsRef.current,stored.items);
+      sharedCartRef.current=stored.items;
+      cartItemsRef.current=nextItems;
       setItemsState(nextItems);
     };
     window.addEventListener('storage',syncCartFromOtherTab);
@@ -1169,14 +1235,19 @@ function App() {
     const timer=window.setTimeout(()=>setCartNotice(null),2200);
     return ()=>window.clearTimeout(timer);
   },[cartNotice?.id]);
+  const changeCart=(change:(current:Item[])=>Item[])=>{
+    const nextItems=change(cartItemsRef.current);
+    cartItemsRef.current=nextItems;
+    setItemsState(nextItems);
+  };
   const add=(item:AddItem)=>{
-    setItemsState(old=>addCartItem(old,item));
+    changeCart(old=>addCartItem(old,item));
     cartNoticeId.current+=1;
     setCartNotice({id:cartNoticeId.current,name:item.name});
   };
-  const update=(id:string,qty:number)=>setItemsState(old=>qty<=0?old.filter(x=>x.id!==id):old.map(x=>x.id===id?{...x,qty}:x));
-  const remove=(id:string)=>setItemsState(old=>old.filter(x=>x.id!==id));
-  const clearCart=()=>setItemsState([]);
+  const update=(id:string,qty:number)=>changeCart(old=>qty<=0?old.filter(x=>x.id!==id):old.map(x=>x.id===id?{...x,qty}:x));
+  const remove=(id:string)=>changeCart(old=>old.filter(x=>x.id!==id));
+  const clearCart=()=>changeCart(()=>[]);
   return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ClerkRouterBridge><Router items={items} add={add} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t('Added to cart',language)}</strong><span>{t(cartNotice.name,language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</ClerkRouterBridge></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
 }
 
