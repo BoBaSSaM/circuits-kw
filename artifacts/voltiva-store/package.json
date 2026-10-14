@@ -9,9 +9,11 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test src/build-assist-model.test.mjs",
-    "test:browser": "node --test src/build-assist.browser.test.mjs"
+    "test:browser": "node --test src/build-assist.browser.test.mjs",
+    "test:auth-browser": "node --test src/account-checkout.browser.test.mjs"
   },
   "devDependencies": {
+    "@clerk/testing": "^2.2.45",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",

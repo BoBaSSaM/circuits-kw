@@ -105,6 +105,17 @@ function stripBasePath(path: string) {
   return path.startsWith(`${basePath}/`) ? path.slice(basePath.length) : path;
 }
 
+function preserveAuthReturnQuery(path: string) {
+  if (new URLSearchParams(window.location.search).get('returnTo') !== 'checkout') return path;
+  const target = new URL(path, window.location.origin);
+  const route = stripBasePath(target.pathname);
+  const isAuthRoute = route === '/sign-in' || route.startsWith('/sign-in/')
+    || route === '/sign-up' || route.startsWith('/sign-up/');
+  if (!isAuthRoute || target.searchParams.has('returnTo')) return path;
+  target.searchParams.set('returnTo', 'checkout');
+  return `${target.pathname}${target.search}${target.hash}`;
+}
+
 function ClerkProfileSync() {
   const { isLoaded, isSignedIn, user } = useUser();
   const { language } = useLanguage();
@@ -178,8 +189,8 @@ function ClerkRouterBridge({ children }: { children: ReactNode }) {
     signInUrl={`${basePath}/sign-in`}
     signUpUrl={`${basePath}/sign-up`}
     localization={localization}
-    routerPush={path => setLocation(stripBasePath(path))}
-    routerReplace={path => setLocation(stripBasePath(path), { replace: true })}
+    routerPush={path => setLocation(stripBasePath(preserveAuthReturnQuery(path)))}
+    routerReplace={path => setLocation(stripBasePath(preserveAuthReturnQuery(path)), { replace: true })}
   ><ClerkProfileSync />{children}</ClerkProvider>;
 }
 
