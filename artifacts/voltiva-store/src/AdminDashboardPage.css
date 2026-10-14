@@ -1,11 +1,6 @@
 .adm-page { min-height:100dvh; padding:0 0 48px; color:#172b3a; background:#f3f6f8; font-family:var(--app-font-sans); }
 .adm-wrap { width:min(1280px,calc(100% - 48px)); margin:0 auto; }
-.adm-topline { height:68px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #e0e7eb; }
-.adm-brand { display:flex; align-items:center; gap:10px; }
-.adm-brand-mark { width:35px; height:35px; display:grid; place-items:center; border-radius:9px; color:#102033; background:#00b8d9; }
-.adm-brand-copy,.adm-brand > span:last-child { display:flex; flex-direction:column; gap:2px; }
-.adm-brand b { font-size:14px; letter-spacing:-.035em; color:#101c30; }
-.adm-brand small { color:#75828c; font:8px var(--app-font-mono); letter-spacing:.12em; }
+.adm-topline { height:68px; display:flex; align-items:center; justify-content:flex-end; border-bottom:1px solid #e0e7eb; }
 .adm-top-meta { display:flex; align-items:center; gap:9px; color:#74818c; font:9px var(--app-font-mono); letter-spacing:.08em; }
 .adm-top-meta b { color:#263c4b; font-weight:600; text-transform:uppercase; }
 .adm-live-dot { flex:none; width:7px; height:7px; border-radius:50%; display:inline-block; background:#0a9e92; box-shadow:0 0 0 3px rgba(10,158,146,.12); }
