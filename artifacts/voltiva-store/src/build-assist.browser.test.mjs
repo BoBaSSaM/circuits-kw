@@ -373,10 +373,48 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.getByTestId('row-checkout-removed-before-checkout').count(), 0);
     assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '6.500 KWD');
 
-    await page.getByRole('link', { name: /Edit cart/ }).click();
-    await page.getByTestId('button-remove-bom-esp32').click();
-    await page.getByTestId('link-empty-cart-components').waitFor();
-    await page.reload();
+    await page.getByTestId('input-checkout-name').fill('Demo Buyer');
+    await page.getByTestId('input-checkout-email').fill('buyer@example.com');
+    await page.getByTestId('input-checkout-phone').fill('+965 5555 5555');
+    await page.getByTestId('select-checkout-governorate').selectOption({ label: 'Capital' });
+    await page.getByTestId('input-checkout-area').fill('Kuwait City');
+    await page.getByTestId('input-checkout-block').fill('1');
+    await page.getByTestId('input-checkout-street').fill('Main Street');
+    await page.getByTestId('input-checkout-building').fill('10');
+    const savedOrderResponse = page.waitForResponse(response =>
+      response.url().endsWith('/api/orders') && response.request().method() === 'POST',
+    );
+    await page.getByTestId('button-place-demo-order').click();
+    const orderResponse = await savedOrderResponse;
+    assert.equal(orderResponse.status(), 201);
+    const savedOrder = await orderResponse.json();
+    assert.deepEqual(orderResponse.request().postDataJSON().items, [{
+      id: 'bom-esp32',
+      kind: 'bom',
+      sku: 'ESP32-WRM-32D',
+      qty: 4,
+      estimateUnitPrice: 1.625,
+    }], 'the saved order must receive only the edited, remaining cart item');
+    assert.deepEqual(savedOrder.items, [{
+      id: 'bom-esp32',
+      kind: 'bom',
+      sku: 'ESP32-WRM-32D',
+      name: 'ESP32-WROOM-32D',
+      price: 1.625,
+      qty: 4,
+    }]);
+    assert.equal(savedOrder.subtotal, 6.5);
+
+    await page.getByTestId('demo-order-confirmation').waitFor();
+    assert.equal(await page.locator('.demo-order-items > div').count(), savedOrder.items.length);
+    const confirmationItem = page.getByTestId('row-confirmation-bom-esp32');
+    assert.match(await confirmationItem.innerText(), /ESP32-WROOM-32D · Qty 4/);
+    assert.match(await confirmationItem.innerText(), /6\.500 KWD/);
+    assert.equal(await page.locator('[data-testid^="row-confirmation-removed-before-checkout"]').count(), 0);
+    assert.equal(await page.getByTestId('text-demo-order-subtotal').innerText(), '6.500 KWD');
+    assert.equal(await page.getByTestId('text-demo-order-number').innerText(), savedOrder.orderNumber);
+
+    await page.goto(`${baseUrl}/cart`);
     await page.getByTestId('link-empty-cart-components').waitFor();
     assert.equal(await page.locator('[data-testid^="row-cart-"]').count(), 0);
 

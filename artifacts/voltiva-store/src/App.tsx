@@ -939,8 +939,8 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
       <h1>{t('Order placed.',language)}</h1>
        <p className="lead" style={{fontSize:13,margin:'0 auto 18px'}} data-testid="text-order-storage-status">{t('Saved for demo order management. No payment or fulfillment is connected.',language)}</p>
       <div className="demo-order-number"><span>{t('DEMO ORDER NUMBER',language)}</span><strong data-testid="text-demo-order-number">{placedOrder.orderNumber}</strong><small>{new Date(placedOrder.placedAt).toLocaleString(language==='ar'?'ar-KW':'en-KW')}</small></div>
-      <div className="demo-order-items">{placedOrder.items.map(item=><div key={item.id}><span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span><strong>{fmt(item.price*item.qty)}</strong></div>)}</div>
-      <div className="summary-line summary-total"><span>{t('Demo total',language)}</span><span className="mono">{fmt(placedOrder.subtotal)}</span></div>
+      <div className="demo-order-items">{placedOrder.items.map(item=><div key={item.id} data-testid={`row-confirmation-${item.id}`}><span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span><strong>{fmt(item.price*item.qty)}</strong></div>)}</div>
+      <div className="summary-line summary-total"><span>{t('Demo total',language)}</span><span className="mono" data-testid="text-demo-order-subtotal">{fmt(placedOrder.subtotal)}</span></div>
         <p className="checkout-order-disclaimer">{t('Order contact and delivery details are saved for admin review. Payment and fulfillment are not connected.',language)}</p>
       <Link className="button button-primary" href="/components" data-testid="link-confirmation-shop">{t('Continue browsing',language)} <ArrowRight size={15}/></Link>
     </div>
