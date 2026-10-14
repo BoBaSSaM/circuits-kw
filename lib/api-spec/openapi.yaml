@@ -131,6 +131,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /admin/audit-log:
+    get:
+      operationId: getAdminAuditLog
+      tags: [admin]
+      summary: Get recent dashboard changes
+      responses:
+        "200":
+          description: Most recent audited dashboard changes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAuditLogResponse"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Audit history could not be loaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /admin/catalog:
     get:
       operationId: getAdminCatalog
@@ -442,6 +466,39 @@ components:
     DashboardRole:
       type: string
       enum: [customer, editor, admin]
+    AuditAction:
+      type: string
+      enum: [created, updated, deleted]
+    AuditRecordType:
+      type: string
+      enum: [product, project_kit, order, user]
+    AuditDetails:
+      type: object
+      additionalProperties:
+        oneOf:
+          - { type: string }
+          - { type: number }
+          - { type: boolean }
+          - { type: "null" }
+    AdminAuditEntry:
+      type: object
+      properties:
+        id: { type: string }
+        actorId: { type: string }
+        actorName: { type: ["string", "null"] }
+        actorRole: { $ref: "#/components/schemas/DashboardRole" }
+        action: { $ref: "#/components/schemas/AuditAction" }
+        recordType: { $ref: "#/components/schemas/AuditRecordType" }
+        recordId: { type: string }
+        timestamp: { type: string, format: date-time }
+        before: { oneOf: [{ $ref: "#/components/schemas/AuditDetails" }, { type: "null" }] }
+        after: { oneOf: [{ $ref: "#/components/schemas/AuditDetails" }, { type: "null" }] }
+      required: [id, actorId, actorName, actorRole, action, recordType, recordId, timestamp, before, after]
+    AdminAuditLogResponse:
+      type: object
+      properties:
+        entries: { type: array, items: { $ref: "#/components/schemas/AdminAuditEntry" } }
+      required: [entries]
     OrderStatus:
       type: string
       enum: [new, confirmed, preparing, completed, cancelled]

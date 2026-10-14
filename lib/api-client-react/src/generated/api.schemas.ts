@@ -22,6 +22,45 @@ export const DashboardRole = {
   admin: 'admin',
 } as const;
 
+export type AuditAction = typeof AuditAction[keyof typeof AuditAction];
+
+
+export const AuditAction = {
+  created: 'created',
+  updated: 'updated',
+  deleted: 'deleted',
+} as const;
+
+export type AuditRecordType = typeof AuditRecordType[keyof typeof AuditRecordType];
+
+
+export const AuditRecordType = {
+  product: 'product',
+  project_kit: 'project_kit',
+  order: 'order',
+  user: 'user',
+} as const;
+
+export interface AuditDetails {[key: string]: string | number | boolean | null}
+
+export interface AdminAuditEntry {
+  id: string;
+  actorId: string;
+  /** @nullable */
+  actorName: string | null;
+  actorRole: DashboardRole;
+  action: AuditAction;
+  recordType: AuditRecordType;
+  recordId: string;
+  timestamp: string;
+  before: AuditDetails | null;
+  after: AuditDetails | null;
+}
+
+export interface AdminAuditLogResponse {
+  entries: AdminAuditEntry[];
+}
+
 export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
 
 

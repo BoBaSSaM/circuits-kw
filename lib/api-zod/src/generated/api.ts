@@ -178,6 +178,25 @@ export const GetAdminAccessResponse = zod.object({
 
 
 /**
+ * @summary Get recent dashboard changes
+ */
+export const GetAdminAuditLogResponse = zod.object({
+  "entries": zod.array(zod.object({
+  "id": zod.string(),
+  "actorId": zod.string(),
+  "actorName": zod.string().nullable(),
+  "actorRole": zod.enum(['customer', 'editor', 'admin']),
+  "action": zod.enum(['created', 'updated', 'deleted']),
+  "recordType": zod.enum(['product', 'project_kit', 'order', 'user']),
+  "recordId": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "before": zod.union([zod.record(zod.string(), zod.union([zod.string(),zod.number(),zod.boolean(),zod.null()])),zod.null()]),
+  "after": zod.union([zod.record(zod.string(), zod.union([zod.string(),zod.number(),zod.boolean(),zod.null()])),zod.null()])
+}))
+})
+
+
+/**
  * @summary Get all catalog items for management
  */
 export const GetAdminCatalogResponse = zod.object({

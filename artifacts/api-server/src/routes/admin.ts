@@ -1,6 +1,7 @@
 import { getAuth } from "@clerk/express";
 import {
   GetAdminAccessResponse,
+  GetAdminAuditLogResponse,
   GetAdminUsersResponse,
   UpdateUserRoleBody,
   UpdateUserRoleParams,
@@ -11,6 +12,11 @@ import { logger } from "../lib/logger";
 import { requireDashboardRoles } from "../lib/dashboard-auth";
 import { getMongoDatabase } from "../lib/mongo";
 import {
+  appendDashboardAudit,
+  getDashboardAuditActor,
+  type DashboardAuditDocument,
+} from "../lib/dashboard-audit";
+import {
   getOrSyncUserProfile,
   isBootstrapAdmin,
   normalizeDashboardRole,
@@ -18,6 +24,44 @@ import {
 } from "../lib/user-profiles";
 
 const router: IRouter = Router();
+
+router.get(
+  "/admin/audit-log",
+  requireDashboardRoles("admin"),
+  async (_req, res) => {
+    try {
+      const database = await getMongoDatabase();
+      const entries = await database
+        .collection<DashboardAuditDocument>("dashboard_audit")
+        .find({})
+        .sort({ timestamp: -1, _id: -1 })
+        .limit(100)
+        .toArray();
+      res.json(
+        GetAdminAuditLogResponse.parse({
+          entries: entries.map((entry) => ({
+            id: entry._id,
+            actorId: entry.actorId,
+            actorName: entry.actorName,
+            actorRole: entry.actorRole,
+            action: entry.action,
+            recordType: entry.recordType,
+            recordId: entry.recordId,
+            timestamp: entry.timestamp,
+            before: entry.before,
+            after: entry.after,
+          })),
+        }),
+      );
+    } catch (error) {
+      logger.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Could not load dashboard audit history",
+      );
+      res.status(503).json({ error: "audit_history_unavailable" });
+    }
+  },
+);
 
 router.get("/admin/access", async (req, res) => {
   const { userId } = getAuth(req);
@@ -134,7 +178,18 @@ router.patch(
         return;
       }
 
+      const previousRole = normalizeDashboardRole(target.role);
       await users.updateOne({ _id: params.data.id }, { $set: { role: parsed.data.role } });
+      if (previousRole !== parsed.data.role) {
+        await appendDashboardAudit(database, {
+          ...getDashboardAuditActor(res.locals.dashboardProfile),
+          action: "updated",
+          recordType: "user",
+          recordId: target.clerkUserId,
+          before: { role: previousRole },
+          after: { role: parsed.data.role },
+        });
+      }
       res.json(
         UpdateUserRoleResponse.parse({
           id: target.clerkUserId,

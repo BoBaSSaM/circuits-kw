@@ -23,6 +23,7 @@ import { Router, type IRouter } from "express";
 import { logger } from "../lib/logger";
 import { requireDashboardRoles } from "../lib/dashboard-auth";
 import { getMongoDatabase } from "../lib/mongo";
+import { appendDashboardAudit, getDashboardAuditActor } from "../lib/dashboard-audit";
 
 type ProductDocument = ProductInput & {
   _id: string;
@@ -110,6 +111,25 @@ function normalizeKitInput(input: ProjectKitInput): ProjectKitInput {
     parts: input.parts.map((part) => part.trim()).filter(Boolean),
     count: input.count.trim(),
     manual: input.manual.trim(),
+  };
+}
+
+function productAuditDetails(product: ProductDocument) {
+  return {
+    name: product.name,
+    sku: product.sku,
+    price: product.price,
+    stock: product.stock,
+    isActive: product.isActive !== false,
+  };
+}
+
+function kitAuditDetails(kit: ProjectKitDocument) {
+  return {
+    title: kit.title,
+    code: kit.code,
+    price: kit.price,
+    isActive: kit.isActive !== false,
   };
 }
 
@@ -223,6 +243,14 @@ router.post(
         isDemo: false,
       };
       await database.collection<ProductDocument>("products").insertOne(document);
+      await appendDashboardAudit(database, {
+        ...getDashboardAuditActor(res.locals.dashboardProfile),
+        action: "created",
+        recordType: "product",
+        recordId: id,
+        before: null,
+        after: productAuditDetails(document),
+      });
       res.status(201).json(CreateProductResponse.parse(normalizeProduct(document)));
     } catch (error) {
       respondToCatalogError(error, res, "Could not create catalog product");
@@ -250,9 +278,15 @@ router.put(
     try {
       const database = await getMongoDatabase();
       const products = database.collection<ProductDocument>("products");
+      const selector = { $or: [{ _id: params.data.id }, { id: params.data.id }] };
+      const before = await products.findOne(selector);
+      if (!before) {
+        res.status(404).json({ error: "product_not_found" });
+        return;
+      }
       const input = normalizeProductInput(parsed.data);
       const result = await products.updateOne(
-        { $or: [{ _id: params.data.id }, { id: params.data.id }] },
+        selector,
         { $set: { ...input, updatedAt: new Date() } },
       );
       if (!result.matchedCount) {
@@ -260,13 +294,19 @@ router.put(
         return;
       }
 
-      const document = await products.findOne({
-        $or: [{ _id: params.data.id }, { id: params.data.id }],
-      });
+      const document = await products.findOne(selector);
       if (!document) {
         res.status(404).json({ error: "product_not_found" });
         return;
       }
+      await appendDashboardAudit(database, {
+        ...getDashboardAuditActor(res.locals.dashboardProfile),
+        action: "updated",
+        recordType: "product",
+        recordId: params.data.id,
+        before: productAuditDetails(before),
+        after: productAuditDetails(document),
+      });
       res.json(UpdateProductResponse.parse(normalizeProduct(document)));
     } catch (error) {
       respondToCatalogError(error, res, "Could not update catalog product");
@@ -286,13 +326,26 @@ router.delete(
 
     try {
       const database = await getMongoDatabase();
-      const result = await database.collection<ProductDocument>("products").deleteOne({
-        $or: [{ _id: params.data.id }, { id: params.data.id }],
-      });
+      const products = database.collection<ProductDocument>("products");
+      const selector = { $or: [{ _id: params.data.id }, { id: params.data.id }] };
+      const before = await products.findOne(selector);
+      if (!before) {
+        res.status(404).json({ error: "product_not_found" });
+        return;
+      }
+      const result = await products.deleteOne(selector);
       if (!result.deletedCount) {
         res.status(404).json({ error: "product_not_found" });
         return;
       }
+      await appendDashboardAudit(database, {
+        ...getDashboardAuditActor(res.locals.dashboardProfile),
+        action: "deleted",
+        recordType: "product",
+        recordId: params.data.id,
+        before: productAuditDetails(before),
+        after: null,
+      });
       res.json(DeleteProductResponse.parse({ deleted: true }));
     } catch (error) {
       respondToCatalogError(error, res, "Could not delete catalog product");
@@ -324,6 +377,14 @@ router.post(
         isDemo: false,
       };
       await database.collection<ProjectKitDocument>("project_kits").insertOne(document);
+      await appendDashboardAudit(database, {
+        ...getDashboardAuditActor(res.locals.dashboardProfile),
+        action: "created",
+        recordType: "project_kit",
+        recordId: id,
+        before: null,
+        after: kitAuditDetails(document),
+      });
       res.status(201).json(CreateProjectKitResponse.parse(normalizeKit(document)));
     } catch (error) {
       respondToCatalogError(error, res, "Could not create project kit");
@@ -351,9 +412,15 @@ router.put(
     try {
       const database = await getMongoDatabase();
       const kits = database.collection<ProjectKitDocument>("project_kits");
+      const selector = { $or: [{ _id: params.data.id }, { id: params.data.id }] };
+      const before = await kits.findOne(selector);
+      if (!before) {
+        res.status(404).json({ error: "project_kit_not_found" });
+        return;
+      }
       const input = normalizeKitInput(parsed.data);
       const result = await kits.updateOne(
-        { $or: [{ _id: params.data.id }, { id: params.data.id }] },
+        selector,
         { $set: { ...input, updatedAt: new Date() } },
       );
       if (!result.matchedCount) {
@@ -361,13 +428,19 @@ router.put(
         return;
       }
 
-      const document = await kits.findOne({
-        $or: [{ _id: params.data.id }, { id: params.data.id }],
-      });
+      const document = await kits.findOne(selector);
       if (!document) {
         res.status(404).json({ error: "project_kit_not_found" });
         return;
       }
+      await appendDashboardAudit(database, {
+        ...getDashboardAuditActor(res.locals.dashboardProfile),
+        action: "updated",
+        recordType: "project_kit",
+        recordId: params.data.id,
+        before: kitAuditDetails(before),
+        after: kitAuditDetails(document),
+      });
       res.json(UpdateProjectKitResponse.parse(normalizeKit(document)));
     } catch (error) {
       respondToCatalogError(error, res, "Could not update project kit");
@@ -387,13 +460,26 @@ router.delete(
 
     try {
       const database = await getMongoDatabase();
-      const result = await database.collection<ProjectKitDocument>("project_kits").deleteOne({
-        $or: [{ _id: params.data.id }, { id: params.data.id }],
-      });
+      const kits = database.collection<ProjectKitDocument>("project_kits");
+      const selector = { $or: [{ _id: params.data.id }, { id: params.data.id }] };
+      const before = await kits.findOne(selector);
+      if (!before) {
+        res.status(404).json({ error: "project_kit_not_found" });
+        return;
+      }
+      const result = await kits.deleteOne(selector);
       if (!result.deletedCount) {
         res.status(404).json({ error: "project_kit_not_found" });
         return;
       }
+      await appendDashboardAudit(database, {
+        ...getDashboardAuditActor(res.locals.dashboardProfile),
+        action: "deleted",
+        recordType: "project_kit",
+        recordId: params.data.id,
+        before: kitAuditDetails(before),
+        after: null,
+      });
       res.json(DeleteProjectKitResponse.parse({ deleted: true }));
     } catch (error) {
       respondToCatalogError(error, res, "Could not delete project kit");

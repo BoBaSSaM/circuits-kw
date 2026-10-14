@@ -26,6 +26,7 @@ import { ObjectId } from "mongodb";
 import { logger } from "../lib/logger";
 import { requireDashboardRoles } from "../lib/dashboard-auth";
 import { getMongoDatabase } from "../lib/mongo";
+import { appendDashboardAudit, getDashboardAuditActor } from "../lib/dashboard-audit";
 
 type ProductDocument = ProductInput & { _id: string; id?: string };
 type ProjectKitDocument = ProjectKitInput & {
@@ -303,6 +304,15 @@ router.post(
         userId: null,
         createdBy: userId ?? null,
       });
+      const database = await getMongoDatabase();
+      await appendDashboardAudit(database, {
+        ...getDashboardAuditActor(res.locals.dashboardProfile),
+        action: "created",
+        recordType: "order",
+        recordId: order.id,
+        before: null,
+        after: { status: order.status, adminNotePresent: false },
+      });
       res.status(201).json(CreateAdminOrderResponse.parse(order));
     } catch (error) {
       respondToOrderError(error, res);
@@ -334,19 +344,39 @@ router.patch(
     try {
       const database = await getMongoDatabase();
       const orders = database.collection<OrderDocument>("orders");
+      const orderId = new ObjectId(params.data.id);
+      const before = await orders.findOne({ _id: orderId });
+      if (!before) {
+        res.status(404).json({ error: "order_not_found" });
+        return;
+      }
       const result = await orders.updateOne(
-        { _id: new ObjectId(params.data.id) },
+        { _id: orderId },
         { $set: { status: parsed.data.status, adminNotes: parsed.data.adminNotes } },
       );
       if (!result.matchedCount) {
         res.status(404).json({ error: "order_not_found" });
         return;
       }
-      const document = await orders.findOne({ _id: new ObjectId(params.data.id) });
+      const document = await orders.findOne({ _id: orderId });
       if (!document) {
         res.status(404).json({ error: "order_not_found" });
         return;
       }
+      await appendDashboardAudit(database, {
+        ...getDashboardAuditActor(res.locals.dashboardProfile),
+        action: "updated",
+        recordType: "order",
+        recordId: params.data.id,
+        before: {
+          status: before.status,
+          adminNotePresent: Boolean(before.adminNotes),
+        },
+        after: {
+          status: document.status,
+          adminNotePresent: Boolean(document.adminNotes),
+        },
+      });
       res.json(UpdateAdminOrderResponse.parse(toAdminOrder(document)));
     } catch (error) {
       logger.error(
@@ -370,13 +400,29 @@ router.delete(
 
     try {
       const database = await getMongoDatabase();
-      const result = await database
-        .collection<OrderDocument>("orders")
-        .deleteOne({ _id: new ObjectId(params.data.id) });
+      const orders = database.collection<OrderDocument>("orders");
+      const orderId = new ObjectId(params.data.id);
+      const before = await orders.findOne({ _id: orderId });
+      if (!before) {
+        res.status(404).json({ error: "order_not_found" });
+        return;
+      }
+      const result = await orders.deleteOne({ _id: orderId });
       if (!result.deletedCount) {
         res.status(404).json({ error: "order_not_found" });
         return;
       }
+      await appendDashboardAudit(database, {
+        ...getDashboardAuditActor(res.locals.dashboardProfile),
+        action: "deleted",
+        recordType: "order",
+        recordId: params.data.id,
+        before: {
+          status: before.status,
+          adminNotePresent: Boolean(before.adminNotes),
+        },
+        after: null,
+      });
       res.json(DeleteAdminOrderResponse.parse({ deleted: true }));
     } catch (error) {
       logger.error(

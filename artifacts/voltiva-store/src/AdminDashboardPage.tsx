@@ -7,14 +7,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { useUser } from '@clerk/react';
 import {
-  getGetAdminAccessQueryKey, getGetAdminCatalogQueryKey, getGetAdminOrdersQueryKey, getGetAdminUsersQueryKey,
-  useGetAdminAccess, useGetAdminCatalog, useGetAdminUsers, useGetAdminOrders,
+  getGetAdminAccessQueryKey, getGetAdminAuditLogQueryKey, getGetAdminCatalogQueryKey, getGetAdminOrdersQueryKey, getGetAdminUsersQueryKey,
+  useGetAdminAccess, useGetAdminAuditLog, useGetAdminCatalog, useGetAdminUsers, useGetAdminOrders,
   useCreateProduct, useUpdateProduct, useDeleteProduct,
   useCreateProjectKit, useUpdateProjectKit, useDeleteProjectKit,
   useUpdateUserRole, useCreateAdminOrder, useUpdateAdminOrder, useDeleteAdminOrder,
 } from '@workspace/api-client-react';
-import type { AdminOrder, CatalogKit, CatalogProduct, DashboardRole, OrderStatus, ProductInput, ProjectKitInput } from '@workspace/api-client-react';
-import { Activity, ArrowUpRight, Box, ChevronDown, CircleAlert, CircuitBoard, ClipboardList, Cpu, Layers3, LoaderCircle, Package, Plus, RefreshCw, Search, ShieldCheck, ShoppingBag, Trash2, Users, Wrench, X } from 'lucide-react';
+import type { AdminAuditEntry, AuditDetails, AdminOrder, CatalogKit, CatalogProduct, DashboardRole, OrderStatus, ProductInput, ProjectKitInput } from '@workspace/api-client-react';
+import { Activity, ArrowUpRight, Box, ChevronDown, CircleAlert, CircuitBoard, ClipboardList, Cpu, History, Layers3, LoaderCircle, Package, Plus, RefreshCw, Search, ShieldCheck, ShoppingBag, Trash2, Users, Wrench, X } from 'lucide-react';
 import './AdminDashboardPage.css';
 
 const productSchema = z.object({
@@ -40,7 +40,7 @@ const orderSchema = z.object({
 type ProductValues = z.infer<typeof productSchema>;
 type KitValues = z.infer<typeof kitSchema>;
 type OrderValues = z.infer<typeof orderSchema>;
-type Tab = 'overview' | 'catalog' | 'orders' | 'users';
+type Tab = 'overview' | 'catalog' | 'orders' | 'users' | 'history';
 type Editor = { kind: 'product'; item?: CatalogProduct } | { kind: 'kit'; item?: CatalogKit } | { kind: 'order' } | null;
 
 const productDefaults: ProductValues = { name: '', sku: '', category: 'Microcontrollers', price: 0, stock: 0, package: '', description: '', voltage: '', interface: '', icon: 'cpu', imageUrl: null, isActive: true };
@@ -76,6 +76,7 @@ export function AdminDashboardPage() {
   const catalog = useGetAdminCatalog({ query: { enabled: !!allowed, queryKey: getGetAdminCatalogQueryKey() } });
   const ordersQuery = useGetAdminOrders({ query: { enabled: !!allowed, queryKey: getGetAdminOrdersQueryKey() } });
   const usersQuery = useGetAdminUsers({ query: { enabled: !!admin, queryKey: getGetAdminUsersQueryKey() } });
+  const auditQuery = useGetAdminAuditLog({ query: { enabled: !!admin, queryKey: getGetAdminAuditLogQueryKey() } });
   const [tab, setTab] = useState<Tab>('overview');
   const [search, setSearch] = useState('');
   const [editor, setEditor] = useState<Editor>(null);
@@ -87,12 +88,13 @@ export function AdminDashboardPage() {
   const invalidateCatalog = () => qc.invalidateQueries({ queryKey: getGetAdminCatalogQueryKey() });
   const invalidateOrders = () => qc.invalidateQueries({ queryKey: getGetAdminOrdersQueryKey() });
   const invalidateUsers = () => qc.invalidateQueries({ queryKey: getGetAdminUsersQueryKey() });
+  const invalidateAuditLog = () => qc.invalidateQueries({ queryKey: getGetAdminAuditLogQueryKey() });
   const busy = createProduct.isPending || updateProduct.isPending || deleteProduct.isPending || createKit.isPending || updateKit.isPending || deleteKit.isPending || updateRole.isPending || createOrder.isPending || updateOrder.isPending || deleteOrder.isPending;
   const products = catalog.data?.products ?? [], kits = catalog.data?.kits ?? [], orders = ordersQuery.data?.orders ?? [], users = usersQuery.data?.users ?? [];
   const filteredProducts = useMemo(() => products.filter(item => `${item.name} ${item.sku} ${item.category}`.toLowerCase().includes(search.toLowerCase())), [products, search]);
   const filteredKits = useMemo(() => kits.filter(item => `${item.title} ${item.code} ${item.category}`.toLowerCase().includes(search.toLowerCase())), [kits, search]);
   const filteredOrders = useMemo(() => orders.filter(item => `${item.orderNumber} ${item.customer.name} ${item.customer.email}`.toLowerCase().includes(search.toLowerCase())), [orders, search]);
-  const act = (work: () => Promise<unknown>, success: string, after?: () => void) => { setNotice(''); work().then(() => { void invalidateCatalog(); void invalidateOrders(); void invalidateUsers(); setNotice(success); after?.(); }).catch(() => setNotice('That change could not be saved. Please retry.')); };
+  const act = (work: () => Promise<unknown>, success: string, after?: () => void) => { setNotice(''); work().then(() => { void invalidateCatalog(); void invalidateOrders(); void invalidateUsers(); void invalidateAuditLog(); setNotice(success); after?.(); }).catch(() => setNotice('That change could not be saved. Please retry.')); };
 
   if (!isLoaded) return <main className="adm-page"><div className="adm-wrap"><StatePanel mode="loading" message="Loading account status." /></div></main>;
   if (!isSignedIn) return <main className="adm-page"><div className="adm-wrap"><section className="adm-denied surface"><span className="adm-denied-icon"><ShieldCheck size={24} /></span><p className="adm-eyebrow">Circuits KW · Workspace access</p><h1>Sign in to continue</h1><p>The dashboard is private. Sign in with an admin or editor account to access it.</p><Link href="/sign-in?returnTo=dashboard" className="adm-button adm-button-primary" data-testid="link-dashboard-sign-in">Sign in</Link></section></div></main>;
@@ -104,7 +106,7 @@ export function AdminDashboardPage() {
     { key: 'overview', label: 'Overview', icon: Activity },
     { key: 'catalog', label: 'Catalog', icon: CircuitBoard, count: products.length + kits.length },
     { key: 'orders', label: 'Orders', icon: ClipboardList, count: orders.length },
-    ...(admin ? [{ key: 'users' as Tab, label: 'Users', icon: Users, count: users.length }] : []),
+    ...(admin ? [{ key: 'users' as Tab, label: 'Users', icon: Users, count: users.length }, { key: 'history' as Tab, label: 'History', icon: History, count: auditQuery.data?.entries.length }] : []),
   ];
   const mutationError = createProduct.error || updateProduct.error || deleteProduct.error || createKit.error || updateKit.error || deleteKit.error || updateRole.error || createOrder.error || updateOrder.error || deleteOrder.error;
 
@@ -115,7 +117,7 @@ export function AdminDashboardPage() {
       <div className="adm-shell">
         <aside className="adm-sidebar" aria-label="Dashboard sections"><div className="adm-nav-label">WORKSPACE</div>{nav.map(({ key, label, icon: Icon, count }) => <button type="button" key={key} className={`adm-nav-item ${tab === key ? 'active' : ''}`} onClick={() => { setTab(key); setSearch(''); }} data-testid={`nav-dashboard-${key}`}><Icon size={16} /><span>{label}</span>{count !== undefined && <small>{count}</small>}</button>)}<div className="adm-sidebar-bottom"><div className="adm-sidebar-chip"><span className="adm-sidebar-chip-mark"><Wrench size={15} /></span><span><b>Built for the bench</b><small>Parts to possibilities.</small></span></div><span className="mono">KUWAIT · KWD</span></div></aside>
         <section className="adm-content">
-          <div className="adm-section-head"><div><p className="adm-eyebrow">{tab === 'overview' ? 'CONTROL ROOM' : `WORKSPACE / ${tab.toUpperCase()}`}</p><h2>{tab === 'overview' ? 'Operations at a glance' : tab === 'catalog' ? 'Catalog management' : tab === 'orders' ? 'Order desk' : 'People & access'}</h2></div>{tab === 'catalog' && <button className="adm-button adm-button-primary" onClick={() => setEditor({ kind: 'product' })} data-testid="button-create-product"><Plus size={15} /> New component</button>}{tab === 'orders' && <button className="adm-button adm-button-primary" onClick={() => setEditor({ kind: 'order' })} data-testid="button-create-order"><Plus size={15} /> Demo order</button>}</div>
+           <div className="adm-section-head"><div><p className="adm-eyebrow">{tab === 'overview' ? 'CONTROL ROOM' : `WORKSPACE / ${tab.toUpperCase()}`}</p><h2>{tab === 'overview' ? 'Operations at a glance' : tab === 'catalog' ? 'Catalog management' : tab === 'orders' ? 'Order desk' : tab === 'users' ? 'People & access' : 'Change history'}</h2></div>{tab === 'catalog' && <button className="adm-button adm-button-primary" onClick={() => setEditor({ kind: 'product' })} data-testid="button-create-product"><Plus size={15} /> New component</button>}{tab === 'orders' && <button className="adm-button adm-button-primary" onClick={() => setEditor({ kind: 'order' })} data-testid="button-create-order"><Plus size={15} /> Demo order</button>}</div>
           {notice && <div className="adm-notice" role="status" data-testid="status-dashboard-notice"><span className="adm-live-dot" />{notice}<button onClick={() => setNotice('')} aria-label="Dismiss notification" data-testid="button-dismiss-notice"><X size={14} /></button></div>}
           {mutationError && <div className="adm-alert" role="alert" data-testid="status-mutation-error"><CircleAlert size={16} />A change could not be completed. Check your access and try again.</div>}
           {tab === 'overview' && <Overview products={products} kits={kits} orders={orders} role={role!} loading={catalog.isLoading || ordersQuery.isLoading} error={catalog.isError || ordersQuery.isError} retry={() => { catalog.refetch(); ordersQuery.refetch(); }} setTab={setTab} />}
@@ -125,6 +127,7 @@ export function AdminDashboardPage() {
           </section>}
           {tab === 'orders' && <section className="adm-panel"><div className="adm-toolbar"><div className="adm-search"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search order number or customer…" aria-label="Search orders" data-testid="input-orders-search" /></div><span className="adm-record-count">{filteredOrders.length} orders</span></div>{ordersQuery.isLoading ? <StatePanel mode="loading" message="Loading order desk." /> : ordersQuery.isError ? <StatePanel mode="error" message="Orders could not be loaded." retry={() => ordersQuery.refetch()} /> : filteredOrders.length ? <div className="adm-order-list">{filteredOrders.map(order => <OrderCard key={order.id} order={order} onSave={(status, adminNotes) => act(() => updateOrder.mutateAsync({ id: order.id, data: { status, adminNotes: adminNotes || null } }), `Order ${order.orderNumber} updated.`)} onDelete={() => { if (window.confirm(`Delete order ${order.orderNumber}? This cannot be undone.`)) act(() => deleteOrder.mutateAsync({ id: order.id }), 'Order deleted.'); }} busy={busy} />)}</div> : <EmptyMini label="No orders match this search." />}</section>}
           {tab === 'users' && admin && <section className="adm-panel"><div className="adm-toolbar"><div className="adm-copy"><strong>Account directory</strong><span>Manage dashboard permissions for synced customer profiles.</span></div><span className="adm-record-count">{users.length} accounts</span></div>{usersQuery.isLoading ? <StatePanel mode="loading" message="Loading account profiles." /> : usersQuery.isError ? <StatePanel mode="error" message="Account profiles could not be loaded." retry={() => usersQuery.refetch()} /> : users.length ? <div className="adm-user-list">{users.map(user => <div className="adm-user-row" key={user.id} data-testid={`row-user-${user.id}`}><div className="adm-user-avatar">{(user.firstName || user.email || '?').slice(0, 1).toUpperCase()}</div><div className="adm-user-main"><b data-testid={`text-user-${user.id}`}>{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Unnamed account'}</b><span>{user.email || 'No email on profile'}</span><small>Synced {new Date(user.lastSyncedAt).toLocaleDateString()}</small></div><label className="adm-role-label" htmlFor={`role-${user.id}`}>Workspace role</label><select id={`role-${user.id}`} value={user.role} disabled={busy} onChange={e => act(() => updateRole.mutateAsync({ id: user.id, data: { role: e.target.value as DashboardRole } }), 'Account role updated.', invalidateUsers)} data-testid={`select-user-role-${user.id}`}>{roles.map(value => <option key={value} value={value}>{value}</option>)}</select></div>)}</div> : <EmptyMini label="No synced accounts found." />}<p className="adm-footnote"><ShieldCheck size={14} /> User profiles are synced from account sign-in. Clerk accounts are not created or deleted here.</p></section>}
+          {tab === 'history' && admin && <AuditHistory entries={auditQuery.data?.entries ?? []} loading={auditQuery.isLoading} error={auditQuery.isError} retry={() => auditQuery.refetch()} />}
           <footer className="adm-footer"><span>Circuits KW <i>·</i> Workshop operations</span><span>Illustrative storefront records <b className="mono">KWD</b></span></footer>
         </section>
       </div>
@@ -147,6 +150,11 @@ function Metric({ icon: Icon, label, value, note, accent }: { icon: typeof Activ
 }
 function StatusBadge({ status, id }: { status: OrderStatus; id?: string }) { return <span className={`adm-status ${status}`} data-testid={`status-order-${id || status}`}>{status}</span>; }
 function EmptyMini({ label }: { label: string }) { return <div className="adm-empty-mini"><span><Box size={18} /></span><p>{label}</p></div>; }
+
+const auditFieldLabels: Record<string, string> = {
+  name: 'Name', sku: 'SKU', title: 'Title', code: 'Code', price: 'Price', stock: 'Stock',
+  isActive: 'Visibility', role: 'Role', status: 'Status', adminNotePresent: 'Internal note',
+};
 function ProductRow({ product: p, onEdit, onToggle, onDelete, busy }: { product: CatalogProduct; onEdit: () => void; onToggle: () => void; onDelete: () => void; busy: boolean }) {
   return <article className="adm-record-row" data-testid={`row-product-${p.id}`}><span className="adm-record-icon"><Cpu size={17} /></span><div className="adm-record-copy"><b>{p.name}</b><span className="mono">{p.sku} <i>·</i> {p.category}</span></div><div className="adm-record-detail"><b className="mono">{kwd(p.price)}</b><span>{p.stock} in stock</span></div><span className={`adm-published ${p.isActive ? 'published' : ''}`} data-testid={`status-product-${p.id}`}><i />{p.isActive ? 'Active' : 'Hidden'}</span><div className="adm-row-actions"><button onClick={onToggle} disabled={busy} aria-label={`${p.isActive ? 'Deactivate' : 'Activate'} ${p.name}`} data-testid={`button-toggle-product-${p.id}`}>{p.isActive ? 'Deactivate' : 'Activate'}</button><button onClick={onEdit} disabled={busy} aria-label={`Edit ${p.name}`} data-testid={`button-edit-product-${p.id}`}>Edit</button><button className="delete" onClick={onDelete} disabled={busy} aria-label={`Delete ${p.name}`} data-testid={`button-delete-product-${p.id}`}><Trash2 size={14} /></button></div></article>;
 }
@@ -181,4 +189,36 @@ function OrderForm({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => 
 }
 function DialogActions({ busy, onClose, submitLabel, testId }: { busy: boolean; onClose: () => void; submitLabel: string; testId: string }) {
   return <div className="adm-dialog-actions adm-span"><button type="button" className="adm-button adm-button-quiet" onClick={onClose} disabled={busy} data-testid="button-cancel-editor">Cancel</button><button type="submit" className="adm-button adm-button-primary" disabled={busy} data-testid={testId}>{busy && <LoaderCircle className="adm-spin" size={15} />}{submitLabel}</button></div>;
+}
+
+function describeAuditDetails(details: AuditDetails | null): string {
+  if (!details) return '—';
+  return Object.entries(details)
+    .filter(([key]) => Object.hasOwn(auditFieldLabels, key))
+    .map(([key, value]) => {
+      const display = key === 'price' && typeof value === 'number'
+        ? kwd(value)
+        : key === 'isActive'
+          ? value ? 'Active' : 'Hidden'
+          : key === 'adminNotePresent'
+            ? value ? 'Present (text not recorded)' : 'None'
+            : String(value);
+      return `${auditFieldLabels[key]}: ${display}`;
+    })
+    .join(' · ') || 'No safe detail recorded';
+}
+
+function AuditHistory({ entries, loading, error, retry }: { entries: AdminAuditEntry[]; loading: boolean; error: boolean; retry: () => void }) {
+  return <section className="adm-panel adm-audit-panel">
+    <div className="adm-toolbar"><div className="adm-copy"><strong>Recent dashboard changes</strong><span>Up to 100 most recent product, kit, order, and role changes. Customer contact details and internal note text are never included.</span></div><span className="adm-record-count">{entries.length} entries</span></div>
+    {loading ? <StatePanel mode="loading" message="Loading recent dashboard changes." /> : error ? <StatePanel mode="error" message="Change history could not be loaded." retry={retry} /> : entries.length ? <div className="adm-audit-list">{entries.map(entry => <article className="adm-audit-row" key={entry.id} data-testid={`audit-entry-${entry.id}`}>
+      <div className="adm-audit-mark"><History size={15} /></div>
+      <div className="adm-audit-main">
+        <div className="adm-audit-heading"><strong>{entry.actorName || entry.actorId}</strong><span className="adm-audit-role">{entry.actorRole}</span><span className={`adm-audit-action ${entry.action}`}>{entry.action}</span><b>{entry.recordType === 'project_kit' ? 'Project kit' : entry.recordType === 'user' ? 'User role' : entry.recordType}</b></div>
+        <div className="adm-audit-record" title={entry.recordId}>Record <span className="mono">{entry.recordId}</span></div>
+        <div className="adm-audit-diff"><span><small>Before</small>{describeAuditDetails(entry.before)}</span><ArrowUpRight size={13} /><span><small>After</small>{describeAuditDetails(entry.after)}</span></div>
+      </div>
+      <time className="adm-audit-time" dateTime={entry.timestamp}>{new Date(entry.timestamp).toLocaleString()}</time>
+    </article>)}</div> : <EmptyMini label="No dashboard changes have been recorded yet." />}
+  </section>;
 }
