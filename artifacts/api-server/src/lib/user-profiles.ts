@@ -19,39 +19,56 @@ export type UserProfileDocument = {
 
 type ClerkUserResource = Awaited<ReturnType<typeof clerkClient.users.getUser>>;
 
+export type ClerkWebhookUser = {
+  id: string;
+  emailAddresses: {
+    id: string;
+    emailAddress: string;
+    verificationStatus?: string | null;
+  }[];
+  primaryEmailAddressId: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
 function getBootstrapEmail(): string | null {
   const email = process.env.CIRCUITS_KW_BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
   return email || null;
 }
 
-async function saveClerkUserProfile(user: ClerkUserResource): Promise<UserProfileDocument> {
-  const primaryEmailAddress = user.emailAddresses.find(
-    (address) => address.id === user.primaryEmailAddressId,
-  );
-  const email = primaryEmailAddress?.emailAddress ?? null;
-  const emailVerified = primaryEmailAddress?.verification?.status === "verified";
+async function saveUserProfile(profileData: {
+  id: string;
+  email: string | null;
+  emailVerified: boolean;
+  firstName: string | null;
+  lastName: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): Promise<UserProfileDocument> {
   const bootstrapEmail = getBootstrapEmail();
   const isBootstrapAdmin =
-    Boolean(bootstrapEmail && emailVerified && email) &&
-    email?.trim().toLowerCase() === bootstrapEmail;
+    Boolean(bootstrapEmail && profileData.emailVerified && profileData.email) &&
+    profileData.email?.trim().toLowerCase() === bootstrapEmail;
   const now = new Date();
   const database = await getMongoDatabase();
   const users = database.collection<UserProfileDocument>("users");
   const fields = {
-    clerkUserId: user.id,
-    email,
-    firstName: user.firstName ?? null,
-    lastName: user.lastName ?? null,
-    primaryEmailVerified: emailVerified,
-    clerkCreatedAt: new Date(user.createdAt),
-    clerkUpdatedAt: new Date(user.updatedAt),
+    clerkUserId: profileData.id,
+    email: profileData.email,
+    firstName: profileData.firstName,
+    lastName: profileData.lastName,
+    primaryEmailVerified: profileData.emailVerified,
+    clerkCreatedAt: profileData.createdAt,
+    clerkUpdatedAt: profileData.updatedAt,
     lastSyncedAt: now,
-    createdAt: new Date(user.createdAt),
+    createdAt: profileData.createdAt,
     ...(isBootstrapAdmin ? { role: "admin" as const } : {}),
   };
 
   await users.updateOne(
-    { _id: user.id },
+    { _id: profileData.id },
     {
       $set: fields,
       $setOnInsert: {
@@ -61,23 +78,64 @@ async function saveClerkUserProfile(user: ClerkUserResource): Promise<UserProfil
     { upsert: true },
   );
 
-  let profile = await users.findOne({ _id: user.id });
+  let profile = await users.findOne({ _id: profileData.id });
   if (!profile) {
     throw new Error("The profile was not available after synchronization.");
   }
 
   if (!profile.role) {
     const role: DashboardRole = isBootstrapAdmin ? "admin" : "customer";
-    await users.updateOne({ _id: user.id }, { $set: { role } });
+    await users.updateOne({ _id: profileData.id }, { $set: { role } });
     profile = { ...profile, role };
   }
 
   return profile;
 }
 
+async function saveClerkUserProfile(user: ClerkUserResource): Promise<UserProfileDocument> {
+  const primaryEmailAddress = user.emailAddresses.find(
+    (address) => address.id === user.primaryEmailAddressId,
+  );
+
+  return saveUserProfile({
+    id: user.id,
+    email: primaryEmailAddress?.emailAddress ?? null,
+    emailVerified: primaryEmailAddress?.verification?.status === "verified",
+    firstName: user.firstName ?? null,
+    lastName: user.lastName ?? null,
+    createdAt: new Date(user.createdAt),
+    updatedAt: new Date(user.updatedAt),
+  });
+}
+
 export async function syncClerkUserProfile(userId: string): Promise<UserProfileDocument> {
   const user = await clerkClient.users.getUser(userId);
   return saveClerkUserProfile(user);
+}
+
+export async function syncClerkUserProfileFromWebhook(
+  user: ClerkWebhookUser,
+): Promise<UserProfileDocument> {
+  const primaryEmailAddress = user.emailAddresses.find(
+    (address) => address.id === user.primaryEmailAddressId,
+  );
+
+  return saveUserProfile({
+    id: user.id,
+    email: primaryEmailAddress?.emailAddress ?? null,
+    emailVerified: primaryEmailAddress?.verificationStatus === "verified",
+    firstName: user.firstName,
+    lastName: user.lastName,
+    createdAt: new Date(user.createdAt),
+    updatedAt: new Date(user.updatedAt),
+  });
+}
+
+export async function deleteClerkUserProfile(userId: string): Promise<void> {
+  const database = await getMongoDatabase();
+  await database.collection<UserProfileDocument>("users").deleteMany({
+    $or: [{ _id: userId }, { clerkUserId: userId }],
+  });
 }
 
 export type UserProfileBackfillResult = {
