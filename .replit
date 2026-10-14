@@ -21,3 +21,8 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+CIRCUITS_KW_BOOTSTRAP_ADMIN_EMAIL = "ali221@gmail.com"
