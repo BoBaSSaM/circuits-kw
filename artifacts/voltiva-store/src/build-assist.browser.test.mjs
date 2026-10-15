@@ -767,18 +767,21 @@ test('replaces supplier prices on BOM cart lines and removes lines omitted by th
       },
     });
     await page.reload();
+    await page.getByTestId('row-bom-esp32').waitFor();
+    await page.getByTestId('input-assembly-count').fill('2');
+    await page.getByTestId('input-assembly-count').press('Tab');
+    await page.getByTestId('input-part-quantity-esp32').fill('3');
+    await page.getByTestId('input-part-quantity-esp32').press('Tab');
+    assert.equal(await page.getByTestId('text-line-total-esp32').innerText(), '9.750 KWD');
+    assert.equal(await page.getByTestId('text-line-total-soil').innerText(), '1.500 KWD');
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '11.250 KWD');
     await page.getByTestId('button-add-bom-cart').click();
-    await page.getByTestId('link-cart').click();
-    const esp32CartRow = page.getByTestId('row-cart-bom-esp32');
-    const soilCartRow = page.getByTestId('row-cart-bom-soil');
-    await esp32CartRow.waitFor();
-    await soilCartRow.waitFor();
-    await page.getByTestId('input-quantity-bom-esp32').fill('3');
-    await page.getByTestId('input-quantity-bom-esp32').press('Tab');
-    assert.equal(await esp32CartRow.locator('.price').innerText(), '4.875 KWD');
-    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '5.625 KWD');
+    assert.deepEqual(
+      await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]').map(({ id, qty }) => ({ id, qty }))),
+      [{ id: 'bom-esp32', qty: 6 }, { id: 'bom-soil', qty: 2 }],
+      'adding the estimate to the cart must use per-assembly and assembly quantities',
+    );
 
-    await page.goto(`${baseUrl}/build-assist`);
     await page.getByTestId('summary-price-list').click();
     await page.getByTestId('input-price-list-source').fill('Replacement supplier');
     await page.getByTestId('input-price-list-updated').fill(dateDaysAgo(0));
@@ -788,26 +791,38 @@ test('replaces supplier prices on BOM cart lines and removes lines omitted by th
       buffer: Buffer.from('sku,price\nESP32-WRM-32D,2.750\n'),
     });
     await page.getByTestId('button-import-price-csv').click();
+    await page.waitForFunction(() => {
+      return document.querySelector('[data-testid="text-price-source"]')?.textContent?.includes('Replacement supplier')
+        && document.querySelector('[data-testid="text-line-total-esp32"]')?.textContent === '16.500 KWD';
+    });
     const importNotice = page.getByTestId('status-build-assist');
-    await importNotice.waitFor();
     assert.match(await importNotice.innerText(), /1 supplier-priced BOM cart item.*repriced/);
     assert.match(await importNotice.innerText(), /1 supplier-priced BOM cart item.*without a replacement price removed/);
+    assert.equal(await page.getByTestId('input-assembly-count').inputValue(), '2');
+    assert.equal(await page.getByTestId('input-part-quantity-esp32').inputValue(), '3');
+    assert.equal(await page.getByTestId('row-bom-esp32').locator('.bom-line-count').innerText(), '6 total units');
+    assert.equal(await page.getByTestId('text-line-total-esp32').innerText(), '16.500 KWD');
+    assert.equal(await page.getByTestId('text-line-total-soil').innerText(), '—');
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '16.500 KWD');
+    assert.match(await page.getByTestId('text-unpriced-soil').innerText(), /Unpriced/);
     await page.waitForFunction(() => {
       const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
-      return cart.some((item) => item.id === 'bom-esp32' && item.price === 2.75 && item.qty === 3)
+      return cart.some((item) => item.id === 'bom-esp32' && item.price === 2.75 && item.qty === 6)
         && !cart.some((item) => item.id === 'bom-soil');
     });
 
     await page.getByTestId('link-cart').click();
     await page.getByTestId('row-cart-bom-esp32').waitFor();
-    assert.equal(await page.getByTestId('row-cart-bom-esp32').locator('.price').innerText(), '8.250 KWD');
+    assert.equal(await page.getByTestId('input-quantity-bom-esp32').inputValue(), '6');
+    assert.equal(await page.getByTestId('row-cart-bom-esp32').locator('.price').innerText(), '16.500 KWD');
     assert.equal(await page.getByTestId('row-cart-bom-soil').count(), 0);
-    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '8.250 KWD');
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '16.500 KWD');
     await page.reload();
     await page.getByTestId('row-cart-bom-esp32').waitFor();
-    assert.equal(await page.getByTestId('row-cart-bom-esp32').locator('.price').innerText(), '8.250 KWD');
+    assert.equal(await page.getByTestId('input-quantity-bom-esp32').inputValue(), '6');
+    assert.equal(await page.getByTestId('row-cart-bom-esp32').locator('.price').innerText(), '16.500 KWD');
     assert.equal(await page.getByTestId('row-cart-bom-soil').count(), 0);
-    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '8.250 KWD');
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '16.500 KWD');
     assert.deepEqual(pageErrors, []);
   } catch (error) {
     error.message += `\nVite output:\n${serverOutput}`;
