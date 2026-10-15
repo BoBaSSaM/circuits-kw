@@ -21,7 +21,7 @@ import {
   type ProjectKitInput,
 } from "@workspace/api-zod";
 import { randomUUID } from "node:crypto";
-import { Router, type IRouter, type Response } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { ObjectId } from "mongodb";
 import { logger } from "../lib/logger";
 import { requireDashboardRoles } from "../lib/dashboard-auth";
@@ -213,33 +213,51 @@ function toAccountOrder(document: OrderDocument): AccountOrder {
   };
 }
 
-router.get("/orders", async (req, res): Promise<void> => {
-  const { userId } = getAuth(req);
-  if (!userId) {
-    res.status(401).json({ error: "authentication_required" });
-    return;
-  }
+type AccountOrdersDependencies = {
+  getUserId: (req: Request) => string | null | undefined;
+  getMongoDatabase: typeof getMongoDatabase;
+};
 
-  try {
-    const database = await getMongoDatabase();
-    const documents = await database
-      .collection<OrderDocument>("orders")
-      .find({ userId, isDemo: true })
-      .sort({ placedAt: -1 })
-      .toArray();
-    res.json(
-      GetMyOrdersResponse.parse({
-        orders: documents.map(toAccountOrder),
-      }),
-    );
-  } catch (error) {
-    req.log.error(
-      { errorName: error instanceof Error ? error.name : "UnknownError" },
-      "Could not load the signed-in buyer's demo orders",
-    );
-    res.status(503).json({ error: "orders_unavailable" });
-  }
-});
+export function createAccountOrdersHandler({
+  getUserId,
+  getMongoDatabase,
+}: AccountOrdersDependencies) {
+  return async (req: Request, res: Response): Promise<void> => {
+    const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: "authentication_required" });
+      return;
+    }
+
+    try {
+      const database = await getMongoDatabase();
+      const documents = await database
+        .collection<OrderDocument>("orders")
+        .find({ userId, isDemo: true })
+        .sort({ placedAt: -1 })
+        .toArray();
+      res.json(
+        GetMyOrdersResponse.parse({
+          orders: documents.map(toAccountOrder),
+        }),
+      );
+    } catch (error) {
+      req.log.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Could not load the signed-in buyer's demo orders",
+      );
+      res.status(503).json({ error: "orders_unavailable" });
+    }
+  };
+}
+
+router.get(
+  "/orders",
+  createAccountOrdersHandler({
+    getUserId: (req) => getAuth(req).userId,
+    getMongoDatabase,
+  }),
+);
 
 router.post("/orders", async (req, res) => {
   const parsed = CreateCheckoutOrderBody.safeParse(req.body);
