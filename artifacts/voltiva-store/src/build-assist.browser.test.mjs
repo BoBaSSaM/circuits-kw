@@ -805,6 +805,8 @@ test('replaces supplier prices on BOM cart lines and removes lines omitted by th
     assert.equal(await page.getByTestId('text-line-total-soil').innerText(), '—');
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '16.500 KWD');
     assert.match(await page.getByTestId('text-unpriced-soil').innerText(), /Unpriced/);
+    assert.match(await page.getByTestId('notice-unpriced-parts').innerText(), /SNS-SOIL-CAP-12/);
+    assert.match(await page.getByTestId('button-add-bom-cart').innerText(), /16\.500 KWD/);
     await page.waitForFunction(() => {
       const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
       return cart.some((item) => item.id === 'bom-esp32' && item.price === 2.75 && item.qty === 6)
