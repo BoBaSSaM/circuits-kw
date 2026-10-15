@@ -882,6 +882,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
   const {isLoaded,isSignedIn,user}=useUser();
   useDocument(t('Checkout',language),t('Demo orders are saved for Circuits KW order management.',language));
   const createOrder=useCreateCheckoutOrder();
+  const orderSubmissionInFlight=useRef(false);
   const [placedOrder,setPlacedOrder]=useState<DemoOrder|null>(null);
   const [orderError,setOrderError]=useState('');
   const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
@@ -917,6 +918,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
   };
   const submitDemoOrder=(event:FormEvent<HTMLFormElement>)=>{
     event.preventDefault();
+    if(orderSubmissionInFlight.current||placedOrder) return;
     setOrderError('');
     const form=event.currentTarget;
     const formData=new FormData(form);
@@ -938,6 +940,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
       });
       return;
     }
+    orderSubmissionInFlight.current=true;
     createOrder.mutate({
       data:{
         customer:{name:value('name'),email:value('email'),phone:value('phone')},
@@ -960,6 +963,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
       },
     },{
       onSuccess:saved=>{
+        orderSubmissionInFlight.current=false;
         trackEvent('demo_order_completed',{
           line_count:saved.items.length,
           subtotal_kwd:saved.subtotal,
@@ -973,6 +977,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
         clearCart();
       },
       onError:error=>{
+        orderSubmissionInFlight.current=false;
         const data=(error as {data?:unknown}).data;
         const payload=data&&typeof data==='object'?data as {error?:unknown;details?:unknown}:null;
         if(payload?.error==='catalog_item_unavailable'){

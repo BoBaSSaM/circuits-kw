@@ -482,13 +482,47 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(checkoutOrderRequests, 0, 'malformed details must not create an order request');
 
     await emailInput.fill('buyer@example.com');
+    let checkoutSaveRequests = 0;
+    let checkoutSavedOrderResponses = 0;
+    let releaseCheckoutOrderSave;
+    const checkoutOrderSaveGate = new Promise(resolve => {
+      releaseCheckoutOrderSave = resolve;
+    });
+    let checkoutOrderSaveStartedResolve;
+    const checkoutOrderSaveStarted = new Promise(resolve => {
+      checkoutOrderSaveStartedResolve = resolve;
+    });
+    await page.route('**/api/orders', async route => {
+      if (route.request().method() === 'POST') {
+        checkoutSaveRequests += 1;
+        checkoutOrderSaveStartedResolve();
+        await checkoutOrderSaveGate;
+      }
+      await route.fallback();
+    });
+    page.on('response', response => {
+      if (
+        response.url().endsWith('/api/orders')
+        && response.request().method() === 'POST'
+        && response.status() === 201
+      ) checkoutSavedOrderResponses += 1;
+    });
     const savedOrderResponse = page.waitForResponse(response =>
       response.url().endsWith('/api/orders') && response.request().method() === 'POST',
     );
     await page.getByTestId('button-place-demo-order').click();
+    await checkoutOrderSaveStarted;
+    await page.getByTestId('form-checkout').evaluate(form => {
+      const submitter = form.querySelector('[data-testid="button-place-demo-order"]');
+      for (let attempt = 0; attempt < 3; attempt += 1) form.requestSubmit(submitter);
+    });
+    releaseCheckoutOrderSave();
     const orderResponse = await savedOrderResponse;
     assert.equal(orderResponse.status(), 201);
     const savedOrder = await orderResponse.json();
+    await page.waitForLoadState('networkidle');
+    assert.equal(checkoutSaveRequests, 1, 'repeated submissions while saving must send one order request');
+    assert.equal(checkoutSavedOrderResponses, 1, 'one order request must produce one saved order result');
     assert.deepEqual(orderResponse.request().postDataJSON().items, [{
       id: 'bom-esp32',
       kind: 'bom',
@@ -507,6 +541,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(savedOrder.subtotal, 6.5);
 
     await page.getByTestId('demo-order-confirmation').waitFor();
+    assert.equal(await page.getByTestId('demo-order-confirmation').count(), 1);
     assert.equal(await page.locator('.demo-order-items > div').count(), savedOrder.items.length);
     const confirmationItem = page.getByTestId('row-confirmation-bom-esp32');
     assert.match(await confirmationItem.innerText(), /ESP32-WROOM-32D · Qty 4/);
