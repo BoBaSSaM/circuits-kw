@@ -1,9 +1,11 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import NotFound from '@/pages/not-found';
+import NotFound from '@/views/not-found';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { ClerkProvider, SignIn, SignUp, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
@@ -49,17 +51,9 @@ type Kit = CatalogKit;
 type PriceListState = { pricesBySku: Record<string, number>; source: string; updatedAt: string };
 const PRICE_LIST_STORAGE_KEY = 'circuits-kw-build-assist-prices';
 const normalizePriceSku = (sku: string) => sku.trim().toLocaleUpperCase('en-US');
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH || '').replace(/\/$/, '');
 setBaseUrl(basePath || null);
-const clerkPublishableKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
-
-if (!clerkPublishableKey) {
-  throw new Error('Clerk is not configured: VITE_CLERK_PUBLISHABLE_KEY is missing.');
-}
+const clerkProxyUrl = process.env.NEXT_PUBLIC_CLERK_PROXY_URL;
 
 const clerkAppearance = {
   theme: shadcn,
@@ -79,7 +73,7 @@ const clerkAppearance = {
   options: {
     logoPlacement: 'inside' as const,
     logoLinkUrl: basePath || '/',
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+    logoImageUrl: `${typeof window === 'undefined' ? '' : window.location.origin}${basePath}/logo.svg`,
   },
   elements: {
     rootBox: 'w-full flex justify-center',
@@ -163,7 +157,13 @@ function ClerkProfileSync() {
   </div>;
 }
 
-function ClerkRouterBridge({ children }: { children: ReactNode }) {
+function ClerkRouterBridge({
+  children,
+  clerkPublishableKey,
+}: {
+  children: ReactNode;
+  clerkPublishableKey: string;
+}) {
   const [, setLocation] = useLocation();
   const { language } = useLanguage();
   const baseLocalization = language === 'ar' ? arSA : enUS;
@@ -1326,6 +1326,17 @@ function Router({items,add,removeSupplierPricedItems,replaceSupplierPricedItems,
 }
 
 function App() {
+  const clerkPublishableKey = useMemo(
+    () =>
+      publishableKeyFromHost(
+        typeof window === 'undefined' ? '' : window.location.hostname,
+        process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+      ),
+    [],
+  );
+  if (!clerkPublishableKey) {
+    throw new Error('Clerk is not configured. Set CLERK_PUBLISHABLE_KEY or NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.');
+  }
   const [initialCart] = useState(readSavedCart);
   const [items,setItemsState]=useState<Item[]>(initialCart.items);
   const cartItemsRef=useRef<Item[]>(initialCart.items);
@@ -1421,7 +1432,7 @@ function App() {
     });
     return result;
   };
-  return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ClerkRouterBridge><Router items={items} add={add} removeSupplierPricedItems={removeSupplierPricedItems} replaceSupplierPricedItems={replaceSupplierPricedItems} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t(cartNotice.type==='added'?'Added to cart':'Cart updated in another tab',language)}</strong><span>{cartNotice.type==='added'?t(cartNotice.name,language):t('Items, quantities, or totals may have changed.',language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</ClerkRouterBridge></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
+  return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ClerkRouterBridge clerkPublishableKey={clerkPublishableKey}><Router items={items} add={add} removeSupplierPricedItems={removeSupplierPricedItems} replaceSupplierPricedItems={replaceSupplierPricedItems} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t(cartNotice.type==='added'?'Added to cart':'Cart updated in another tab',language)}</strong><span>{cartNotice.type==='added'?t(cartNotice.name,language):t('Items, quantities, or totals may have changed.',language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</ClerkRouterBridge></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
 }
 
 export default App;

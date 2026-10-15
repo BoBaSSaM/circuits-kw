@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState, type ComponentType } from "react";
 
 import { modules as discoveredModules } from "./.generated/mockup-components";
@@ -88,7 +90,7 @@ function PreviewRenderer({
 }
 
 function getBasePath(): string {
-  return import.meta.env.BASE_URL.replace(/\/$/, "");
+  return (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
 }
 
 function getPreviewExamplePath(): string {
@@ -119,7 +121,7 @@ function Gallery() {
 
 function getPreviewPath(): string | null {
   const basePath = getBasePath();
-  const { pathname } = window.location;
+  const pathname = typeof window === "undefined" ? "/" : window.location.pathname;
   const local =
     basePath && pathname.startsWith(basePath)
       ? pathname.slice(basePath.length) || "/"

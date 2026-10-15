@@ -2,11 +2,21 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
+  "packageManager": "npm@11.21.0",
+  "engines": {
+    "node": ">=20.9.0",
+    "npm": ">=11.21.0"
+  },
+  "workspaces": [
+    "artifacts/*",
+    "lib/*",
+    "lib/integrations/*",
+    "scripts"
+  ],
   "scripts": {
-    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
-    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "build": "npm run typecheck && npm run build --workspaces --if-present",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "npm run typecheck:libs && npm run typecheck --workspaces --if-present"
   },
   "private": true,
   "dependencies": {
@@ -15,5 +25,10 @@
   "devDependencies": {
     "prettier": "^3.9.6",
     "typescript": "~5.9.3"
+  },
+  "overrides": {
+    "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0",
+    "esbuild": "0.28.2",
+    "js-yaml": "4.3.2"
   }
 }

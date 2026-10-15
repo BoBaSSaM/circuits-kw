@@ -1,45 +1,55 @@
-# [Project name]
+# Circuits KW
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A Kuwait-focused electronics storefront for components, project kits, and build guidance.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `npm run dev --workspace=@workspace/voltiva-store` — run the storefront
+- `npm run dev --workspace=@workspace/api-server` — run the API service
+- `npm run dev --workspace=@workspace/mockup-sandbox` — run component previews
+- `npm run typecheck` — typecheck libraries and workspaces
+- `npm run build` — typecheck and build every Next.js app
+- `npm run codegen --workspace=@workspace/api-spec` — regenerate API hooks and Zod schemas
+- `npm run push --workspace=@workspace/db` — update the development Drizzle schema only
+- Required secrets: `MONGODB_URL` and Clerk publishable/secret keys
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
+- npm workspaces, Node.js 24, TypeScript 5.9
+- Storefront, API, and component preview: Next.js 16
+- API routes: Next.js route handlers wrapping the existing Express 5 router
+- Product, order, and user data: MongoDB Atlas
+- Authentication: Clerk
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/voltiva-store` — storefront, account flows, and dashboard
+- `artifacts/api-server` — API routes, authentication, and MongoDB-backed services
+- `artifacts/mockup-sandbox` — isolated component previews
+- `lib/api-spec` — OpenAPI source and API code generation
+- `lib/db` — Drizzle/Postgres scaffold; the commerce catalog and orders use MongoDB
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Keep Clerk for sign-in and use MongoDB Atlas for application records.
+- Storefront and API are deployed together through the storefront's Next.js route handler.
+- Keep the API server artifact available for development and direct API testing.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Users can browse electronics parts, build kits and BOMs, save carts, and submit demo orders in KWD. Staff manage products, orders, and users through a role-protected dashboard.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+Keep the storefront's current brand, colors, and compact writing style. Use MongoDB Atlas for product, order, and user application data.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Use npm workspaces and the root `package-lock.json`; do not restore pnpm or Vite commands.
+- Production builds must succeed without a workflow-provided `PORT` or `BASE_PATH`.
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- `package.json` at the root defines npm workspaces and shared build/typecheck commands.

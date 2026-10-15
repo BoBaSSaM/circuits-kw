@@ -32,17 +32,17 @@ async function waitForServer(serverProcess, url) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (serverProcess.exitCode !== null) {
-      throw new Error(`Vite exited before it was ready (exit code ${serverProcess.exitCode}).`);
+      throw new Error(`Next.js exited before it was ready (exit code ${serverProcess.exitCode}).`);
     }
     try {
       const response = await fetch(url);
       if (response.ok) return;
     } catch {
-      // Vite is still starting.
+      // Next.js is still starting.
     }
     await delay(250);
   }
-  throw new Error(`Vite did not become ready at ${url} within 30 seconds.`);
+  throw new Error(`Next.js did not become ready at ${url} within 30 seconds.`);
 }
 
 async function findChromiumPath() {
@@ -148,9 +148,9 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+  const serverProcess = spawn('npm', ['run', 'dev'], {
     cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -620,7 +620,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.getByTestId('button-remove-price-list').count(), 0);
     assert.deepEqual(pageErrors, []);
   } catch (error) {
-    error.message += `\nVite output:\n${serverOutput}`;
+    error.message += `\nNext.js output:\n${serverOutput}`;
     throw error;
   } finally {
     await browser?.close();
@@ -639,9 +639,9 @@ test('reports rejected supplier price imports without replacing saved prices', {
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+  const serverProcess = spawn('npm', ['run', 'dev'], {
     cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -714,7 +714,7 @@ test('reports rejected supplier price imports without replacing saved prices', {
     );
     assert.deepEqual(pageErrors, []);
   } catch (error) {
-    error.message += `\nVite output:\n${serverOutput}`;
+    error.message += `\nNext.js output:\n${serverOutput}`;
     throw error;
   } finally {
     await browser?.close();
@@ -733,9 +733,9 @@ test('replaces supplier prices on BOM cart lines and removes lines omitted by th
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+  const serverProcess = spawn('npm', ['run', 'dev'], {
     cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -827,7 +827,7 @@ test('replaces supplier prices on BOM cart lines and removes lines omitted by th
     assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '16.500 KWD');
     assert.deepEqual(pageErrors, []);
   } catch (error) {
-    error.message += `\nVite output:\n${serverOutput}`;
+    error.message += `\nNext.js output:\n${serverOutput}`;
     throw error;
   } finally {
     await browser?.close();
@@ -846,9 +846,9 @@ test('uses a saved zero-cost price-list entry and keeps the BOM item in the cart
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+  const serverProcess = spawn('npm', ['run', 'dev'], {
     cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -903,7 +903,7 @@ test('uses a saved zero-cost price-list entry and keeps the BOM item in the cart
     assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '0.000 KWD');
     assert.deepEqual(pageErrors, []);
   } catch (error) {
-    error.message += `\nVite output:\n${serverOutput}`;
+    error.message += `\nNext.js output:\n${serverOutput}`;
     throw error;
   } finally {
     await browser?.close();
@@ -922,9 +922,9 @@ test('recovers from malformed saved cart data and keeps valid cart entries uncha
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+  const serverProcess = spawn('npm', ['run', 'dev'], {
     cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -977,7 +977,7 @@ test('recovers from malformed saved cart data and keeps valid cart entries uncha
     assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart'))), validCart);
     assert.deepEqual(pageErrors, []);
   } catch (error) {
-    error.message += `\nVite output:\n${serverOutput}`;
+    error.message += `\nNext.js output:\n${serverOutput}`;
     throw error;
   } finally {
     await browser?.close();
@@ -996,9 +996,9 @@ test('keeps cart interactions usable when browser storage reads or writes fail',
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+  const serverProcess = spawn('npm', ['run', 'dev'], {
     cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -1138,7 +1138,7 @@ test('keeps cart interactions usable when browser storage reads or writes fail',
     assert.equal(await priceListRemoveFailurePage.getByTestId('input-part-quantity-esp32').inputValue(), '3');
     assert.deepEqual(priceListRemoveFailureErrors, []);
   } catch (error) {
-    error.message += `\nVite output:\n${serverOutput}`;
+    error.message += `\nNext.js output:\n${serverOutput}`;
     throw error;
   } finally {
     await browser?.close();
@@ -1157,9 +1157,9 @@ test('syncs cart quantity edits and item removal across open tabs', {
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+  const serverProcess = spawn('npm', ['run', 'dev'], {
     cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -1207,7 +1207,7 @@ test('syncs cart quantity edits and item removal across open tabs', {
     assert.match(await secondTab.locator('.summary-line').nth(0).innerText(), /Items\s*2/);
     assert.deepEqual(pageErrors, []);
   } catch (error) {
-    error.message += `\nVite output:\n${serverOutput}`;
+    error.message += `\nNext.js output:\n${serverOutput}`;
     throw error;
   } finally {
     await context?.close();
@@ -1227,9 +1227,9 @@ test('merges concurrent cart additions and edits across tabs without changing th
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+  const serverProcess = spawn('npm', ['run', 'dev'], {
     cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -1446,7 +1446,7 @@ test('merges concurrent cart additions and edits across tabs without changing th
     }), 2);
     assert.deepEqual(pageErrors, []);
   } catch (error) {
-    error.message += `\nVite output:\n${serverOutput}`;
+    error.message += `\nNext.js output:\n${serverOutput}`;
     throw error;
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
@@ -1466,9 +1466,9 @@ test('saves demo orders through the order API when browser order-history storage
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+  const serverProcess = spawn('npm', ['run', 'dev'], {
     cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -1599,7 +1599,7 @@ test('saves demo orders through the order API when browser order-history storage
     assert.deepEqual(await failedOrderPage.evaluate(() => window.demoAnalyticsEvents), []);
     assert.deepEqual(failedOrderPageErrors, []);
   } catch (error) {
-    error.message += `\nVite output:\n${serverOutput}`;
+    error.message += `\nNext.js output:\n${serverOutput}`;
     throw error;
   } finally {
     await Promise.all(contexts.map((context) => context.close()));

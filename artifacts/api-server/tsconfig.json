@@ -3,11 +3,14 @@
   "compilerOptions": {
     "incremental": true,
     "tsBuildInfoFile": ".tsbuildinfo",
-    "outDir": "dist",
-    "rootDir": "src",
-    "types": ["node"]
+    "noEmit": true,
+    "jsx": "preserve",
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "types": ["node"],
+    "plugins": [{ "name": "next" }]
   },
-  "include": ["src"],
+  "include": ["next-env.d.ts", ".next/types/**/*.ts", "next.config.ts", "app/**/*.ts", "app/**/*.tsx", "src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"],
   "references": [
     {
       "path": "../../lib/db"

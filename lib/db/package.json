@@ -14,14 +14,14 @@
     "seed:mongo": "node ./scripts/seed-mongodb.mjs"
   },
   "dependencies": {
-    "drizzle-orm": "catalog:",
+    "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.8.3",
     "mongodb": "^7.7.0",
     "pg": "^8.23.0",
-    "zod": "catalog:"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
+    "@types/node": "^25.3.3",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.10"
   }

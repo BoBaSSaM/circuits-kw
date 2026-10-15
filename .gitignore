@@ -5,6 +5,8 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+.next/
+.next-browser-test-*/
 .expo
 .expo-shared
 

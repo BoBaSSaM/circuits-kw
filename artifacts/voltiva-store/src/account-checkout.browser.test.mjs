@@ -49,16 +49,16 @@ async function waitForServer(serverProcess, url) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (serverProcess.exitCode !== null) {
-      throw new Error(`Vite exited before it was ready (exit code ${serverProcess.exitCode}).`);
+      throw new Error(`Next.js exited before it was ready (exit code ${serverProcess.exitCode}).`);
     }
     try {
       if ((await fetch(url)).ok) return;
     } catch {
-      // Vite is still starting.
+      // Next.js is still starting.
     }
     await delay(250);
   }
-  throw new Error(`Vite did not become ready at ${url} within 30 seconds.`);
+  throw new Error(`Next.js did not become ready at ${url} within 30 seconds.`);
 }
 
 async function installApiMocks(context) {
@@ -108,9 +108,9 @@ test('guest checkout, account creation, sign-in, and sign-out preserve checkout 
 
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}${basePath}`;
-  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+  const serverProcess = spawn('npm', ['run', 'dev'], {
     cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: `${basePath}/`, PORT: String(port) },
+    env: { ...process.env, BASE_PATH: `${basePath}/`, PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -210,7 +210,7 @@ test('guest checkout, account creation, sign-in, and sign-out preserve checkout 
 
     assert.deepEqual(pageErrors, []);
   } catch (error) {
-    error.message += `\nVite output:\n${serverOutput}`;
+    error.message += `\nNext.js output:\n${serverOutput}`;
     throw error;
   } finally {
     await context?.close();

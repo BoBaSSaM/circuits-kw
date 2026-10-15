@@ -1,6 +1,14 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src/**/*", "mockupPreviewPlugin.ts", "vite.config.ts"],
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "next.config.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "src/**/*",
+    "scripts/**/*.mjs"
+  ],
   "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
   "compilerOptions": {
     "incremental": true,
@@ -10,7 +18,7 @@
     "jsx": "preserve",
     "esModuleInterop": true,
     "allowImportingTsExtensions": true,
-    "types": ["node", "vite/client"],
+    "types": ["node"],
     "paths": {
       "@/*": ["./src/*"]
     }

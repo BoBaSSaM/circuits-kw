@@ -12,16 +12,21 @@ paths = [ "/" ]
 localPort = 19607
 
 [services.development]
-run = "pnpm --filter @workspace/voltiva-store run dev"
+run = "npm run dev --workspace=@workspace/voltiva-store"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/voltiva-store", "run", "build" ]
-serve = "static"
-publicDir = "artifacts/voltiva-store/dist/public"
+[services.production.build]
+args = ["npm", "run", "build", "--workspace=@workspace/voltiva-store"]
 
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+[services.production.build.env]
+NODE_ENV = "production"
+BASE_PATH = "/"
+
+[services.production.run]
+args = ["npm", "run", "start", "--workspace=@workspace/voltiva-store"]
+
+[services.production.run.env]
+NODE_ENV = "production"
+PORT = "19607"
 
 [services.env]
 PORT = "19607"
