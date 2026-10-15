@@ -2,3 +2,4 @@
 - [Supplier CSV browser tests](supplier-csv-browser-tests.md) — Wait for visible state after file imports and reopen the price-list disclosure before subsequent uploads.
 - [Cart sync browser tests](browser-cart-sync-tests.md) — Cart-seeding init scripts run on each navigation; avoid unintended storage resets while exercising tab-sync flows.
 - [Checkout auth redirect preservation](checkout-auth-redirects.md) — Preserve checkout return intent across Clerk's internal sign-in and verification routes.
+- [Vite deployment build environment](vite-build-env.md) — Workspace deployment builds may omit workflow-injected PORT and BASE_PATH; keep those requirements scoped to dev/preview.
