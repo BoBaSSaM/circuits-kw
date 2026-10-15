@@ -34,9 +34,9 @@ import {
 import { AdminDashboardPage } from './AdminDashboardPage';
 import { trackEvent } from './lib/analytics';
 import {
-  ArrowDown, ArrowRight, BatteryCharging, BookOpen, Bot,
+  ArrowDown, ArrowRight, BatteryCharging, BookOpen, Bot, Download,
   CheckCircle2, CircuitBoard, Cpu, Gauge, GraduationCap, Grid2X2,
-  Info, Layers, LifeBuoy, MapPin, Menu, Minus, PackageCheck, Plus,
+  Info, Layers, LifeBuoy, MapPin, Menu, Minus, PackageCheck, Plus, Printer,
   Search, ShieldCheck, ShoppingCart, SlidersHorizontal, Trash2, Truck, UserRound, Wifi, X,
 } from 'lucide-react';
 
@@ -292,6 +292,57 @@ const buildOptions: BuildOption[] = [
 const kitDomains = ['All domains','Robotics','IoT & Smart Home','IoT & Automation','University Labs','Automation'];
 const fmt = (value:number) => `${value.toFixed(3)} KWD`;
 const queryClient = new QueryClient();
+
+function escapeReceiptHtml(value:string) {
+  const entities:Record<string,string>={
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;',
+  };
+  return value.replace(/[&<>"']/g, character => entities[character]??character);
+}
+
+function demoReceiptHtml(order:DemoOrder, language:Language) {
+  const isArabic=language==='ar';
+  const escape=escapeReceiptHtml;
+  const items=order.items.map(item=>`<tr><td>${escape(item.name)}</td><td>${escape(t('Qty',language))} ${item.qty}</td><td>${escape(fmt(item.price*item.qty))}</td></tr>`).join('');
+  return `<!doctype html>
+<html lang="${isArabic?'ar':'en'}" dir="${isArabic?'rtl':'ltr'}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escape(t('Demo receipt',language))} ${escape(order.orderNumber)}</title>
+  <style>
+    body{font:16px/1.5 Arial,sans-serif;color:#172d3b;margin:0;padding:36px}
+    main{max-width:720px;margin:0 auto}
+    .label{display:inline-block;padding:5px 10px;border:1px solid #c8dce3;border-radius:999px;color:#17677b;font-size:12px;font-weight:700;letter-spacing:.04em}
+    h1{margin:18px 0 4px;font-size:28px}
+    .number{margin:0 0 26px;color:#52616c}
+    table{width:100%;border-collapse:collapse;margin:20px 0}
+    th,td{padding:12px 8px;border-bottom:1px solid #dfe8eb;text-align:start}
+    th{font-size:12px;color:#52616c}
+    .total{display:flex;justify-content:space-between;gap:16px;padding-top:16px;border-top:2px solid #172d3b;font-weight:700}
+    .notice{margin-top:30px;color:#52616c;font-size:13px}
+    @media print{body{padding:0}.label{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+  </style>
+</head>
+<body>
+  <main>
+    <span class="label">${escape(t('DEMO ORDER · NO PAYMENT TAKEN',language))}</span>
+    <h1>${escape(t('Demo receipt',language))}</h1>
+    <p class="number">${escape(t('Order number',language))}: <strong>${escape(order.orderNumber)}</strong></p>
+    <table>
+      <thead><tr><th>${escape(t('Item',language))}</th><th>${escape(t('Quantity',language))}</th><th>${escape(t('Amount',language))}</th></tr></thead>
+      <tbody>${items}</tbody>
+    </table>
+    <div class="total"><span>${escape(t('Subtotal',language))}</span><span>${escape(fmt(order.subtotal))}</span></div>
+    <p class="notice">${escape(t('This is a demo order receipt. No payment or fulfillment is connected.',language))}</p>
+  </main>
+</body>
+</html>`;
+}
 
 function useDocument(title:string, description:string) {
   useEffect(() => {
@@ -840,6 +891,30 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
     window.scrollTo({top:0,left:0,behavior:reducedMotion?'auto':'smooth'});
   },[placedOrder]);
   const subtotal=calculateCartSubtotal(items);
+  const openReceiptForPrint=()=>{
+    if(!placedOrder) return;
+    const printWindow=window.open('','_blank');
+    if(!printWindow) return;
+    printWindow.opener=null;
+    printWindow.document.open();
+    printWindow.document.write(demoReceiptHtml(placedOrder,language));
+    printWindow.document.close();
+    window.setTimeout(()=>{
+      if(!printWindow.closed) printWindow.print();
+    },250);
+  };
+  const downloadReceipt=()=>{
+    if(!placedOrder) return;
+    const blob=new Blob([demoReceiptHtml(placedOrder,language)],{type:'text/html;charset=utf-8'});
+    const receiptUrl=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=receiptUrl;
+    link.download=`demo-receipt-${placedOrder.orderNumber.replace(/[^a-zA-Z0-9_-]/g,'-')}.html`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(receiptUrl),1000);
+  };
   const submitDemoOrder=(event:FormEvent<HTMLFormElement>)=>{
     event.preventDefault();
     setOrderError('');
@@ -931,6 +1006,10 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
       <div className="demo-order-items">{placedOrder.items.map(item=><div key={item.id} data-testid={`row-confirmation-${item.id}`}><span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span><strong>{fmt(item.price*item.qty)}</strong></div>)}</div>
       <div className="summary-line summary-total"><span>{t('Demo total',language)}</span><span className="mono" data-testid="text-demo-order-subtotal">{fmt(placedOrder.subtotal)}</span></div>
         <p className="checkout-order-disclaimer">{t('Order contact and delivery details are saved for admin review. Payment and fulfillment are not connected.',language)}</p>
+      <div className="checkout-receipt-actions">
+        <button className="button button-outline" type="button" onClick={openReceiptForPrint} data-testid="button-print-demo-receipt"><Printer size={15}/>{t('Print receipt',language)}</button>
+        <button className="button button-outline" type="button" onClick={downloadReceipt} data-testid="button-download-demo-receipt"><Download size={15}/>{t('Download receipt',language)}</button>
+      </div>
       <Link className="button button-primary" href="/components" data-testid="link-confirmation-shop">{t('Continue browsing',language)} <ArrowRight size={15}/></Link>
     </div>
   </div>;

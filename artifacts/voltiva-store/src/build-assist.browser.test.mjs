@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -514,6 +514,19 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.locator('[data-testid^="row-confirmation-removed-before-checkout"]').count(), 0);
     assert.equal(await page.getByTestId('text-demo-order-subtotal').innerText(), '6.500 KWD');
     assert.equal(await page.getByTestId('text-demo-order-number').innerText(), savedOrder.orderNumber);
+    const receiptDownloadPromise=page.waitForEvent('download');
+    await page.getByTestId('button-download-demo-receipt').click();
+    const receiptDownload=await receiptDownloadPromise;
+    assert.equal(receiptDownload.suggestedFilename(),`demo-receipt-${savedOrder.orderNumber}.html`);
+    const receiptPath=await receiptDownload.path();
+    assert.ok(receiptPath,'the downloadable receipt should be available for inspection');
+    const receiptHtml=await readFile(receiptPath,'utf8');
+    assert.match(receiptHtml,/DEMO ORDER · NO PAYMENT TAKEN/);
+    assert.ok(receiptHtml.includes(savedOrder.orderNumber),'the receipt must include the saved order number');
+    assert.match(receiptHtml,/ESP32-WROOM-32D/);
+    assert.match(receiptHtml,/Qty 4/);
+    assert.match(receiptHtml,/6\.500 KWD/);
+    assert.match(await page.getByTestId('button-print-demo-receipt').innerText(),/Print receipt/);
 
     await page.goto(`${baseUrl}/cart`);
     await page.getByTestId('link-empty-cart-components').waitFor();
