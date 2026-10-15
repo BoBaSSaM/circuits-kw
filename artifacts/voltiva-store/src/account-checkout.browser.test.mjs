@@ -18,6 +18,21 @@ const cartItem = {
   sku: 'AUTH-001',
   qty: 2,
 };
+const savedOrderSnapshot = {
+  id: 'saved-order-snapshot',
+  orderNumber: 'CKW-SNAPSHOT-001',
+  placedAt: '2026-10-15T12:00:00.000Z',
+  isDemo: true,
+  items: [{
+    id: 'archived-component',
+    kind: 'component',
+    sku: 'ARCHIVED-001',
+    name: 'Original archived component',
+    price: 1.25,
+    qty: 2,
+  }],
+  subtotal: 2.5,
+};
 
 async function getAvailablePort() {
   const server = net.createServer();
@@ -53,7 +68,7 @@ async function installApiMocks(context) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ orders: [] }),
+        body: JSON.stringify({ orders: [savedOrderSnapshot] }),
       });
       return;
     }
@@ -168,6 +183,13 @@ test('guest checkout, account creation, sign-in, and sign-out preserve checkout 
     assert.equal(await accountLink.getAttribute('href'), `${basePath}/account`);
     await accountLink.click();
     await page.getByTestId('page-account').waitFor();
+    const savedOrderCard = page.getByTestId('account-demo-order-saved-order-snapshot');
+    await savedOrderCard.waitFor();
+    const savedOrderText = await savedOrderCard.innerText();
+    assert.match(savedOrderText, /Original archived component/);
+    assert.match(savedOrderText, /Qty 2/);
+    assert.match(savedOrderText, /Unit price 1\.250 KWD/);
+    assert.match(savedOrderText, /2\.500 KWD/);
     const signOutLink = page.getByTestId('link-sign-out');
     assert.equal(await signOutLink.getAttribute('href'), `${basePath}/sign-out`);
     await signOutLink.click();

@@ -74,8 +74,10 @@ function isDuplicateKeyError(error: unknown): boolean {
   );
 }
 
-async function resolveOrderItems(items: OrderItemInput[]): Promise<OrderItem[]> {
-  const database = await getMongoDatabase();
+async function resolveOrderItems(
+  items: OrderItemInput[],
+  database: Awaited<ReturnType<typeof getMongoDatabase>>,
+): Promise<OrderItem[]> {
   const products = database.collection<ProductDocument>("products");
   const kits = database.collection<ProjectKitDocument>("project_kits");
   const resolved: OrderItem[] = [];
@@ -131,12 +133,13 @@ async function resolveOrderItems(items: OrderItemInput[]): Promise<OrderItem[]> 
   return resolved;
 }
 
-async function storeOrder(
+export async function storeOrder(
   input: CheckoutOrderInput,
   options: { userId: string | null; createdBy: string | null },
+  getDatabase: typeof getMongoDatabase = getMongoDatabase,
 ): Promise<AdminOrder> {
-  const database = await getMongoDatabase();
-  const items = await resolveOrderItems(input.items);
+  const database = await getDatabase();
+  const items = await resolveOrderItems(input.items, database);
   const subtotal = roundKwd(items.reduce((total, item) => total + item.price * item.qty, 0));
   const placedAt = new Date();
   const orderNumber = `CKW-${Date.now()}-${randomUUID().slice(0, 6).toUpperCase()}`;

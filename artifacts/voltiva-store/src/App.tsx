@@ -1214,7 +1214,7 @@ function AccountPage() {
                   </div>
                   <div className="account-order-items">
                     {order.items.map((item,index)=><div key={`${item.id}-${index}`}>
-                      <span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span>
+                      <span>{t(item.name,language)} · {t('Qty',language)} {item.qty} · {t('Unit price',language)} {fmt(item.price)}</span>
                       <strong>{fmt(item.price*item.qty)}</strong>
                     </div>)}
                   </div>

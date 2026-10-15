@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Request, Response } from "express";
 import type { getMongoDatabase } from "../lib/mongo";
-import { createAccountOrdersHandler } from "./orders";
+import { createAccountOrdersHandler, storeOrder } from "./orders";
 
 type TestOrder = {
   _id: { toHexString: () => string };
@@ -156,4 +156,127 @@ test("account order history returns each signed-in buyer's demo snapshots only",
     { userId: "buyer-a", isDemo: true },
     { userId: "buyer-b", isDemo: true },
   ]);
+});
+
+test("saved order history keeps product and kit snapshots after catalog edits and deactivation", async () => {
+  const product = {
+    _id: "component-1",
+    id: "component-1",
+    sku: "COMP-1",
+    name: "Original component",
+    price: 1.25,
+    isActive: true,
+  };
+  const kit = {
+    _id: "kit-1",
+    id: "kit-1",
+    code: "KIT-1",
+    title: "Original project kit",
+    price: 4.75,
+    isActive: true,
+  };
+  const savedOrders: Record<string, unknown>[] = [];
+  const database = {
+    collection(name: string) {
+      if (name === "products") {
+        return {
+          findOne: async (filter: Record<string, unknown>) => {
+            const matches = (filter.$or as Record<string, string>[]).some((candidate) =>
+              Object.entries(candidate).some(([key, value]) => product[key as keyof typeof product] === value),
+            );
+            return filter.isActive && product.isActive && matches ? product : null;
+          },
+        };
+      }
+      if (name === "project_kits") {
+        return {
+          findOne: async (filter: Record<string, unknown>) => {
+            const matches = (filter.$or as Record<string, string>[]).some((candidate) =>
+              Object.entries(candidate).some(([key, value]) => kit[key as keyof typeof kit] === value),
+            );
+            return filter.isActive && kit.isActive && matches ? kit : null;
+          },
+        };
+      }
+      assert.equal(name, "orders");
+      return {
+        insertOne: async (document: Record<string, unknown>) => {
+          savedOrders.push(document);
+        },
+        find: (filter: { userId: string; isDemo: true }) => ({
+          sort: (sort: { placedAt: -1 }) => {
+            assert.deepEqual(sort, { placedAt: -1 });
+            return {
+              toArray: async () =>
+                savedOrders.filter(
+                  (entry) => entry.userId === filter.userId && entry.isDemo === filter.isDemo,
+                ),
+            };
+          },
+        }),
+      };
+    },
+  };
+  const getDatabase = async () =>
+    database as unknown as Awaited<ReturnType<typeof getMongoDatabase>>;
+
+  await storeOrder(
+    {
+      customer: { name: "Buyer", email: "buyer@example.com", phone: "+965 5555 5555" },
+      shipping: {
+        governorate: "Capital",
+        area: "Kuwait City",
+        block: "1",
+        street: "Main Street",
+        building: "10",
+      },
+      items: [
+        { id: "component-1", kind: "component", sku: "COMP-1", qty: 2 },
+        { id: "kit-1", kind: "kit", sku: "KIT-1", qty: 1 },
+      ],
+    },
+    { userId: "buyer-a", createdBy: null },
+    getDatabase,
+  );
+
+  product.name = "Renamed component";
+  product.price = 99;
+  product.isActive = false;
+  kit.title = "Renamed project kit";
+  kit.price = 199;
+  kit.isActive = false;
+
+  const handler = createAccountOrdersHandler({
+    getUserId: () => "buyer-a",
+    getMongoDatabase: getDatabase,
+  });
+  const { response, result } = responseRecorder();
+  await handler(request("buyer-a"), response);
+
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(
+    (result.body as { orders: { items: unknown[]; subtotal: number }[] }).orders[0].items,
+    [
+      {
+        id: "component-1",
+        kind: "component",
+        sku: "COMP-1",
+        name: "Original component",
+        price: 1.25,
+        qty: 2,
+      },
+      {
+        id: "kit-1",
+        kind: "kit",
+        sku: "KIT-1",
+        name: "Original project kit",
+        price: 4.75,
+        qty: 1,
+      },
+    ],
+  );
+  assert.equal(
+    (result.body as { orders: { subtotal: number }[] }).orders[0].subtotal,
+    7.25,
+  );
 });

@@ -66,6 +66,7 @@ const arabic: Record<string, string> = {
   'Loading your demo orders…': 'جارٍ تحميل طلباتك التجريبية…',
   'Your demo orders could not be loaded.': 'تعذر تحميل طلباتك التجريبية.',
   'Demo order': 'طلب تجريبي',
+  'Unit price': 'سعر الوحدة',
   'No demo orders are linked to your account yet. Orders placed as a guest are not included.': 'لا توجد طلبات تجريبية مرتبطة بحسابك بعد. لا تُدرج الطلبات المقدمة كضيف.',
   'Sign out of your Circuits KW account.': 'تسجيل الخروج من حساب Circuits KW.',
   'Sign out of your account?': 'هل تريد تسجيل الخروج من حسابك؟',
