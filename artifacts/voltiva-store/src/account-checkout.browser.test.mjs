@@ -96,7 +96,7 @@ async function installApiMocks(context) {
   });
 }
 
-test('guest checkout, account creation, sign-in, and sign-out preserve checkout at a mounted base path', {
+test('guest checkout, account creation, and sign-in preserve checkout and dashboard destinations at a mounted base path', {
   timeout: 180_000,
 }, async () => {
   assert.match(
@@ -207,6 +207,27 @@ test('guest checkout, account creation, sign-in, and sign-out preserve checkout 
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await page.waitForURL((url) => url.pathname === `${basePath}/checkout`, { timeout: 60_000 });
     await page.getByTestId('row-checkout-auth-flow-item').waitFor();
+
+    await page.goto(`${baseUrl}/account`);
+    await page.getByTestId('page-account').waitFor();
+    await page.getByTestId('link-sign-out').click();
+    await page.getByTestId('button-confirm-sign-out').waitFor();
+    await page.getByTestId('button-confirm-sign-out').click();
+    await page.waitForURL((url) => url.pathname === `${basePath}/`, { timeout: 60_000 });
+
+    await page.goto(`${baseUrl}/dashboard`);
+    await page.getByTestId('link-dashboard-sign-in').waitFor();
+    assert.equal(
+      await page.getByTestId('link-dashboard-sign-in').getAttribute('href'),
+      `${basePath}/sign-in?returnTo=dashboard`,
+    );
+    await page.getByTestId('link-dashboard-sign-in').click();
+    await page.locator('input[name=identifier]').waitFor();
+    await page.locator('input[name=identifier]').fill(testEmail);
+    await page.locator('input[name=password]').fill(testPassword);
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.waitForURL((url) => url.pathname === `${basePath}/dashboard`, { timeout: 60_000 });
+    await page.getByRole('heading', { name: 'Admin access required' }).waitFor();
 
     assert.deepEqual(pageErrors, []);
   } catch (error) {
