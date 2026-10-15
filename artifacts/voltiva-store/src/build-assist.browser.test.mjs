@@ -719,6 +719,102 @@ test('reports rejected supplier price imports without replacing saved prices', {
   }
 });
 
+test('replaces supplier prices on BOM cart lines and removes lines omitted by the new list', {
+  timeout: 90_000,
+}, async () => {
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverProcess = spawn('pnpm', ['exec', 'vite', '--config', 'vite.config.ts', '--host', '127.0.0.1'], {
+    cwd: artifactDir,
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let serverOutput = '';
+  serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+  serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+
+  let browser;
+  try {
+    await waitForServer(serverProcess, baseUrl);
+    const executablePath = await findChromiumPath();
+    assert.ok(executablePath, 'Set CHROMIUM_PATH or install Chromium to run browser tests.');
+    browser = await chromium.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    const page = await browser.newPage();
+    const pageErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.goto(`${baseUrl}/build-assist`);
+    await page.getByTestId('row-bom-esp32').waitFor();
+
+    await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+      key: priceListStorageKey,
+      value: {
+        pricesBySku: { 'ESP32-WRM-32D': 1.625, 'SNS-SOIL-CAP-12': 0.75 },
+        source: 'Original supplier',
+        updatedAt: dateDaysAgo(0),
+      },
+    });
+    await page.reload();
+    await page.getByTestId('button-add-bom-cart').click();
+    await page.getByTestId('link-cart').click();
+    const esp32CartRow = page.getByTestId('row-cart-bom-esp32');
+    const soilCartRow = page.getByTestId('row-cart-bom-soil');
+    await esp32CartRow.waitFor();
+    await soilCartRow.waitFor();
+    await page.getByTestId('input-quantity-bom-esp32').fill('3');
+    await page.getByTestId('input-quantity-bom-esp32').press('Tab');
+    assert.equal(await esp32CartRow.locator('.price').innerText(), '4.875 KWD');
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '5.625 KWD');
+
+    await page.goto(`${baseUrl}/build-assist`);
+    await page.getByTestId('summary-price-list').click();
+    await page.getByTestId('input-price-list-source').fill('Replacement supplier');
+    await page.getByTestId('input-price-list-updated').fill(dateDaysAgo(0));
+    await page.getByTestId('input-price-list-file').setInputFiles({
+      name: 'replacement-prices.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('sku,price\nESP32-WRM-32D,2.750\n'),
+    });
+    await page.getByTestId('button-import-price-csv').click();
+    const importNotice = page.getByTestId('status-build-assist');
+    await importNotice.waitFor();
+    assert.match(await importNotice.innerText(), /1 supplier-priced BOM cart item.*repriced/);
+    assert.match(await importNotice.innerText(), /1 supplier-priced BOM cart item.*without a replacement price removed/);
+    await page.waitForFunction(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return cart.some((item) => item.id === 'bom-esp32' && item.price === 2.75 && item.qty === 3)
+        && !cart.some((item) => item.id === 'bom-soil');
+    });
+
+    await page.getByTestId('link-cart').click();
+    await page.getByTestId('row-cart-bom-esp32').waitFor();
+    assert.equal(await page.getByTestId('row-cart-bom-esp32').locator('.price').innerText(), '8.250 KWD');
+    assert.equal(await page.getByTestId('row-cart-bom-soil').count(), 0);
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '8.250 KWD');
+    await page.reload();
+    await page.getByTestId('row-cart-bom-esp32').waitFor();
+    assert.equal(await page.getByTestId('row-cart-bom-esp32').locator('.price').innerText(), '8.250 KWD');
+    assert.equal(await page.getByTestId('row-cart-bom-soil').count(), 0);
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '8.250 KWD');
+    assert.deepEqual(pageErrors, []);
+  } catch (error) {
+    error.message += `\nVite output:\n${serverOutput}`;
+    throw error;
+  } finally {
+    await browser?.close();
+    serverProcess.kill('SIGTERM');
+    if (serverProcess.exitCode === null) {
+      await Promise.race([
+        new Promise((resolve) => serverProcess.once('exit', resolve)),
+        delay(2_000),
+      ]);
+    }
+  }
+});
+
 test('uses a saved zero-cost price-list entry and keeps the BOM item in the cart', {
   timeout: 90_000,
 }, async () => {

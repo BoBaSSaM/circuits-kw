@@ -177,3 +177,40 @@ export function removeSupplierPricedBomItems<T extends CartLine>(
     return supplierPrice === undefined || supplierPrice !== item.price;
   });
 }
+
+export function replaceSupplierPricedBomItems<T extends CartLine>(
+  items: readonly T[],
+  pricesBySku: Readonly<Record<string, number>>,
+  previousPricesBySku: Readonly<Record<string, number>> = {},
+): { items: T[]; updatedCount: number; removedCount: number } {
+  const supplierPrices = new Map(
+    Object.entries(pricesBySku).map(([sku, price]) => [sku.trim().toLocaleUpperCase('en-US'), price]),
+  );
+  const previousSupplierPrices = new Map(
+    Object.entries(previousPricesBySku).map(([sku, price]) => [sku.trim().toLocaleUpperCase('en-US'), price]),
+  );
+  let updatedCount = 0;
+  let removedCount = 0;
+  const nextItems = items.flatMap((item) => {
+    if (item.kind !== 'bom') return [item];
+    const normalizedSku = item.sku?.trim().toLocaleUpperCase('en-US');
+    const isLegacySupplierLine = item.priceSource === undefined
+      && normalizedSku !== undefined
+      && previousSupplierPrices.get(normalizedSku) === item.price;
+    if (item.priceSource !== 'supplier-list' && !isLegacySupplierLine) return [item];
+    const replacementPrice = item.sku
+      ? supplierPrices.get(item.sku.trim().toLocaleUpperCase('en-US'))
+      : undefined;
+    if (replacementPrice === undefined) {
+      removedCount += 1;
+      return [];
+    }
+    if (replacementPrice !== item.price) {
+      updatedCount += 1;
+      return [{ ...item, price: replacementPrice }];
+    }
+    return [item];
+  });
+
+  return { items: nextItems, updatedCount, removedCount };
+}

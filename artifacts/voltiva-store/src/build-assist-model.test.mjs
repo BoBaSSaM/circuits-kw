@@ -15,6 +15,7 @@ import {
   addCartItem,
   calculateCartSubtotal,
   mergeConcurrentCartChanges,
+  replaceSupplierPricedBomItems,
   removeSupplierPricedBomItems,
   setCartItemQuantity,
 } from './cart-model.ts';
@@ -202,4 +203,30 @@ test('removing a supplier list clears only supplier-priced BOM cart entries', ()
 
   assert.deepEqual(remaining.map(({ id }) => id), ['bom-soil', 'component-esp32']);
   assert.equal(calculateCartSubtotal(remaining), 4.05);
+});
+
+test('replacing a supplier list reprices matching BOM lines and removes unpriced ones', () => {
+  const items = [
+    { id: 'bom-esp32', kind: 'bom', sku: 'ESP32-WRM-32D', price: 1.625, priceSource: 'supplier-list', qty: 3 },
+    { id: 'bom-soil', kind: 'bom', sku: 'SNS-SOIL-CAP-12', price: 0.75, qty: 1 },
+    { id: 'bom-catalog', kind: 'bom', sku: 'SNS-BME280-I2C', price: 1.95, priceSource: 'catalog', qty: 2 },
+    { id: 'component-esp32', kind: 'component', sku: 'ESP32-WRM-32D', price: 2.85, qty: 1 },
+  ];
+
+  const replacement = replaceSupplierPricedBomItems(items, {
+    ' esp32-wrm-32d ': 2.75,
+    'SNS-BME280-I2C': 1.5,
+  }, {
+    'ESP32-WRM-32D': 1.625,
+    'SNS-SOIL-CAP-12': 0.75,
+  });
+
+  assert.equal(replacement.updatedCount, 1);
+  assert.equal(replacement.removedCount, 1);
+  assert.deepEqual(replacement.items, [
+    { ...items[0], price: 2.75 },
+    items[2],
+    items[3],
+  ]);
+  assert.equal(calculateCartSubtotal(replacement.items), 15);
 });

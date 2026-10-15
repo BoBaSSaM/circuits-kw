@@ -27,6 +27,7 @@ import {
   addCartItem,
   calculateCartSubtotal,
   mergeConcurrentCartChanges,
+  replaceSupplierPricedBomItems,
   removeSupplierPricedBomItems,
   sameCartItemList,
   setCartItemQuantity,
@@ -572,7 +573,7 @@ function getPriceCsvImportError(error: unknown, language: Language) {
     : t('CSV could not be imported. Check required columns, row values, KWD prices, and duplicate SKUs.', language);
 }
 
-function BuildAssistPage({add,removeSupplierPricedItems,products,loading,error,retry}:{add:(item:AddItem)=>void;removeSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>)=>number;products:Product[];loading:boolean;error:boolean;retry:()=>void}) {
+function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedItems,products,loading,error,retry}:{add:(item:AddItem)=>void;removeSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>)=>number;replaceSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>)=>{updatedCount:number;removedCount:number};products:Product[];loading:boolean;error:boolean;retry:()=>void}) {
   const {language}=useLanguage();
    useDocument(t('Build Assist',language),t('Choose a project and preview its parts and saved prices.',language));
   const [selectedProjectId,setSelectedProjectId]=useState(buildOptions[0].id);
@@ -639,14 +640,24 @@ function BuildAssistPage({add,removeSupplierPricedItems,products,loading,error,r
       const imported=parseAuthorizedPriceCsv(csv);
       const nextPriceList={...imported,source:priceSource.trim(),updatedAt:priceUpdatedAt};
       const saved=writeBrowserStorage(PRICE_LIST_STORAGE_KEY,JSON.stringify(nextPriceList));
+      const cartChanges=replaceSupplierPricedItems(nextPriceList.pricesBySku,priceList?.pricesBySku);
       setPriceList(nextPriceList);
       setPriceListRemoved(false);
       setPriceImportError('');
       setPriceFile(null);
       if(priceFileInputRef.current) priceFileInputRef.current.value='';
-      setNotice(saved
+      const cartChangeNotice=[
+        cartChanges.updatedCount
+          ?`${cartChanges.updatedCount} ${t('supplier-priced BOM cart item(s) repriced',language)}`
+          :'',
+        cartChanges.removedCount
+          ?`${cartChanges.removedCount} ${t('supplier-priced BOM cart item(s) without a replacement price removed',language)}`
+          :'',
+      ].filter(Boolean).join('; ');
+      const importNotice=saved
         ?t('Price list imported.',language)
-        :t('Price list imported for this estimate, but browser storage rejected the save. It will not be available after refresh.',language));
+        :t('Price list imported for this estimate, but browser storage rejected the save. It will not be available after refresh.',language);
+      setNotice(cartChangeNotice?`${importNotice} ${cartChangeNotice}.`:importNotice);
     }catch(error){
       setPriceImportError(getPriceCsvImportError(error, language));
     }
@@ -1267,7 +1278,7 @@ function Shell({children, count, globalSearch, setGlobalSearch, cartStorageUnava
 
 function RoutedErrorBoundary({children}:{children:ReactNode}) { const [location]=useLocation(); return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>; }
 
-function Router({items,add,removeSupplierPricedItems,update,remove,clearCart,search,setSearch,cartStorageUnavailable}:{items:Item[];add:(item:AddItem)=>void;removeSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>)=>number;update:(id:string,qty:number)=>void;remove:(id:string)=>void;clearCart:()=>void;search:string;setSearch:(v:string)=>void;cartStorageUnavailable:boolean}) {
+function Router({items,add,removeSupplierPricedItems,replaceSupplierPricedItems,update,remove,clearCart,search,setSearch,cartStorageUnavailable}:{items:Item[];add:(item:AddItem)=>void;removeSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>)=>number;replaceSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>)=>{updatedCount:number;removedCount:number};update:(id:string,qty:number)=>void;remove:(id:string)=>void;clearCart:()=>void;search:string;setSearch:(v:string)=>void;cartStorageUnavailable:boolean}) {
   const [location]=useLocation();
   const count=items.reduce((n,i)=>n+i.qty,0);
   const catalogEnabled=['/components','/project-kits','/build-assist'].includes(location);
@@ -1301,7 +1312,7 @@ function Router({items,add,removeSupplierPricedItems,update,remove,clearCart,sea
     <Route path="/" component={HomePage}/>
     <Route path="/components"><CatalogPage add={add} globalSearch={search} products={products} loading={catalogLoading} error={catalogError} retry={retryCatalog}/></Route>
     <Route path="/project-kits"><KitsPage add={add} kits={kits} loading={catalogLoading} error={catalogError} retry={retryCatalog}/></Route>
-    <Route path="/build-assist"><BuildAssistPage add={add} removeSupplierPricedItems={removeSupplierPricedItems} products={products} loading={catalogLoading} error={catalogError} retry={retryCatalog}/></Route>
+    <Route path="/build-assist"><BuildAssistPage add={add} removeSupplierPricedItems={removeSupplierPricedItems} replaceSupplierPricedItems={replaceSupplierPricedItems} products={products} loading={catalogLoading} error={catalogError} retry={retryCatalog}/></Route>
     <Route path="/dashboard" component={AdminDashboardPage}/>
     <Route path="/about"><AboutPage/></Route>
     <Route path="/cart"><CartPage items={items} update={update} remove={remove} clearCart={clearCart}/></Route>
@@ -1401,7 +1412,16 @@ function App() {
     });
     return removedCount;
   };
-  return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ClerkRouterBridge><Router items={items} add={add} removeSupplierPricedItems={removeSupplierPricedItems} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t(cartNotice.type==='added'?'Added to cart':'Cart updated in another tab',language)}</strong><span>{cartNotice.type==='added'?t(cartNotice.name,language):t('Items, quantities, or totals may have changed.',language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</ClerkRouterBridge></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
+  const replaceSupplierPricedItems=(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>)=>{
+    let result={updatedCount:0,removedCount:0};
+    changeCart(current=>{
+      const replacement=replaceSupplierPricedBomItems(current,pricesBySku,previousPricesBySku);
+      result={updatedCount:replacement.updatedCount,removedCount:replacement.removedCount};
+      return replacement.items;
+    });
+    return result;
+  };
+  return <LanguageProvider language={language} setLanguage={setLanguage}><div lang={language} dir={language==='ar'?'rtl':'ltr'}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ClerkRouterBridge><Router items={items} add={add} removeSupplierPricedItems={removeSupplierPricedItems} replaceSupplierPricedItems={replaceSupplierPricedItems} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t(cartNotice.type==='added'?'Added to cart':'Cart updated in another tab',language)}</strong><span>{cartNotice.type==='added'?t(cartNotice.name,language):t('Items, quantities, or totals may have changed.',language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</ClerkRouterBridge></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider></div></LanguageProvider>;
 }
 
 export default App;
