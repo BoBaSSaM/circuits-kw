@@ -567,6 +567,8 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     await page.getByTestId('link-empty-cart-components').waitFor();
     assert.equal(await page.locator('[data-testid^="row-cart-"]').count(), 0);
 
+    await page.goto(`${baseUrl}/components`);
+    await page.getByTestId('button-add-nucleo').click();
     await page.goto(`${baseUrl}/build-assist`);
     await page.getByTestId('row-bom-esp32').waitFor();
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '1.625 KWD');
@@ -575,7 +577,8 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     const supplierPricedCartRow = page.getByTestId('row-cart-bom-esp32');
     await supplierPricedCartRow.waitFor();
     assert.equal(await supplierPricedCartRow.locator('.price').innerText(), '1.625 KWD');
-    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '1.625 KWD');
+    assert.equal(await page.getByTestId('row-cart-nucleo').count(), 1);
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '7.825 KWD');
 
     await page.goto(`${baseUrl}/build-assist`);
     await page.getByTestId('row-bom-esp32').waitFor();
@@ -592,16 +595,22 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.match(await page.getByTestId('status-build-assist').innerText(), /1 supplier-priced BOM cart item/);
     assert.match(await page.getByTestId('button-generate-bom').innerText(), /Generate local demo BOM/);
     await page.waitForFunction((key) => localStorage.getItem(key) === null, priceListStorageKey);
+    await page.waitForFunction(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return cart.length === 1 && cart[0].id === 'nucleo' && cart[0].price === 6.2;
+    });
     assert.deepEqual(
-      await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]')),
-      [],
-      'removing the list should not retain its copied price in the saved cart',
+      await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]').map(({ id, price, qty }) => ({ id, price, qty }))),
+      [{ id: 'nucleo', price: 6.2, qty: 1 }],
+      'removing the supplier prices should remove only its BOM item and preserve the unrelated catalog item',
     );
 
     await page.goto(`${baseUrl}/cart`);
-    await page.getByTestId('link-empty-cart-components').waitFor();
-    assert.equal(await page.locator('[data-testid^="row-cart-"]').count(), 0);
-    assert.equal(await page.locator('.summary-card .summary-total').count(), 0);
+    await page.getByTestId('row-cart-nucleo').waitFor();
+    assert.equal(await page.locator('[data-testid^="row-cart-"]').count(), 1);
+    assert.equal(await page.getByTestId('row-cart-bom-esp32').count(), 0);
+    assert.equal(await page.getByTestId('row-cart-nucleo').locator('.price').innerText(), '6.200 KWD');
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '6.200 KWD');
 
     await page.goto(`${baseUrl}/build-assist`);
     await page.reload();
