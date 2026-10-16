@@ -1385,6 +1385,44 @@ test('merges concurrent cart additions and edits across tabs without changing th
       assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]')), []);
     }
 
+    const removeAddContext = await browser.newContext();
+    contexts.push(removeAddContext);
+    await installApiMocks(removeAddContext);
+    await delayStorageEvents(removeAddContext, [
+      { id: 'esp32', name: 'ESP32-WROOM-32D', price: 2.85, kind: 'component', sku: 'ESP32-WRM-32D', qty: 1 },
+    ]);
+    const removingTab = await removeAddContext.newPage();
+    const addingTab = await removeAddContext.newPage();
+    removingTab.on('pageerror', (error) => pageErrors.push(error.message));
+    addingTab.on('pageerror', (error) => pageErrors.push(error.message));
+    await removingTab.goto(`${baseUrl}/cart`);
+    await removingTab.getByTestId('row-cart-esp32').waitFor();
+    await addingTab.goto(`${baseUrl}/cart`);
+    await addingTab.getByTestId('row-cart-esp32').waitFor();
+
+    await removingTab.getByTestId('button-remove-esp32').click();
+    await removingTab.waitForFunction(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]').length === 0);
+    await addingTab.getByTestId('nav-components').click();
+    await addingTab.getByTestId('button-add-esp32').click();
+    await addingTab.waitForFunction(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return cart.find((item) => item.id === 'esp32')?.qty === 2;
+    });
+    await Promise.all([
+      removingTab.evaluate(() => window.flushCartStorageEvents()),
+      addingTab.evaluate(() => window.flushCartStorageEvents()),
+    ]);
+    await removingTab.getByTestId('link-cart').click();
+    await addingTab.getByTestId('link-cart').click();
+    for (const page of [removingTab, addingTab]) {
+      await page.getByTestId('row-cart-esp32').waitFor();
+      assert.equal(await page.getByTestId('input-quantity-esp32').inputValue(), '2');
+      assert.deepEqual(await page.evaluate(() => {
+        const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+        return cart.map(({ id, qty }) => ({ id, qty }));
+      }), [{ id: 'esp32', qty: 2 }]);
+    }
+
     const additionsContext = await browser.newContext();
     contexts.push(additionsContext);
     await installApiMocks(additionsContext);

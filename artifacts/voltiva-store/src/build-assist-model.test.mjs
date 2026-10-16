@@ -180,6 +180,18 @@ test('merges unique concurrent add operations once, including new matching lines
   assert.equal(mergeConcurrentCartChanges([], localNewItem, remoteNewItem)[0].qty, 5);
 });
 
+test('a fresh add survives a concurrent removal in either tab order', () => {
+  const base = [{ id: 'esp32', name: catalog[0].name, sku: catalog[0].sku, kind: 'component', price: catalog[0].price, qty: 1 }];
+  const added = addCartItem(base, base[0]);
+
+  assert.deepEqual(mergeConcurrentCartChanges(base, [], added).map(({ id, qty }) => ({ id, qty })), [
+    { id: 'esp32', qty: 2 },
+  ]);
+  assert.deepEqual(mergeConcurrentCartChanges(base, added, []).map(({ id, qty }) => ({ id, qty })), [
+    { id: 'esp32', qty: 2 },
+  ]);
+});
+
 test('keeps the saved-value conflict rule for explicit quantity edits', () => {
   const base = [{ id: 'esp32', name: catalog[0].name, sku: catalog[0].sku, kind: 'component', price: catalog[0].price, qty: 1 }];
   const localEdit = setCartItemQuantity(base, 'esp32', 3);

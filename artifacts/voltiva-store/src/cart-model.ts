@@ -107,6 +107,13 @@ function additiveDetails(item: CartLine | undefined, baseItem: CartLine | undefi
   return calculatedQty === item.qty ? { baseQty: expectedBaseQty, operations: item.cartAddOperations } : null;
 }
 
+function hasNewAddSinceBase(item: CartLine | undefined, baseItem: CartLine | undefined): boolean {
+  const additions = additiveDetails(item, baseItem);
+  if (!additions) return false;
+  const baseOperations = baseItem?.cartAddOperations ?? {};
+  return Object.keys(additions.operations).some((operationId) => !(operationId in baseOperations));
+}
+
 export function mergeConcurrentCartChanges<T extends CartLine>(base: T[], local: T[], remote: T[]): T[] {
   const baseById = new Map(base.map(item => [item.id, item]));
   const localById = new Map(local.map(item => [item.id, item]));
@@ -121,9 +128,15 @@ export function mergeConcurrentCartChanges<T extends CartLine>(base: T[], local:
     const remoteChanged = !sameCartItem(remoteItem, baseItem);
 
     if (localChanged && remoteChanged) {
-      // A line removed by either tab stays removed when the other tab only edits it.
-      // This makes a clear-cart action win against stale quantity updates.
-      if (!localItem || !remoteItem) continue;
+      // A new add is a fresh intent that should survive a concurrent line removal.
+      // Without a new add operation, removal still wins over stale edits and clears.
+      if (!localItem || !remoteItem) {
+        const survivingItem = localItem ?? remoteItem;
+        if (hasNewAddSinceBase(survivingItem, baseItem) && survivingItem) {
+          mergedById.set(id, survivingItem);
+        }
+        continue;
+      }
       const localAdd = additiveDetails(localItem, baseItem);
       const remoteAdd = additiveDetails(remoteItem, baseItem);
       if (localAdd && remoteAdd && localAdd.baseQty === remoteAdd.baseQty) {
