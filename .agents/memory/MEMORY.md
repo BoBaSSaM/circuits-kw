@@ -3,4 +3,4 @@
 - [Cart sync browser tests](browser-cart-sync-tests.md) — Cart-seeding init scripts run on each navigation; avoid unintended storage resets while exercising tab-sync flows.
 - [Checkout auth redirect preservation](checkout-auth-redirects.md) — Preserve checkout return intent across Clerk's internal sign-in and verification routes.
 - [Next.js deployment build environment](next-build-env.md) — Root workspace builds should succeed without preview-only PORT or BASE_PATH values.
-- [Next.js preview CSS bundling](next-preview-css-bundling.md) — In this workspace, Webpack dev avoids a Turbopack/Tailwind PostCSS module-resolution failure.
+- [Next.js Replit preview checks](next-preview-css-bundling.md) — Webpack avoids Turbopack CSS failures; the actual Replit host must also be allowed for HMR.
