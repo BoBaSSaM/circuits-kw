@@ -96,6 +96,16 @@ async function installApiMocks(context) {
   });
 }
 
+async function assertVisibleWithinViewport(page, locator, label) {
+  assert.equal(await locator.isVisible(), true, `${label} should be visible at a phone viewport.`);
+  const box = await locator.boundingBox();
+  assert.ok(box, `${label} should have a visible bounding box.`);
+  const viewport = page.viewportSize();
+  assert.ok(viewport, 'The browser page should have a viewport size.');
+  assert.ok(box.x >= 0 && box.x + box.width <= viewport.width, `${label} should fit horizontally in the viewport.`);
+  assert.ok(box.y >= 0 && box.y + box.height <= viewport.height, `${label} should fit vertically in the viewport.`);
+}
+
 test('guest checkout, account creation, and sign-in preserve checkout and dashboard destinations at a mounted base path', {
   timeout: 180_000,
 }, async () => {
@@ -111,6 +121,7 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
   const serverProcess = spawn('npm', ['run', 'dev'], {
     cwd: artifactDir,
     env: { ...process.env, BASE_PATH: `${basePath}/`, PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
+    detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -136,18 +147,33 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
     const page = await context.newPage();
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.setViewportSize({ width: 375, height: 812 });
+
+    await page.goto(`${baseUrl}/`);
+    const mobileMenuButton = page.getByTestId('button-mobile-menu');
+    await mobileMenuButton.waitFor();
+    await mobileMenuButton.click();
+    const mobileAccountLink = page.getByTestId('mobile-nav-account');
+    await mobileAccountLink.waitFor();
+    await assertVisibleWithinViewport(page, mobileAccountLink, 'The signed-out mobile account link');
+    assert.equal(await mobileAccountLink.getAttribute('href'), `${basePath}/sign-in`);
+    await mobileAccountLink.click();
+    await page.waitForURL((url) => url.pathname === `${basePath}/sign-in`);
 
     await page.goto(`${baseUrl}/checkout`);
     await page.getByTestId('row-checkout-auth-flow-item').waitFor();
     assert.match(await page.getByTestId('checkout-account-options').innerText(), /Guest checkout is available/);
-    assert.equal(
-      await page.getByTestId('link-checkout-sign-in').getAttribute('href'),
-      `${basePath}/sign-in?returnTo=checkout`,
-    );
-    assert.equal(
-      await page.getByTestId('link-checkout-sign-up').getAttribute('href'),
-      `${basePath}/sign-up?returnTo=checkout`,
-    );
+    const checkoutSignInLink = page.getByTestId('link-checkout-sign-in');
+    const checkoutSignUpLink = page.getByTestId('link-checkout-sign-up');
+    await assertVisibleWithinViewport(page, checkoutSignInLink, 'The checkout sign-in action');
+    await assertVisibleWithinViewport(page, checkoutSignUpLink, 'The checkout create-account action');
+    assert.equal(await checkoutSignInLink.getAttribute('href'), `${basePath}/sign-in?returnTo=checkout`);
+    assert.equal(await checkoutSignUpLink.getAttribute('href'), `${basePath}/sign-up?returnTo=checkout`);
+
+    await checkoutSignInLink.click();
+    await page.waitForURL((url) => url.pathname === `${basePath}/sign-in` && url.searchParams.get('returnTo') === 'checkout');
+    await page.goto(`${baseUrl}/checkout`);
+    await page.getByTestId('row-checkout-auth-flow-item').waitFor();
 
     const testEmail = `checkout-flow+clerk_test_${randomUUID()}@example.com`;
     const testPassword = `QaPass-${randomUUID()}-A9!`;
@@ -179,7 +205,8 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
     assert.match(await checkoutRow.innerText(), /Qty 2/);
     assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '5.700 KWD');
 
-    const accountLink = page.getByTestId('link-account');
+    await page.getByTestId('button-mobile-menu').click();
+    const accountLink = page.getByTestId('mobile-nav-account');
     assert.equal(await accountLink.getAttribute('href'), `${basePath}/account`);
     await accountLink.click();
     await page.getByTestId('page-account').waitFor();
@@ -236,7 +263,15 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
   } finally {
     await context?.close();
     await browser?.close();
-    serverProcess.kill('SIGTERM');
+    if (process.platform !== 'win32' && serverProcess.pid) {
+      try {
+        process.kill(-serverProcess.pid, 'SIGTERM');
+      } catch (error) {
+        if (error.code !== 'ESRCH') throw error;
+      }
+    } else {
+      serverProcess.kill('SIGTERM');
+    }
     if (serverProcess.exitCode === null) {
       await Promise.race([
         new Promise((resolve) => serverProcess.once('exit', resolve)),
