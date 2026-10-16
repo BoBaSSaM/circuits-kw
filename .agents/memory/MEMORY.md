@@ -4,3 +4,4 @@
 - [Checkout auth redirect preservation](checkout-auth-redirects.md) — Preserve checkout return intent across Clerk's internal sign-in and verification routes.
 - [Next.js deployment build environment](next-build-env.md) — Root workspace builds should succeed without preview-only PORT or BASE_PATH values.
 - [Next.js Replit preview checks](next-preview-css-bundling.md) — Webpack avoids Turbopack CSS failures; the actual Replit host must also be allowed for HMR.
+- [GitHub push authentication](github-push-auth.md) — A present token or healthy OAuth status does not prove Git CLI push access; never expose tokens or force-push to work around auth.
