@@ -62,8 +62,20 @@ async function waitForServer(serverProcess, url) {
 }
 
 async function installApiMocks(context) {
+  const savedCart = [];
   await context.route('**/api/**', async (route) => {
     const { pathname } = new URL(route.request().url());
+    if (pathname.endsWith('/api/users/me/cart')) {
+      if (route.request().method() === 'PUT') {
+        savedCart.splice(0, savedCart.length, ...route.request().postDataJSON().items);
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: savedCart }),
+      });
+      return;
+    }
     if (pathname.endsWith('/api/orders') && route.request().method() === 'GET') {
       await route.fulfill({
         status: 200,
@@ -94,6 +106,7 @@ async function installApiMocks(context) {
       body: JSON.stringify({ ok: true }),
     });
   });
+  return { savedCart };
 }
 
 async function assertVisibleWithinViewport(page, locator, label) {
@@ -140,9 +153,11 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
     });
     context = await browser.newContext();
     await context.addInitScript((item) => {
+      if (sessionStorage.getItem('__cart-seed-installed')) return;
+      sessionStorage.setItem('__cart-seed-installed', '1');
       localStorage.setItem('circuits-kw-cart', JSON.stringify([item]));
     }, cartItem);
-    await installApiMocks(context);
+    const apiMocks = await installApiMocks(context);
 
     const page = await context.newPage();
     const pageErrors = [];
@@ -195,15 +210,25 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
     const legalAcceptance = page.locator('input[name="legalAccepted"]');
     if (await legalAcceptance.isVisible().catch(() => false)) await legalAcceptance.check();
 
+    const savedAccountCart = page.waitForResponse((response) =>
+      response.url().includes('/api/users/me/cart')
+      && response.request().method() === 'PUT',
+    );
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     const verificationCode = page.getByRole('textbox', { name: /verification code/i });
     await verificationCode.waitFor();
     await verificationCode.fill('424242');
     await page.waitForURL((url) => url.pathname === `${basePath}/checkout`, { timeout: 60_000 });
+    await savedAccountCart;
+    assert.deepEqual(apiMocks.savedCart, [cartItem]);
     const checkoutRow = page.getByTestId('row-checkout-auth-flow-item');
     await checkoutRow.waitFor();
     assert.match(await checkoutRow.innerText(), /Qty 2/);
     assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '5.700 KWD');
+    await page.evaluate(() => localStorage.removeItem('circuits-kw-cart'));
+    await page.reload();
+    await page.getByTestId('row-checkout-auth-flow-item').waitFor();
+    assert.match(await page.getByTestId('row-checkout-auth-flow-item').innerText(), /Qty 2/);
 
     await page.getByTestId('button-mobile-menu').click();
     const accountLink = page.getByTestId('mobile-nav-account');
@@ -224,6 +249,9 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
     await page.getByTestId('button-confirm-sign-out').click();
     await page.waitForURL((url) => url.pathname === `${basePath}/`, { timeout: 60_000 });
 
+    await page.evaluate((item) => {
+      localStorage.setItem('circuits-kw-cart', JSON.stringify([item]));
+    }, cartItem);
     await page.goto(`${baseUrl}/checkout`);
     await page.getByTestId('row-checkout-auth-flow-item').waitFor();
     await page.getByTestId('link-checkout-sign-in').click();

@@ -12,6 +12,7 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port ${PORT:-8080}",
     "backfill:users": "tsx ./src/backfill-users.ts",
+    "test:cart": "tsx --test src/routes/user-carts.test.ts",
     "test:orders": "tsx --test src/routes/orders.test.ts",
     "test:backfill": "tsx --test src/lib/user-profiles.test.ts",
     "test:webhook": "tsx --test src/routes/clerk-webhook.test.ts",

@@ -15,6 +15,7 @@ import {
   addCartItem,
   calculateCartSubtotal,
   mergeConcurrentCartChanges,
+  mergeGuestCartItems,
   replaceSupplierPricedBomItems,
   removeSupplierPricedBomItems,
   setCartItemQuantity,
@@ -163,6 +164,21 @@ test('adding an estimate merges quantities into an existing matching cart line',
   assert.equal(cart.length, 1);
   assert.equal(cart[0].qty, 7);
   assert.equal(calculateCartSubtotal(cart), catalog[0].price * 7);
+});
+
+test('merges guest cart quantities into the signed-in buyer cart after sign-in', () => {
+  const saved = [
+    { id: 'esp32', name: 'Saved ESP32', sku: 'ESP32', kind: 'component', price: 2.85, qty: 2 },
+  ];
+  const guest = [
+    { id: 'esp32', name: 'Guest ESP32', sku: 'ESP32', kind: 'component', price: 2.85, qty: 3 },
+    { id: 'bme280', name: 'BME280', sku: 'BME280', kind: 'component', price: 1.95, qty: 1 },
+  ];
+
+  assert.deepEqual(mergeGuestCartItems(saved, guest), [
+    { ...saved[0], qty: 5 },
+    guest[1],
+  ]);
 });
 
 test('merges unique concurrent add operations once, including new matching lines', () => {

@@ -65,6 +65,95 @@ export const SyncCurrentUserResponse = zod.object({
 
 
 /**
+ * @summary Get the signed-in buyer's saved cart
+ */
+export const getMyCartResponseItemsItemIdMax = 120;
+
+export const getMyCartResponseItemsItemNameMax = 240;
+
+export const getMyCartResponseItemsItemPriceMin = 0;
+export const getMyCartResponseItemsItemPriceMax = 1000000;
+
+export const getMyCartResponseItemsItemSkuMax = 80;
+
+export const getMyCartResponseItemsItemQtyMax = 999;
+
+export const getMyCartResponseItemsMax = 100;
+
+
+
+export const GetMyCartResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().min(1).max(getMyCartResponseItemsItemIdMax),
+  "name": zod.string().min(1).max(getMyCartResponseItemsItemNameMax),
+  "price": zod.number().min(getMyCartResponseItemsItemPriceMin).max(getMyCartResponseItemsItemPriceMax),
+  "kind": zod.enum(['component', 'kit', 'bom']),
+  "sku": zod.string().max(getMyCartResponseItemsItemSkuMax),
+  "qty": zod.number().int().min(1).max(getMyCartResponseItemsItemQtyMax),
+  "priceSource": zod.enum(['catalog', 'supplier-list']).optional()
+})).max(getMyCartResponseItemsMax)
+})
+
+
+/**
+ * @summary Replace the signed-in buyer's saved cart
+ */
+export const saveMyCartBodyItemsItemIdMax = 120;
+
+export const saveMyCartBodyItemsItemNameMax = 240;
+
+export const saveMyCartBodyItemsItemPriceMin = 0;
+export const saveMyCartBodyItemsItemPriceMax = 1000000;
+
+export const saveMyCartBodyItemsItemSkuMax = 80;
+
+export const saveMyCartBodyItemsItemQtyMax = 999;
+
+export const saveMyCartBodyItemsMax = 100;
+
+
+
+export const SaveMyCartBody = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveMyCartBodyItemsItemIdMax),
+  "name": zod.string().min(1).max(saveMyCartBodyItemsItemNameMax),
+  "price": zod.number().min(saveMyCartBodyItemsItemPriceMin).max(saveMyCartBodyItemsItemPriceMax),
+  "kind": zod.enum(['component', 'kit', 'bom']),
+  "sku": zod.string().max(saveMyCartBodyItemsItemSkuMax),
+  "qty": zod.number().int().min(1).max(saveMyCartBodyItemsItemQtyMax),
+  "priceSource": zod.enum(['catalog', 'supplier-list']).optional()
+})).max(saveMyCartBodyItemsMax)
+})
+
+export const saveMyCartResponseItemsItemIdMax = 120;
+
+export const saveMyCartResponseItemsItemNameMax = 240;
+
+export const saveMyCartResponseItemsItemPriceMin = 0;
+export const saveMyCartResponseItemsItemPriceMax = 1000000;
+
+export const saveMyCartResponseItemsItemSkuMax = 80;
+
+export const saveMyCartResponseItemsItemQtyMax = 999;
+
+export const saveMyCartResponseItemsMax = 100;
+
+
+
+export const SaveMyCartResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveMyCartResponseItemsItemIdMax),
+  "name": zod.string().min(1).max(saveMyCartResponseItemsItemNameMax),
+  "price": zod.number().min(saveMyCartResponseItemsItemPriceMin).max(saveMyCartResponseItemsItemPriceMax),
+  "kind": zod.enum(['component', 'kit', 'bom']),
+  "sku": zod.string().max(saveMyCartResponseItemsItemSkuMax),
+  "qty": zod.number().int().min(1).max(saveMyCartResponseItemsItemQtyMax),
+  "priceSource": zod.enum(['catalog', 'supplier-list']).optional()
+})).max(saveMyCartResponseItemsMax)
+})
+
+
+/**
  * @summary List the signed-in buyer's demo orders
  */
 export const GetMyOrdersResponse = zod.object({

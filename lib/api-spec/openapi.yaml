@@ -60,6 +60,65 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /users/me/cart:
+    get:
+      operationId: getMyCart
+      tags: [orders]
+      summary: Get the signed-in buyer's saved cart
+      responses:
+        "200":
+          description: Saved cart, or an empty cart when none exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartResponse"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Cart could not be loaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: saveMyCart
+      tags: [orders]
+      summary: Replace the signed-in buyer's saved cart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveCartInput"
+      responses:
+        "200":
+          description: Cart saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartResponse"
+        "400":
+          description: Cart contains invalid items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Cart could not be saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /orders:
     get:
       operationId: getMyOrders
@@ -625,6 +684,27 @@ components:
         ok: { type: boolean }
         role: { $ref: "#/components/schemas/DashboardRole" }
       required: [ok, role]
+    CartItem:
+      type: object
+      properties:
+        id: { type: string, minLength: 1, maxLength: 120 }
+        name: { type: string, minLength: 1, maxLength: 240 }
+        price: { type: number, minimum: 0, maximum: 1000000 }
+        kind: { type: string, enum: [component, kit, bom] }
+        sku: { type: string, maxLength: 80 }
+        qty: { type: integer, minimum: 1, maximum: 999 }
+        priceSource: { type: string, enum: [catalog, supplier-list] }
+      required: [id, name, price, kind, sku, qty]
+    CartResponse:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/CartItem" }, maxItems: 100 }
+      required: [items]
+    SaveCartInput:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/CartItem" }, maxItems: 100 }
+      required: [items]
     OrderItemInput:
       type: object
       properties:

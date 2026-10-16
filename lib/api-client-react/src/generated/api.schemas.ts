@@ -319,6 +319,60 @@ export interface CurrentUserResponse {
   role: DashboardRole;
 }
 
+export type CartItemKind = typeof CartItemKind[keyof typeof CartItemKind];
+
+
+export const CartItemKind = {
+  component: 'component',
+  kit: 'kit',
+  bom: 'bom',
+} as const;
+
+export type CartItemPriceSource = typeof CartItemPriceSource[keyof typeof CartItemPriceSource];
+
+
+export const CartItemPriceSource = {
+  catalog: 'catalog',
+  'supplier-list': 'supplier-list',
+} as const;
+
+export interface CartItem {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  name: string;
+  /**
+     * @minimum 0
+     * @maximum 1000000
+     */
+  price: number;
+  kind: CartItemKind;
+  /** @maxLength 80 */
+  sku: string;
+  /**
+     * @minimum 1
+     * @maximum 999
+     */
+  qty: number;
+  priceSource?: CartItemPriceSource;
+}
+
+export interface CartResponse {
+  /** @maxItems 100 */
+  items: CartItem[];
+}
+
+export interface SaveCartInput {
+  /** @maxItems 100 */
+  items: CartItem[];
+}
+
 export type OrderItemInputKind = typeof OrderItemInputKind[keyof typeof OrderItemInputKind];
 
 

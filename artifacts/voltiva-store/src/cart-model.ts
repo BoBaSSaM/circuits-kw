@@ -67,6 +67,23 @@ export function addCartItem<T extends CartLine>(
   } as T];
 }
 
+export function mergeGuestCartItems<T extends CartLine>(
+  savedItems: readonly T[],
+  guestItems: readonly T[],
+): T[] {
+  const merged = [...savedItems];
+  for (const guestItem of guestItems) {
+    const existingIndex = merged.findIndex((item) => item.id === guestItem.id);
+    if (existingIndex < 0) {
+      merged.push(guestItem);
+      continue;
+    }
+    const existing = merged[existingIndex];
+    merged[existingIndex] = { ...existing, qty: existing.qty + guestItem.qty } as T;
+  }
+  return merged;
+}
+
 export function setCartItemQuantity<T extends CartLine>(items: readonly T[], id: string, qty: number): T[] {
   return items.map((item) => {
     if (item.id !== id) return item;
