@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0 --port ${PORT:-19607}",
+    "dev": "next dev --webpack --hostname 0.0.0.0 --port ${PORT:-19607}",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port ${PORT:-3000}",
     "serve": "npm run start",
