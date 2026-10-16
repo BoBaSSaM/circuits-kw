@@ -1779,6 +1779,10 @@ test('saves demo orders through the order API when browser order-history storage
       }
       assert.deepEqual(pageErrors, []);
       assert.equal(await page.evaluate(() => window.readOriginalStorageItem('circuits-kw-demo-orders')), null);
+      await page.waitForFunction(() => {
+        const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+        return cart.length === 0;
+      });
       assert.equal(await page.evaluate(() => JSON.parse(window.readOriginalStorageItem('circuits-kw-cart') || '[]').length), 0);
     }
 
@@ -1803,11 +1807,23 @@ test('saves demo orders through the order API when browser order-history storage
     const failedOrderPage = await failedOrderContext.newPage();
     const failedOrderPageErrors = [];
     failedOrderPage.on('pageerror', error => failedOrderPageErrors.push(error.message));
-    await failedOrderPage.route('**/api/orders', route => route.fulfill({
-      status: 503,
-      contentType: 'application/json',
-      body: JSON.stringify({ error: 'orders_unavailable' }),
-    }));
+    let failedOrderAttempts = 0;
+    await failedOrderPage.route('**/api/orders', route => {
+      failedOrderAttempts += 1;
+      return route.fulfill({
+        status: failedOrderAttempts === 1 ? 503 : 400,
+        contentType: 'application/json',
+        body: JSON.stringify(failedOrderAttempts === 1
+          ? {
+            error: 'order_storage_unavailable',
+            message: 'Private customer details must never be forwarded.',
+            orderId: 'private-order-id',
+            customer: { name: 'Private Buyer', email: 'private@example.com' },
+            address: 'Private delivery address',
+          }
+          : { error: 'private@example.com', details: [{ message: 'Private validation text' }] }),
+      });
+    });
     await failedOrderPage.goto(`${baseUrl}/checkout`);
     await failedOrderPage.getByTestId('row-checkout-failed-order-item').waitFor();
     await failedOrderPage.getByTestId('input-checkout-name').fill('Demo Buyer');
@@ -1821,7 +1837,40 @@ test('saves demo orders through the order API when browser order-history storage
     await failedOrderPage.getByTestId('button-place-demo-order').click();
     await failedOrderPage.getByTestId('checkout-order-error').waitFor();
     assert.equal(await failedOrderPage.getByTestId('demo-order-confirmation').count(), 0);
-    assert.deepEqual(await failedOrderPage.evaluate(() => window.demoAnalyticsEvents), []);
+    await failedOrderPage.getByTestId('button-place-demo-order').click();
+    await failedOrderPage.getByTestId('checkout-order-error').waitFor();
+    assert.equal(await failedOrderPage.getByTestId('demo-order-confirmation').count(), 0);
+    assert.deepEqual(await failedOrderPage.evaluate(() => window.demoAnalyticsEvents), [
+      {
+        name: 'demo_order_save_failed',
+        data: {
+          error_category: 'order_storage_unavailable',
+          line_count: 1,
+          subtotal_kwd: 5,
+        },
+      },
+      {
+        name: 'demo_order_save_failed',
+        data: {
+          error_category: 'other',
+          line_count: 1,
+          subtotal_kwd: 5,
+        },
+      },
+    ]);
+    assert.deepEqual(
+      await failedOrderPage.evaluate(() => window.demoAnalyticsEvents.some(event => event.name === 'demo_order_completed')),
+      false,
+      'failed saves must never emit the success event',
+    );
+    await failedOrderPage.evaluate(() => {
+      window.umami.track = () => {
+        throw new Error('Analytics is unavailable.');
+      };
+    });
+    await failedOrderPage.getByTestId('button-place-demo-order').click();
+    await failedOrderPage.getByTestId('checkout-order-error').waitFor();
+    assert.equal(await failedOrderPage.getByTestId('demo-order-confirmation').count(), 0);
     assert.deepEqual(failedOrderPageErrors, []);
   } catch (error) {
     error.message += `\nNext.js output:\n${serverOutput}`;

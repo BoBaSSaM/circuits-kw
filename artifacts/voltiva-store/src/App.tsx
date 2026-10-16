@@ -36,7 +36,7 @@ import {
   setCartItemQuantity,
 } from './cart-model';
 import { AdminDashboardPage } from './AdminDashboardPage';
-import { trackEvent } from './lib/analytics';
+import { trackCheckoutSaveFailure, trackEvent } from './lib/analytics';
 import {
   ArrowDown, ArrowRight, BatteryCharging, BookOpen, Bot, Download,
   CheckCircle2, CircuitBoard, Cpu, Gauge, GraduationCap, Grid2X2,
@@ -995,6 +995,11 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
         orderSubmissionInFlight.current=false;
         const data=(error as {data?:unknown}).data;
         const payload=data&&typeof data==='object'?data as {error?:unknown;details?:unknown}:null;
+        trackCheckoutSaveFailure(
+          payload?.error,
+          latestItems.length,
+          calculateCartSubtotal(latestItems),
+        );
         if(payload?.error==='catalog_item_unavailable'){
           setOrderError(t('One or more items are no longer available. Refresh the catalog and update your cart.',language));
           return;
