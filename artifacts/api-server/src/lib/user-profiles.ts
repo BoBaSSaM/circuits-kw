@@ -177,6 +177,7 @@ export async function backfillClerkUserProfiles(
   let complete = true;
 
   while (offset < totalCount) {
+    const expectedMoreUsers = Number.isFinite(totalCount) && offset < totalCount;
     let page: { data: ClerkUserForProfile[]; totalCount: number };
     try {
       page = await getUserList({ limit: pageSize, offset });
@@ -187,7 +188,7 @@ export async function backfillClerkUserProfiles(
 
     totalCount = page.totalCount;
     if (!page.data.length) {
-      if (offset < totalCount) {
+      if (expectedMoreUsers || offset < totalCount) {
         complete = false;
       }
       break;
@@ -206,7 +207,13 @@ export async function backfillClerkUserProfiles(
     const succeededOnPage = outcomes.filter(Boolean).length;
     succeededCount += succeededOnPage;
     failedCount += outcomes.length - succeededOnPage;
-    offset += page.data.length;
+
+    if (page.data.length < pageSize && offset + page.data.length < totalCount) {
+      complete = false;
+      break;
+    }
+
+    offset += pageSize;
   }
 
   return { succeededCount, failedCount, complete };
