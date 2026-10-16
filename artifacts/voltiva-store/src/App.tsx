@@ -890,7 +890,7 @@ function checkoutFieldError(field:string,value:string):string|undefined {
   }
 }
 
-function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
+function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCart:()=>void;getLatestCartItems:()=>Item[]}) {
   const {language}=useLanguage();
   const {isLoaded,isSignedIn,user}=useUser();
   useDocument(t('Checkout',language),t('Demo orders are saved for Circuits KW order management.',language));
@@ -932,6 +932,8 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
   const submitDemoOrder=(event:FormEvent<HTMLFormElement>)=>{
     event.preventDefault();
     if(orderSubmissionInFlight.current||placedOrder) return;
+    const latestItems=getLatestCartItems();
+    if(!latestItems.length) return;
     setOrderError('');
     const form=event.currentTarget;
     const formData=new FormData(form);
@@ -966,7 +968,7 @@ function CheckoutPage({items,clearCart}:{items:Item[];clearCart:()=>void}) {
           ...(value('unit')?{unit:value('unit')}:{ }),
           ...(value('notes')?{notes:value('notes')}:{ }),
         },
-        items:items.map(item=>({
+        items:latestItems.map(item=>({
           id:item.id,
           kind:item.kind,
           sku:item.sku,
@@ -1282,7 +1284,7 @@ function Shell({children, count, globalSearch, setGlobalSearch, cartStorageUnava
 
 function RoutedErrorBoundary({children}:{children:ReactNode}) { const [location]=useLocation(); return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>; }
 
-function Router({items,add,removeSupplierPricedItems,replaceSupplierPricedItems,update,remove,clearCart,search,setSearch,cartStorageUnavailable,cartSyncUnavailable,retryCartSync}:{items:Item[];add:(item:AddItem)=>void;removeSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>)=>number;replaceSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>)=>{updatedCount:number;removedCount:number};update:(id:string,qty:number)=>void;remove:(id:string)=>void;clearCart:()=>void;search:string;setSearch:(v:string)=>void;cartStorageUnavailable:boolean;cartSyncUnavailable:boolean;retryCartSync:()=>void}) {
+function Router({items,add,removeSupplierPricedItems,replaceSupplierPricedItems,update,remove,clearCart,getLatestCartItems,search,setSearch,cartStorageUnavailable,cartSyncUnavailable,retryCartSync}:{items:Item[];add:(item:AddItem)=>void;removeSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>)=>number;replaceSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>)=>{updatedCount:number;removedCount:number};update:(id:string,qty:number)=>void;remove:(id:string)=>void;clearCart:()=>void;getLatestCartItems:()=>Item[];search:string;setSearch:(v:string)=>void;cartStorageUnavailable:boolean;cartSyncUnavailable:boolean;retryCartSync:()=>void}) {
   const [location]=useLocation();
   const count=items.reduce((n,i)=>n+i.qty,0);
   const catalogEnabled=['/components','/project-kits','/build-assist'].includes(location);
@@ -1320,7 +1322,7 @@ function Router({items,add,removeSupplierPricedItems,replaceSupplierPricedItems,
     <Route path="/dashboard" component={AdminDashboardPage}/>
     <Route path="/about"><AboutPage/></Route>
     <Route path="/cart"><CartPage items={items} update={update} remove={remove} clearCart={clearCart}/></Route>
-    <Route path="/checkout"><CheckoutPage items={items} clearCart={clearCart}/></Route>
+    <Route path="/checkout"><CheckoutPage items={items} clearCart={clearCart} getLatestCartItems={getLatestCartItems}/></Route>
     <Route path="/sign-in/*?" component={SignInPage}/>
     <Route path="/sign-up/*?" component={SignUpPage}/>
     <Route path="/account" component={AccountPage}/>
@@ -1544,9 +1546,24 @@ function StorefrontRuntime() {
     if(cartMode==='account-error') setCartLoadRetry(retry=>retry+1);
     else setCartSaveRetry(retry=>retry+1);
   };
+  const getLatestCartItems=()=>{
+    if(cartModeRef.current==='guest') {
+      const stored=readStoredCartSnapshot();
+      if(stored.storageAvailable) {
+        const latestItems=mergeConcurrentCartChanges(sharedCartRef.current,cartItemsRef.current,stored.items);
+        sharedCartRef.current=stored.items;
+        if(!sameCartItemList(latestItems,cartItemsRef.current)) {
+          cartItemsRef.current=latestItems;
+          setItemsState(latestItems);
+        }
+        return latestItems;
+      }
+    }
+    return cartItemsRef.current;
+  };
   const showStorageWarning=cartMode==='guest'&&cartStorageUnavailable;
   const showAccountCartWarning=cartMode==='account-error'||(cartMode==='account'&&cartSyncUnavailable);
-  return <div lang={language} dir={language==='ar'?'rtl':'ltr'}><Router items={items} add={add} removeSupplierPricedItems={removeSupplierPricedItems} replaceSupplierPricedItems={replaceSupplierPricedItems} update={update} remove={remove} clearCart={clearCart} search={search} setSearch={setSearch} cartStorageUnavailable={showStorageWarning} cartSyncUnavailable={showAccountCartWarning} retryCartSync={retryCartSync}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t(cartNotice.type==='added'?'Added to cart':'Cart updated in another tab',language)}</strong><span>{cartNotice.type==='added'?t(cartNotice.name,language):t('Items, quantities, or totals may have changed.',language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</div>;
+  return <div lang={language} dir={language==='ar'?'rtl':'ltr'}><Router items={items} add={add} removeSupplierPricedItems={removeSupplierPricedItems} replaceSupplierPricedItems={replaceSupplierPricedItems} update={update} remove={remove} clearCart={clearCart} getLatestCartItems={getLatestCartItems} search={search} setSearch={setSearch} cartStorageUnavailable={showStorageWarning} cartSyncUnavailable={showAccountCartWarning} retryCartSync={retryCartSync}/>{cartNotice&&<div key={cartNotice.id} className="cart-toast" role="status" aria-live="polite" data-testid="cart-add-feedback"><span className="cart-toast-icon"><CheckCircle2 size={17}/></span><span className="cart-toast-copy"><strong>{t(cartNotice.type==='added'?'Added to cart':'Cart updated in another tab',language)}</strong><span>{cartNotice.type==='added'?t(cartNotice.name,language):t('Items, quantities, or totals may have changed.',language)}</span></span><Link href="/cart" className="cart-toast-link" data-testid="link-cart-feedback">{t('View cart',language)} <ArrowRight size={13}/></Link></div>}</div>;
 }
 
 export default App;

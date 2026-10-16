@@ -1215,6 +1215,110 @@ test('syncs cart quantity edits and item removal across open tabs', {
   }
 });
 
+test('checkout refreshes another tab cart clear before reviewing or submitting the order', {
+  timeout: 180_000,
+}, async () => {
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverProcess = startNextDevServer(port);
+  let serverOutput = '';
+  serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+  serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+
+  let browser;
+  let context;
+  try {
+    await waitForServer(serverProcess, baseUrl);
+    const executablePath = await findChromiumPath();
+    assert.ok(executablePath, 'Set CHROMIUM_PATH or install Chromium to run browser tests.');
+    browser = await chromium.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    context = await browser.newContext();
+    const cartTab = await context.newPage();
+    const checkoutTab = await context.newPage();
+    const pageErrors = [];
+    const orderRequests = [];
+    checkoutTab.on('pageerror', error => pageErrors.push(error.message));
+    checkoutTab.on('request', request => {
+      if (request.url().endsWith('/api/orders') && request.method() === 'POST') {
+        orderRequests.push(request.postDataJSON());
+      }
+    });
+    await checkoutTab.addInitScript(() => {
+      const delayedCartListeners = [];
+      const originalAddEventListener = window.addEventListener.bind(window);
+      window.addEventListener = function (type, listener, options) {
+        if (type === 'storage' && typeof listener === 'function'
+          && String(listener).includes('circuits-kw-cart')) {
+          delayedCartListeners.push(listener);
+          return;
+        }
+        return originalAddEventListener(type, listener, options);
+      };
+      window.flushDelayedCartStorageEvents = () => {
+        const event = new StorageEvent('storage', {
+          key: 'circuits-kw-cart',
+          newValue: localStorage.getItem('circuits-kw-cart'),
+        });
+        delayedCartListeners.forEach(listener => listener.call(window, event));
+      };
+    });
+
+    const startingCart = [{
+      id: 'cleared-checkout-item',
+      name: 'Cleared checkout item',
+      price: 4.5,
+      kind: 'component',
+      sku: 'CLEAR-001',
+      qty: 2,
+    }];
+    await cartTab.goto(`${baseUrl}/cart`);
+    await cartTab.evaluate(items => localStorage.setItem('circuits-kw-cart', JSON.stringify(items)), startingCart);
+    await cartTab.reload();
+    await cartTab.getByTestId('row-cart-cleared-checkout-item').waitFor();
+    await checkoutTab.goto(`${baseUrl}/checkout`);
+    await checkoutTab.getByTestId('row-checkout-cleared-checkout-item').waitFor();
+    await checkoutTab.getByTestId('input-checkout-name').fill('Demo Buyer');
+    await checkoutTab.getByTestId('input-checkout-email').fill('buyer@example.com');
+    await checkoutTab.getByTestId('input-checkout-phone').fill('+965 5555 5555');
+    await checkoutTab.getByTestId('select-checkout-governorate').selectOption({ label: 'Capital' });
+    await checkoutTab.getByTestId('input-checkout-area').fill('Kuwait City');
+    await checkoutTab.getByTestId('input-checkout-block').fill('1');
+    await checkoutTab.getByTestId('input-checkout-street').fill('Main Street');
+    await checkoutTab.getByTestId('input-checkout-building').fill('10');
+
+    await cartTab.getByTestId('button-clear-cart').click();
+    await cartTab.waitForFunction(() => localStorage.getItem('circuits-kw-cart') === '[]');
+    assert.equal(
+      await checkoutTab.getByTestId('row-checkout-cleared-checkout-item').count(),
+      1,
+      'the delayed cross-tab event leaves checkout visibly stale before submission',
+    );
+
+    await checkoutTab.getByTestId('button-place-demo-order').click();
+    await checkoutTab.getByText('Your cart is empty.').waitFor();
+    assert.equal(await checkoutTab.getByTestId('row-checkout-cleared-checkout-item').count(), 0);
+    assert.deepEqual(orderRequests, [], 'checkout must not send cleared cart lines to the order API');
+    assert.deepEqual(pageErrors, []);
+  } catch (error) {
+    error.message += `\nNext.js output:\n${serverOutput}`;
+    throw error;
+  } finally {
+    await context?.close();
+    await browser?.close();
+    stopNextDevServer(serverProcess);
+    if (serverProcess.exitCode === null) {
+      await Promise.race([
+        new Promise(resolve => serverProcess.once('exit', resolve)),
+        delay(2_000),
+      ]);
+    }
+  }
+});
+
 test('keeps a deliberate same-product add after another tab clears the cart', {
   timeout: 180_000,
 }, async () => {
