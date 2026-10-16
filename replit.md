@@ -47,7 +47,7 @@ Keep the storefront's current brand, colors, and compact writing style. Use Mong
 
 ## Gotchas
 
-- Use npm workspaces and the root `package-lock.json`; do not restore pnpm or Vite commands.
+- Keep npm workspaces and the root `package-lock.json` as the single package setup.
 - Production builds must succeed without a workflow-provided `PORT` or `BASE_PATH`.
 
 ## Pointers

@@ -9,6 +9,7 @@ const workspaceRoot = path.resolve(
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: workspaceRoot,
+  turbopack: { root: workspaceRoot },
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   transpilePackages: ["@workspace/api-zod", "@workspace/db"],
   serverExternalPackages: [

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "@clerk/themes/shadcn.css";
 import "../index.css";
 
 export const metadata: Metadata = {

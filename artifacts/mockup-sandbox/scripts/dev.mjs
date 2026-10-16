@@ -10,7 +10,7 @@ await generatePreviewIndex();
 
 const nextProcess = spawn(
   "next",
-  ["dev", "--hostname", "0.0.0.0", "--port", process.env.PORT || "8081"],
+  ["dev", "--webpack", "--hostname", "0.0.0.0", "--port", process.env.PORT || "8081"],
   { cwd: packageRoot, env: process.env, stdio: "inherit" },
 );
 const watcher = chokidar.watch(mockupsDir, {

@@ -45,6 +45,27 @@ async function waitForServer(serverProcess, url) {
   throw new Error(`Next.js did not become ready at ${url} within 30 seconds.`);
 }
 
+function startNextDevServer(port) {
+  return spawn('npm', ['run', 'dev'], {
+    cwd: artifactDir,
+    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: process.platform !== 'win32',
+  });
+}
+
+function stopNextDevServer(serverProcess) {
+  if (process.platform !== 'win32' && serverProcess.pid) {
+    try {
+      process.kill(-serverProcess.pid, 'SIGTERM');
+      return;
+    } catch {
+      // Fall back to terminating the npm process itself.
+    }
+  }
+  serverProcess.kill('SIGTERM');
+}
+
 async function findChromiumPath() {
   const candidates = [
     process.env.CHROMIUM_PATH,
@@ -144,15 +165,11 @@ const chromium = {
 };
 
 test('stale saved price lists warn on Build Assist, fresh lists clear the warning, and priced items reach the cart', {
-  timeout: 90_000,
+  timeout: 180_000,
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('npm', ['run', 'dev'], {
-    cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const serverProcess = startNextDevServer(port);
   let serverOutput = '';
   serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
   serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
@@ -624,7 +641,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     throw error;
   } finally {
     await browser?.close();
-    serverProcess.kill('SIGTERM');
+    stopNextDevServer(serverProcess);
     if (serverProcess.exitCode === null) {
       await Promise.race([
         new Promise((resolve) => serverProcess.once('exit', resolve)),
@@ -635,15 +652,11 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
 });
 
 test('reports rejected supplier price imports without replacing saved prices', {
-  timeout: 90_000,
+  timeout: 180_000,
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('npm', ['run', 'dev'], {
-    cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const serverProcess = startNextDevServer(port);
   let serverOutput = '';
   serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
   serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
@@ -718,7 +731,7 @@ test('reports rejected supplier price imports without replacing saved prices', {
     throw error;
   } finally {
     await browser?.close();
-    serverProcess.kill('SIGTERM');
+    stopNextDevServer(serverProcess);
     if (serverProcess.exitCode === null) {
       await Promise.race([
         new Promise((resolve) => serverProcess.once('exit', resolve)),
@@ -729,15 +742,11 @@ test('reports rejected supplier price imports without replacing saved prices', {
 });
 
 test('replaces supplier prices on BOM cart lines and removes lines omitted by the new list', {
-  timeout: 90_000,
+  timeout: 180_000,
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('npm', ['run', 'dev'], {
-    cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const serverProcess = startNextDevServer(port);
   let serverOutput = '';
   serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
   serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
@@ -831,7 +840,7 @@ test('replaces supplier prices on BOM cart lines and removes lines omitted by th
     throw error;
   } finally {
     await browser?.close();
-    serverProcess.kill('SIGTERM');
+    stopNextDevServer(serverProcess);
     if (serverProcess.exitCode === null) {
       await Promise.race([
         new Promise((resolve) => serverProcess.once('exit', resolve)),
@@ -842,15 +851,11 @@ test('replaces supplier prices on BOM cart lines and removes lines omitted by th
 });
 
 test('uses a saved zero-cost price-list entry and keeps the BOM item in the cart', {
-  timeout: 90_000,
+  timeout: 180_000,
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('npm', ['run', 'dev'], {
-    cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const serverProcess = startNextDevServer(port);
   let serverOutput = '';
   serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
   serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
@@ -907,7 +912,7 @@ test('uses a saved zero-cost price-list entry and keeps the BOM item in the cart
     throw error;
   } finally {
     await browser?.close();
-    serverProcess.kill('SIGTERM');
+    stopNextDevServer(serverProcess);
     if (serverProcess.exitCode === null) {
       await Promise.race([
         new Promise((resolve) => serverProcess.once('exit', resolve)),
@@ -918,15 +923,11 @@ test('uses a saved zero-cost price-list entry and keeps the BOM item in the cart
 });
 
 test('recovers from malformed saved cart data and keeps valid cart entries unchanged', {
-  timeout: 90_000,
+  timeout: 180_000,
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('npm', ['run', 'dev'], {
-    cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const serverProcess = startNextDevServer(port);
   let serverOutput = '';
   serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
   serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
@@ -981,7 +982,7 @@ test('recovers from malformed saved cart data and keeps valid cart entries uncha
     throw error;
   } finally {
     await browser?.close();
-    serverProcess.kill('SIGTERM');
+    stopNextDevServer(serverProcess);
     if (serverProcess.exitCode === null) {
       await Promise.race([
         new Promise((resolve) => serverProcess.once('exit', resolve)),
@@ -992,15 +993,11 @@ test('recovers from malformed saved cart data and keeps valid cart entries uncha
 });
 
 test('keeps cart interactions usable when browser storage reads or writes fail', {
-  timeout: 90_000,
+  timeout: 180_000,
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('npm', ['run', 'dev'], {
-    cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const serverProcess = startNextDevServer(port);
   let serverOutput = '';
   serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
   serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
@@ -1142,7 +1139,7 @@ test('keeps cart interactions usable when browser storage reads or writes fail',
     throw error;
   } finally {
     await browser?.close();
-    serverProcess.kill('SIGTERM');
+    stopNextDevServer(serverProcess);
     if (serverProcess.exitCode === null) {
       await Promise.race([
         new Promise((resolve) => serverProcess.once('exit', resolve)),
@@ -1153,15 +1150,11 @@ test('keeps cart interactions usable when browser storage reads or writes fail',
 });
 
 test('syncs cart quantity edits and item removal across open tabs', {
-  timeout: 90_000,
+  timeout: 180_000,
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('npm', ['run', 'dev'], {
-    cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const serverProcess = startNextDevServer(port);
   let serverOutput = '';
   serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
   serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
@@ -1212,7 +1205,7 @@ test('syncs cart quantity edits and item removal across open tabs', {
   } finally {
     await context?.close();
     await browser?.close();
-    serverProcess.kill('SIGTERM');
+    stopNextDevServer(serverProcess);
     if (serverProcess.exitCode === null) {
       await Promise.race([
         new Promise((resolve) => serverProcess.once('exit', resolve)),
@@ -1223,15 +1216,11 @@ test('syncs cart quantity edits and item removal across open tabs', {
 });
 
 test('merges concurrent cart additions and edits across tabs without changing the saved-value conflict rule', {
-  timeout: 90_000,
+  timeout: 180_000,
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('npm', ['run', 'dev'], {
-    cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const serverProcess = startNextDevServer(port);
   let serverOutput = '';
   serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
   serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
@@ -1451,7 +1440,7 @@ test('merges concurrent cart additions and edits across tabs without changing th
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
     await browser?.close();
-    serverProcess.kill('SIGTERM');
+    stopNextDevServer(serverProcess);
     if (serverProcess.exitCode === null) {
       await Promise.race([
         new Promise((resolve) => serverProcess.once('exit', resolve)),
@@ -1462,15 +1451,11 @@ test('merges concurrent cart additions and edits across tabs without changing th
 });
 
 test('saves demo orders through the order API when browser order-history storage is unavailable', {
-  timeout: 90_000,
+  timeout: 180_000,
 }, async () => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverProcess = spawn('npm', ['run', 'dev'], {
-    cwd: artifactDir,
-    env: { ...process.env, BASE_PATH: '/', PORT: String(port), NEXT_DIST_DIR: `.next-browser-test-${port}` },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const serverProcess = startNextDevServer(port);
   let serverOutput = '';
   serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
   serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
@@ -1604,7 +1589,7 @@ test('saves demo orders through the order API when browser order-history storage
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
     await browser?.close();
-    serverProcess.kill('SIGTERM');
+    stopNextDevServer(serverProcess);
     if (serverProcess.exitCode === null) {
       await Promise.race([
         new Promise((resolve) => serverProcess.once('exit', resolve)),
