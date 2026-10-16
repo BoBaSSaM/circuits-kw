@@ -13,6 +13,7 @@
     "start": "next start --hostname 0.0.0.0 --port ${PORT:-8080}",
     "backfill:users": "tsx ./src/backfill-users.ts",
     "test:orders": "tsx --test src/routes/orders.test.ts",
+    "test:backfill": "tsx --test src/lib/user-profiles.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

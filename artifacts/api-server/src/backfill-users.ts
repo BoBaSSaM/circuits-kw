@@ -1,5 +1,5 @@
 import { closeMongoConnection } from "./lib/mongo";
-import { backfillClerkUserProfiles } from "./lib/user-profiles";
+import { backfillClerkUserProfiles, getBackfillCommandExitCode } from "./lib/user-profiles";
 
 let result = { succeededCount: 0, failedCount: 0, complete: false };
 
@@ -19,6 +19,4 @@ console.info(
   `Clerk user profile backfill: ${result.succeededCount} succeeded, ${result.failedCount} failed, complete=${result.complete}.`,
 );
 
-if (!result.complete || result.failedCount > 0) {
-  process.exitCode = 1;
-}
+process.exitCode = getBackfillCommandExitCode(result);

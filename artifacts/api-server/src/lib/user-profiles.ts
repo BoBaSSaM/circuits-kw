@@ -18,6 +18,16 @@ export type UserProfileDocument = {
 };
 
 type ClerkUserResource = Awaited<ReturnType<typeof clerkClient.users.getUser>>;
+type ClerkUserForProfile = Pick<
+  ClerkUserResource,
+  | "id"
+  | "emailAddresses"
+  | "primaryEmailAddressId"
+  | "firstName"
+  | "lastName"
+  | "createdAt"
+  | "updatedAt"
+>;
 
 export type ClerkWebhookUser = {
   id: string;
@@ -92,7 +102,7 @@ async function saveUserProfile(profileData: {
   return profile;
 }
 
-async function saveClerkUserProfile(user: ClerkUserResource): Promise<UserProfileDocument> {
+async function saveClerkUserProfile(user: ClerkUserForProfile): Promise<UserProfileDocument> {
   const primaryEmailAddress = user.emailAddresses.find(
     (address) => address.id === user.primaryEmailAddressId,
   );
@@ -144,7 +154,21 @@ export type UserProfileBackfillResult = {
   complete: boolean;
 };
 
-export async function backfillClerkUserProfiles(): Promise<UserProfileBackfillResult> {
+type UserProfileBackfillDependencies = {
+  getUserList: (params: { limit: number; offset: number }) => Promise<{
+    data: ClerkUserForProfile[];
+    totalCount: number;
+  }>;
+  saveUserProfile: (user: ClerkUserForProfile) => Promise<unknown>;
+};
+
+export async function backfillClerkUserProfiles(
+  dependencies: Partial<UserProfileBackfillDependencies> = {},
+): Promise<UserProfileBackfillResult> {
+  const getUserList =
+    dependencies.getUserList ??
+    ((params: { limit: number; offset: number }) => clerkClient.users.getUserList(params));
+  const saveUserProfile = dependencies.saveUserProfile ?? saveClerkUserProfile;
   const pageSize = 100;
   let offset = 0;
   let totalCount = Number.POSITIVE_INFINITY;
@@ -153,9 +177,9 @@ export async function backfillClerkUserProfiles(): Promise<UserProfileBackfillRe
   let complete = true;
 
   while (offset < totalCount) {
-    let page: Awaited<ReturnType<typeof clerkClient.users.getUserList>>;
+    let page: { data: ClerkUserForProfile[]; totalCount: number };
     try {
-      page = await clerkClient.users.getUserList({ limit: pageSize, offset });
+      page = await getUserList({ limit: pageSize, offset });
     } catch {
       complete = false;
       break;
@@ -172,7 +196,7 @@ export async function backfillClerkUserProfiles(): Promise<UserProfileBackfillRe
     const outcomes = await Promise.all(
       page.data.map(async (user) => {
         try {
-          await saveClerkUserProfile(user);
+          await saveUserProfile(user);
           return true;
         } catch {
           return false;
@@ -186,6 +210,10 @@ export async function backfillClerkUserProfiles(): Promise<UserProfileBackfillRe
   }
 
   return { succeededCount, failedCount, complete };
+}
+
+export function getBackfillCommandExitCode(result: UserProfileBackfillResult): 0 | 1 {
+  return result.complete && result.failedCount === 0 ? 0 : 1;
 }
 
 export async function getOrSyncUserProfile(userId: string): Promise<UserProfileDocument> {
