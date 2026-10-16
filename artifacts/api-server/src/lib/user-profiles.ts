@@ -56,13 +56,13 @@ async function saveUserProfile(profileData: {
   lastName: string | null;
   createdAt: Date;
   updatedAt: Date;
-}): Promise<UserProfileDocument> {
+}, getDatabase: typeof getMongoDatabase = getMongoDatabase): Promise<UserProfileDocument> {
   const bootstrapEmail = getBootstrapEmail();
   const isBootstrapAdmin =
     Boolean(bootstrapEmail && profileData.emailVerified && profileData.email) &&
     profileData.email?.trim().toLowerCase() === bootstrapEmail;
   const now = new Date();
-  const database = await getMongoDatabase();
+  const database = await getDatabase();
   const users = database.collection<UserProfileDocument>("users");
   const fields = {
     clerkUserId: profileData.id,
@@ -125,24 +125,31 @@ export async function syncClerkUserProfile(userId: string): Promise<UserProfileD
 
 export async function syncClerkUserProfileFromWebhook(
   user: ClerkWebhookUser,
+  getDatabase: typeof getMongoDatabase = getMongoDatabase,
 ): Promise<UserProfileDocument> {
   const primaryEmailAddress = user.emailAddresses.find(
     (address) => address.id === user.primaryEmailAddressId,
   );
 
-  return saveUserProfile({
-    id: user.id,
-    email: primaryEmailAddress?.emailAddress ?? null,
-    emailVerified: primaryEmailAddress?.verificationStatus === "verified",
-    firstName: user.firstName,
-    lastName: user.lastName,
-    createdAt: new Date(user.createdAt),
-    updatedAt: new Date(user.updatedAt),
-  });
+  return saveUserProfile(
+    {
+      id: user.id,
+      email: primaryEmailAddress?.emailAddress ?? null,
+      emailVerified: primaryEmailAddress?.verificationStatus === "verified",
+      firstName: user.firstName,
+      lastName: user.lastName,
+      createdAt: new Date(user.createdAt),
+      updatedAt: new Date(user.updatedAt),
+    },
+    getDatabase,
+  );
 }
 
-export async function deleteClerkUserProfile(userId: string): Promise<void> {
-  const database = await getMongoDatabase();
+export async function deleteClerkUserProfile(
+  userId: string,
+  getDatabase: typeof getMongoDatabase = getMongoDatabase,
+): Promise<void> {
+  const database = await getDatabase();
   await database.collection<UserProfileDocument>("users").deleteMany({
     $or: [{ _id: userId }, { clerkUserId: userId }],
   });
