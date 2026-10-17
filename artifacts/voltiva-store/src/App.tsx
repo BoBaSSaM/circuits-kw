@@ -37,6 +37,7 @@ import {
 } from './cart-model';
 import { AdminDashboardPage } from './AdminDashboardPage';
 import { trackCheckoutSaveFailure, trackCheckoutStarted, trackEvent } from './lib/analytics';
+import { downloadReceiptPdf } from './receipt-pdf';
 import {
   ArrowDown, ArrowRight, BatteryCharging, BookOpen, Bot, Download,
   CheckCircle2, CircuitBoard, Cpu, Gauge, GraduationCap, Grid2X2,
@@ -926,6 +927,8 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
   const [stripePaymentPending,setStripePaymentPending]=useState(false);
   const [paymentVerifying,setPaymentVerifying]=useState(false);
   const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
+  const [isReceiptPdfGenerating,setIsReceiptPdfGenerating]=useState(false);
+  const [receiptPdfError,setReceiptPdfError]=useState('');
   useEffect(()=>{
     if(!placedOrder) return;
     const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -987,6 +990,18 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
   const downloadReceipt=()=>{
     if(!placedOrder) return;
     downloadDemoReceipt(placedOrder,language);
+  };
+  const downloadPdfReceipt=async()=>{
+    if(!placedOrder||isReceiptPdfGenerating) return;
+    setIsReceiptPdfGenerating(true);
+    setReceiptPdfError('');
+    try{
+      await downloadReceiptPdf(placedOrder,language);
+    }catch{
+      setReceiptPdfError(t('PDF receipt could not be created. Please use Print receipt instead.',language));
+    }finally{
+      setIsReceiptPdfGenerating(false);
+    }
   };
   const collectCheckoutInput=(form:HTMLFormElement,latestItems:Item[])=>{
     if(!latestItems.length) return null;
@@ -1142,7 +1157,9 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
       <div className="checkout-receipt-actions">
         <button className="button button-outline" type="button" onClick={openReceiptForPrint} data-testid="button-print-demo-receipt"><Printer size={15}/>{t('Print receipt',language)}</button>
         <button className="button button-outline" type="button" onClick={downloadReceipt} data-testid="button-download-demo-receipt"><Download size={15}/>{t('Download receipt',language)}</button>
+        <button className="button button-outline" type="button" onClick={()=>void downloadPdfReceipt()} disabled={isReceiptPdfGenerating} data-testid="button-download-demo-receipt-pdf"><Download size={15}/>{t(isReceiptPdfGenerating?'Creating PDF receipt…':'Download PDF receipt',language)}</button>
       </div>
+      {receiptPdfError&&<p className="checkout-order-disclaimer" role="alert">{receiptPdfError}</p>}
       <Link className="button button-primary" href="/components" data-testid="link-confirmation-shop">{t('Continue browsing',language)} <ArrowRight size={15}/></Link>
     </div>
   </div>;

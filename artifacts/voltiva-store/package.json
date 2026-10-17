@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test src/build-assist-model.test.mjs",
     "test:browser": "node --test src/build-assist.browser.test.mjs",
+    "test:receipt-browser": "node --test src/receipt-pdf.browser.test.mjs",
     "test:auth-browser": "node --test src/account-checkout.browser.test.mjs"
   },
   "devDependencies": {
