@@ -495,6 +495,7 @@ input[type=range] { width:100%; accent-color:#007b91; }
 .account-order-items > div > span { overflow-wrap:anywhere; }
 .account-order-items strong,.account-order-total strong { flex:none; color:#172d3b; font:10px var(--app-font-mono); }
 .account-order-total { padding-top:10px; border-top:1px solid #e8edef; color:#172d3b; font-weight:700; }
+.account-order-receipt-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
 @media (max-width:480px) { .account-order-heading { flex-direction:column; }.account-order-heading time { text-align:left; } }
 .page-transition { animation:page-enter .28s cubic-bezier(.2,.7,.25,1) both; }
 @keyframes page-enter { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }

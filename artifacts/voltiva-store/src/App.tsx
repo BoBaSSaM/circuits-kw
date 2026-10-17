@@ -350,6 +350,17 @@ function demoReceiptHtml(order:DemoOrder, language:Language) {
 </html>`;
 }
 
+function printDemoReceipt(order:DemoOrder, language:Language) {
+  const printWindow=window.open('','_blank');
+  if(!printWindow) return;
+  printWindow.opener=null;
+  printWindow.document.open();
+  printWindow.document.write(demoReceiptHtml(order,language));
+  printWindow.document.close();
+  window.setTimeout(()=>{
+    if(!printWindow.closed) printWindow.print();
+  },250);
+}
 function useDocument(title:string, description:string) {
   useEffect(() => {
     document.title = `${title} | Circuits KW`;
@@ -960,27 +971,11 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
   const subtotal=calculateCartSubtotal(items);
   const openReceiptForPrint=()=>{
     if(!placedOrder) return;
-    const printWindow=window.open('','_blank');
-    if(!printWindow) return;
-    printWindow.opener=null;
-    printWindow.document.open();
-    printWindow.document.write(demoReceiptHtml(placedOrder,language));
-    printWindow.document.close();
-    window.setTimeout(()=>{
-      if(!printWindow.closed) printWindow.print();
-    },250);
+    printDemoReceipt(placedOrder,language);
   };
   const downloadReceipt=()=>{
     if(!placedOrder) return;
-    const blob=new Blob([demoReceiptHtml(placedOrder,language)],{type:'text/html;charset=utf-8'});
-    const receiptUrl=URL.createObjectURL(blob);
-    const link=document.createElement('a');
-    link.href=receiptUrl;
-    link.download=`demo-receipt-${placedOrder.orderNumber.replace(/[^a-zA-Z0-9_-]/g,'-')}.html`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    window.setTimeout(()=>URL.revokeObjectURL(receiptUrl),1000);
+    downloadDemoReceipt(placedOrder,language);
   };
   const collectCheckoutInput=(form:HTMLFormElement,latestItems:Item[])=>{
     if(!latestItems.length) return null;
@@ -1333,6 +1328,10 @@ function AccountPage() {
                     </div>)}
                   </div>
                   <div className="account-order-total"><span>{t(order.isDemo?'Demo total':'Order total',language)}</span><strong>{fmt(order.subtotal)}</strong></div>
+                  {order.isDemo&&<div className="account-order-receipt-actions">
+                    <button className="button button-outline small-button" type="button" onClick={()=>printDemoReceipt(order,language)} data-testid={`button-print-account-demo-receipt-${order.id}`}><Printer size={14}/>{t('Print receipt',language)}</button>
+                    <button className="button button-outline small-button" type="button" onClick={()=>downloadDemoReceipt(order,language)} data-testid={`button-download-account-demo-receipt-${order.id}`}><Download size={14}/>{t('Download receipt',language)}</button>
+                  </div>}
                 </article>)}
               </div>
             : <p className="account-orders-state">{t('No orders are linked to your account yet. Orders placed as a guest are not included.',language)}</p>}
@@ -1675,3 +1674,15 @@ function StorefrontRuntime() {
 }
 
 export default App;
+
+function downloadDemoReceipt(order:DemoOrder, language:Language) {
+  const blob=new Blob([demoReceiptHtml(order,language)],{type:'text/html;charset=utf-8'});
+  const receiptUrl=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=receiptUrl;
+  link.download=`demo-receipt-${order.orderNumber.replace(/[^a-zA-Z0-9_-]/g,'-')}.html`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(()=>URL.revokeObjectURL(receiptUrl),1000);
+}
