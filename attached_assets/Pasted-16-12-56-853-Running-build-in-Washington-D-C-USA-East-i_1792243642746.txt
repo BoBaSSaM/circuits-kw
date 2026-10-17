@@ -1,0 +1,60 @@
+16:12:56.853 Running build in Washington, D.C., USA (East) – iad1
+16:12:56.854 Build machine configuration: 2 cores, 8 GB
+16:12:57.021 Cloning github.com/BoBaSSaM/circuits-kw (Branch: main, Commit: 8b6ebf7)
+16:12:57.023 Previous build caches not available.
+16:12:57.601 Cloning completed: 579.000ms
+16:12:58.096 Running "vercel build"
+16:12:58.110 Vercel CLI 64.0.2
+16:12:58.491 Installing dependencies...
+16:12:59.196 npm warn Unknown env config "cache-dir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+16:12:59.480 npm warn EBADENGINE Unsupported engine {
+16:12:59.480 npm warn EBADENGINE   package: 'workspace@0.0.0',
+16:12:59.481 npm warn EBADENGINE   required: { node: '>=20.9.0', npm: '>=11.21.0' },
+16:12:59.481 npm warn EBADENGINE   current: { node: 'v24.21.0', npm: '11.19.0' }
+16:12:59.481 npm warn EBADENGINE }
+16:13:06.291 npm warn deprecated recharts@2.15.4: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
+16:13:15.790 
+16:13:15.791 added 374 packages in 17s
+16:13:15.791 
+16:13:15.791 60 packages are looking for funding
+16:13:15.791   run `npm fund` for details
+16:13:15.793 npm warn install-scripts 2 packages have install scripts not yet covered by allowScripts:
+16:13:15.794 npm warn install-scripts   @clerk/shared@3.48.0 (postinstall: node ./scripts/postinstall.mjs)
+16:13:15.794 npm warn install-scripts   esbuild@0.28.2 (postinstall: node install.js)
+16:13:15.794 npm warn install-scripts
+16:13:15.794 npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+16:13:15.889 Detected Next.js version: 16.4.1
+16:13:15.901 Running "npm run build"
+16:13:16.150 npm warn Unknown env config "cache-dir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+16:13:16.166 
+16:13:16.167 > @workspace/voltiva-store@0.0.0 build
+16:13:16.167 > next build
+16:13:16.167 
+16:13:16.728 ▲ Next.js 16.4.1 (Turbopack)
+16:13:16.950   Applying modifyConfig from Vercel
+16:13:16.955 ✓ Running next.config.ts took 227ms
+16:13:17.082 Attention: Next.js now collects completely anonymous telemetry regarding usage.
+16:13:17.083 This information is used to shape Next.js' roadmap and prioritize features.
+16:13:17.084 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+16:13:17.084 https://nextjs.org/telemetry
+16:13:17.085 
+16:13:17.320 
+16:13:17.362   Creating an optimized production build ...
+16:13:26.412 ✓ Compiled successfully in 9.0s
+16:13:26.413   Running TypeScript ...
+16:13:26.413 It looks like you're trying to use TypeScript but do not have the required package(s) installed.
+16:13:26.413 
+16:13:26.414 Please install typescript by running:
+16:13:26.414 
+16:13:26.414 	npm install --save-dev typescript
+16:13:26.414 
+16:13:26.414 If you are not trying to use TypeScript, please remove the tsconfig.json file from your package root (and any TypeScript files in your app and pages directories).
+16:13:26.414 
+16:13:26.458 npm error Lifecycle script `build` failed with error:
+16:13:26.459 npm error code 1
+16:13:26.460 npm error path /vercel/path0/artifacts/voltiva-store
+16:13:26.464 npm error workspace @workspace/voltiva-store@0.0.0
+16:13:26.464 npm error location /vercel/path0/artifacts/voltiva-store
+16:13:26.465 npm error command failed
+16:13:26.465 npm error command sh -c next build
+16:13:26.489 Error: [BUILD_UTILS_SPAWN_1] Command "npm run build" exited with 1
