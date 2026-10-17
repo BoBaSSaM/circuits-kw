@@ -176,6 +176,7 @@ async function installApiMocks(context) {
         placedAt: new Date().toISOString(),
         items,
         subtotal: items.reduce((total, item) => total + item.price * item.qty, 0),
+        currency: 'USD',
         status: 'new',
       }),
     });
@@ -1799,6 +1800,7 @@ test('saves demo orders through the order API when browser order-history storage
             { id: 'funnel-kit', kind: 'kit', sku: 'PRIVATE-KIT-SKU', name: 'Private kit name', price: 3.75, qty: 1 },
           ],
           subtotal: 8.75,
+          currency: 'USD',
           status: 'new',
         }),
       });
@@ -1835,7 +1837,7 @@ test('saves demo orders through the order API when browser order-history storage
       },
       {
         name: 'demo_order_completed',
-        data: { line_count: 2, subtotal_kwd: 8.75 },
+        data: { line_count: 2, subtotal: 8.75, currency: 'USD' },
         pathname: '/checkout',
       },
     ], 'the funnel events must contain only allowlisted aggregate dimensions');
@@ -1900,7 +1902,7 @@ test('saves demo orders through the order API when browser order-history storage
       if (rejectedOperation === 'read') {
         assert.deepEqual(analyticsEvents, [{
           name: 'demo_order_completed',
-          data: { line_count: 1, subtotal_kwd: 5 },
+          data: { line_count: 1, subtotal: 5, currency: 'USD' },
         }]);
       } else {
         assert.deepEqual(analyticsEvents, [], 'a tracker exception must not block checkout');
@@ -1933,8 +1935,6 @@ test('saves demo orders through the order API when browser order-history storage
       };
     });
     const failedOrderPage = await failedOrderContext.newPage();
-    const failedOrderPageErrors = [];
-    failedOrderPage.on('pageerror', error => failedOrderPageErrors.push(error.message));
     let failedOrderAttempts = 0;
     await failedOrderPage.route('**/api/orders', route => {
       failedOrderAttempts += 1;
@@ -1962,12 +1962,88 @@ test('saves demo orders through the order API when browser order-history storage
     await failedOrderPage.getByTestId('input-checkout-block').fill('1');
     await failedOrderPage.getByTestId('input-checkout-street').fill('Main Street');
     await failedOrderPage.getByTestId('input-checkout-building').fill('10');
+    let successfulOrderSaves = 0;
+    let successfulOrderResponses = 0;
+    await failedOrderPage.route('**/api/orders', route => {
+      failedOrderAttempts += 1;
+      if (failedOrderAttempts === 1) {
+        return route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: 'order_storage_unavailable',
+            message: 'Private customer details must never be forwarded.',
+            orderId: 'private-order-id',
+            customer: { name: 'Private Buyer', email: 'private@example.com' },
+            address: 'Private delivery address',
+          }),
+        });
+      }
+      successfulOrderSaves += 1;
+      const input = route.request().postDataJSON();
+      const items = input.items.map(item => ({
+        id: item.id,
+        kind: item.kind,
+        sku: item.sku,
+        name: 'Failed order test item',
+        price: 2.5,
+        qty: item.qty,
+      }));
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'mock-retry-order-id',
+          orderNumber: 'CKW-MOCK-RETRY-0001',
+          placedAt: new Date().toISOString(),
+          items,
+          subtotal: items.reduce((total, item) => total + item.price * item.qty, 0),
+          currency: 'USD',
+          status: 'new',
+        }),
+      });
+    });
+    failedOrderPage.on('response', response => {
+      if (
+        response.url().endsWith('/api/orders')
+        && response.request().method() === 'POST'
+        && response.status() === 201
+      ) successfulOrderResponses += 1;
+    });
     await failedOrderPage.getByTestId('button-place-demo-order').click();
     await failedOrderPage.getByTestId('checkout-order-error').waitFor();
     assert.equal(await failedOrderPage.getByTestId('demo-order-confirmation').count(), 0);
+    assert.equal(await failedOrderPage.getByTestId('row-checkout-failed-order-item').count(), 1);
+    assert.match(
+      await failedOrderPage.getByTestId('checkout-order-error').innerText(),
+      /order could not be saved.*cart is still here/i,
+    );
+    assert.equal(successfulOrderSaves, 0, 'the failed save must not create a saved order');
+    assert.equal(
+      await failedOrderPage.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]').length),
+      1,
+      'the failed save must leave the cart intact for retry',
+    );
+    const successfulRetryResponse = failedOrderPage.waitForResponse(response =>
+      response.url().endsWith('/api/orders')
+      && response.request().method() === 'POST',
+    );
     await failedOrderPage.getByTestId('button-place-demo-order').click();
-    await failedOrderPage.getByTestId('checkout-order-error').waitFor();
-    assert.equal(await failedOrderPage.getByTestId('demo-order-confirmation').count(), 0);
+    const retryResponse = await successfulRetryResponse;
+    assert.equal(retryResponse.status(), 201);
+    const savedRetryOrder = await retryResponse.json();
+    await failedOrderPage.getByTestId('demo-order-confirmation').waitFor();
+    assert.equal(await failedOrderPage.getByTestId('demo-order-confirmation').count(), 1);
+    assert.equal(await failedOrderPage.getByTestId('checkout-order-error').count(), 0);
+    assert.equal(await failedOrderPage.getByTestId('text-demo-order-number').innerText(), savedRetryOrder.orderNumber);
+    assert.equal(savedRetryOrder.orderNumber, 'CKW-MOCK-RETRY-0001');
+    assert.equal(failedOrderAttempts, 2, 'a failed save must allow the buyer to submit one retry');
+    assert.equal(successfulOrderSaves, 1, 'only the successful retry must create a saved order');
+    assert.equal(successfulOrderResponses, 1, 'the retry must produce one saved-order response');
+    await failedOrderPage.waitForFunction(() => {
+      const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
+      return cart.length === 0;
+    });
     assert.deepEqual(await failedOrderPage.evaluate(() => window.demoAnalyticsEvents), [
       {
         name: 'demo_order_save_failed',
@@ -1978,28 +2054,59 @@ test('saves demo orders through the order API when browser order-history storage
         },
       },
       {
-        name: 'demo_order_save_failed',
+        name: 'demo_order_completed',
         data: {
-          error_category: 'other',
           line_count: 1,
-          subtotal_kwd: 5,
+          subtotal: 5,
+          currency: 'USD',
         },
       },
     ]);
-    assert.deepEqual(
-      await failedOrderPage.evaluate(() => window.demoAnalyticsEvents.some(event => event.name === 'demo_order_completed')),
-      false,
-      'failed saves must never emit the success event',
+    assert.equal(
+      await failedOrderPage.evaluate(() => window.demoAnalyticsEvents.filter(event => event.name === 'demo_order_completed').length),
+      1,
+      'the successful retry must emit one completion event',
     );
-    await failedOrderPage.evaluate(() => {
-      window.umami.track = () => {
-        throw new Error('Analytics is unavailable.');
+
+    const analyticsFailureContext = await browser.newContext();
+    contexts.push(analyticsFailureContext);
+    await analyticsFailureContext.addInitScript(() => {
+      localStorage.setItem('circuits-kw-cart', JSON.stringify([{
+        id: 'analytics-failure-item',
+        name: 'Analytics failure test item',
+        price: 2.5,
+        kind: 'component',
+        sku: 'ANALYTICS-001',
+        qty: 1,
+      }]));
+      window.umami = {
+        track() {
+          throw new Error('Analytics is unavailable.');
+        },
       };
     });
-    await failedOrderPage.getByTestId('button-place-demo-order').click();
-    await failedOrderPage.getByTestId('checkout-order-error').waitFor();
-    assert.equal(await failedOrderPage.getByTestId('demo-order-confirmation').count(), 0);
-    assert.deepEqual(failedOrderPageErrors, []);
+    const analyticsFailurePage = await analyticsFailureContext.newPage();
+    const analyticsFailurePageErrors = [];
+    analyticsFailurePage.on('pageerror', error => analyticsFailurePageErrors.push(error.message));
+    await analyticsFailurePage.route('**/api/orders', route => route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'order_storage_unavailable' }),
+    }));
+    await analyticsFailurePage.goto(`${baseUrl}/checkout`);
+    await analyticsFailurePage.getByTestId('row-checkout-analytics-failure-item').waitFor();
+    await analyticsFailurePage.getByTestId('input-checkout-name').fill('Demo Buyer');
+    await analyticsFailurePage.getByTestId('input-checkout-email').fill('buyer@example.com');
+    await analyticsFailurePage.getByTestId('input-checkout-phone').fill('+965 5555 5555');
+    await analyticsFailurePage.getByTestId('select-checkout-governorate').selectOption({ label: 'Capital' });
+    await analyticsFailurePage.getByTestId('input-checkout-area').fill('Kuwait City');
+    await analyticsFailurePage.getByTestId('input-checkout-block').fill('1');
+    await analyticsFailurePage.getByTestId('input-checkout-street').fill('Main Street');
+    await analyticsFailurePage.getByTestId('input-checkout-building').fill('10');
+    await analyticsFailurePage.getByTestId('button-place-demo-order').click();
+    await analyticsFailurePage.getByTestId('checkout-order-error').waitFor();
+    assert.equal(await analyticsFailurePage.getByTestId('demo-order-confirmation').count(), 0);
+    assert.deepEqual(analyticsFailurePageErrors, []);
   } catch (error) {
     error.message += `\nNext.js output:\n${serverOutput}`;
     throw error;
