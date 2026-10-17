@@ -26,6 +26,15 @@ export function trackEvent(name: string, data?: AnalyticsData): void {
   }
 }
 
+export function trackCheckoutStarted(lineCount: number, subtotalKwd: number): void {
+  trackEvent('demo_checkout_started', {
+    line_count: Number.isSafeInteger(lineCount) ? Math.max(0, lineCount) : 0,
+    subtotal_kwd: Number.isFinite(subtotalKwd)
+      ? Math.max(0, Number(subtotalKwd.toFixed(3)))
+      : 0,
+  });
+}
+
 export function trackCheckoutSaveFailure(
   errorCode: unknown,
   lineCount: number,

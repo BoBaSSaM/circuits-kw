@@ -1712,6 +1712,97 @@ test('saves demo orders through the order API when browser order-history storage
       args: ['--no-sandbox', '--disable-dev-shm-usage'],
     });
 
+    const funnelContext = await browser.newContext();
+    contexts.push(funnelContext);
+    await funnelContext.addInitScript(() => {
+      localStorage.setItem('circuits-kw-cart', JSON.stringify([
+        { id: 'funnel-component', name: 'Private component name', price: 2.5, kind: 'component', sku: 'PRIVATE-SKU', qty: 2 },
+        { id: 'funnel-kit', name: 'Private kit name', price: 3.75, kind: 'kit', sku: 'PRIVATE-KIT-SKU', qty: 1 },
+      ]));
+      window.demoAnalyticsEvents = [];
+      window.umami = {
+        track(name, data) {
+          window.demoAnalyticsEvents.push({
+            name,
+            data,
+            pathname: window.location.pathname,
+          });
+        },
+      };
+    });
+    const funnelPage = await funnelContext.newPage();
+    await funnelPage.goto(`${baseUrl}/cart`);
+    await funnelPage.getByTestId('row-cart-funnel-component').waitFor();
+    assert.deepEqual(await funnelPage.evaluate(() => window.demoAnalyticsEvents), []);
+
+    let releaseFunnelOrder;
+    const funnelOrderGate = new Promise(resolve => {
+      releaseFunnelOrder = resolve;
+    });
+    let startFunnelOrder;
+    const funnelOrderStarted = new Promise(resolve => {
+      startFunnelOrder = resolve;
+    });
+    await funnelPage.route('**/api/orders', async route => {
+      if (route.request().method() !== 'POST') {
+        await route.fallback();
+        return;
+      }
+      startFunnelOrder();
+      await funnelOrderGate;
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'private-order-id',
+          orderNumber: 'CKW-FUNNEL-0001',
+          placedAt: new Date().toISOString(),
+          items: [
+            { id: 'funnel-component', kind: 'component', sku: 'PRIVATE-SKU', name: 'Private component name', price: 2.5, qty: 2 },
+            { id: 'funnel-kit', kind: 'kit', sku: 'PRIVATE-KIT-SKU', name: 'Private kit name', price: 3.75, qty: 1 },
+          ],
+          subtotal: 8.75,
+          status: 'new',
+        }),
+      });
+    });
+    await funnelPage.getByTestId('link-checkout').click();
+    await funnelPage.getByTestId('row-checkout-funnel-component').waitFor();
+    assert.deepEqual(await funnelPage.evaluate(() => window.demoAnalyticsEvents), [{
+      name: 'demo_checkout_started',
+      data: { line_count: 2, subtotal_kwd: 8.75 },
+      pathname: '/cart',
+    }], 'checkout start should fire from the cart with aggregate-only fields');
+    await funnelPage.getByTestId('input-checkout-name').fill('Demo Buyer');
+    await funnelPage.getByTestId('input-checkout-email').fill('buyer@example.com');
+    await funnelPage.getByTestId('input-checkout-phone').fill('+965 5555 5555');
+    await funnelPage.getByTestId('select-checkout-governorate').selectOption({ label: 'Capital' });
+    await funnelPage.getByTestId('input-checkout-area').fill('Kuwait City');
+    await funnelPage.getByTestId('input-checkout-block').fill('1');
+    await funnelPage.getByTestId('input-checkout-street').fill('Main Street');
+    await funnelPage.getByTestId('input-checkout-building').fill('10');
+    await funnelPage.getByTestId('button-place-demo-order').click();
+    await funnelOrderStarted;
+    assert.deepEqual(await funnelPage.evaluate(() => window.demoAnalyticsEvents), [{
+      name: 'demo_checkout_started',
+      data: { line_count: 2, subtotal_kwd: 8.75 },
+      pathname: '/cart',
+    }], 'completion must not fire before the order save succeeds');
+    releaseFunnelOrder();
+    await funnelPage.getByTestId('demo-order-confirmation').waitFor();
+    assert.deepEqual(await funnelPage.evaluate(() => window.demoAnalyticsEvents), [
+      {
+        name: 'demo_checkout_started',
+        data: { line_count: 2, subtotal_kwd: 8.75 },
+        pathname: '/cart',
+      },
+      {
+        name: 'demo_order_completed',
+        data: { line_count: 2, subtotal_kwd: 8.75 },
+        pathname: '/checkout',
+      },
+    ], 'the funnel events must contain only allowlisted aggregate dimensions');
+
     for (const rejectedOperation of ['read', 'write']) {
       const context = await browser.newContext();
       contexts.push(context);
