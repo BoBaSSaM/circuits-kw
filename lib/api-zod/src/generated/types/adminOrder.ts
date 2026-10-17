@@ -9,6 +9,7 @@ import type { OrderCustomer } from './orderCustomer';
 import type { OrderItem } from './orderItem';
 import type { OrderShipping } from './orderShipping';
 import type { OrderStatus } from './orderStatus';
+import type { PaymentStatus } from './paymentStatus';
 
 export interface AdminOrder {
   id: string;
@@ -23,4 +24,6 @@ export interface AdminOrder {
   userId: string | null;
   /** @nullable */
   adminNotes: string | null;
+  isDemo: boolean;
+  paymentStatus: PaymentStatus;
 }

@@ -14,6 +14,7 @@
     "backfill:users": "tsx ./src/backfill-users.ts",
     "test:cart": "tsx --test src/routes/user-carts.test.ts",
     "test:orders": "tsx --test src/routes/orders.test.ts",
+    "test:payments": "tsx --test src/routes/stripe-payments.test.ts",
     "test:audit": "node --experimental-test-module-mocks --import tsx --test src/routes/dashboard-audit.test.ts",
     "test:backfill": "tsx --test src/lib/user-profiles.test.ts",
     "test:webhook": "tsx --test src/routes/clerk-webhook.test.ts",

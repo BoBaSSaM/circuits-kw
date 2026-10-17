@@ -42,6 +42,7 @@ export * from './orderItemKind';
 export * from './orderListResponse';
 export * from './orderShipping';
 export * from './orderStatus';
+export * from './paymentStatus';
 export * from './productInput';
 export * from './productInputIcon';
 export * from './productUpdate';

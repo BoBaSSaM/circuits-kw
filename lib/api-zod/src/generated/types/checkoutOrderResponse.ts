@@ -7,6 +7,7 @@
  */
 import type { OrderItem } from './orderItem';
 import type { OrderStatus } from './orderStatus';
+import type { PaymentStatus } from './paymentStatus';
 
 export interface CheckoutOrderResponse {
   id: string;
@@ -15,4 +16,6 @@ export interface CheckoutOrderResponse {
   items: OrderItem[];
   subtotal: number;
   status: OrderStatus;
+  isDemo: boolean;
+  paymentStatus: PaymentStatus;
 }

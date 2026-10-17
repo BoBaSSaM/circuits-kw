@@ -75,6 +75,17 @@ export const OrderStatus = {
   cancelled: 'cancelled',
 } as const;
 
+export type PaymentStatus = typeof PaymentStatus[keyof typeof PaymentStatus];
+
+
+export const PaymentStatus = {
+  not_required: 'not_required',
+  pending: 'pending',
+  paid: 'paid',
+  failed: 'failed',
+  expired: 'expired',
+} as const;
+
 export type CatalogProductIcon = typeof CatalogProductIcon[keyof typeof CatalogProductIcon];
 
 
@@ -491,6 +502,8 @@ export interface CheckoutOrderResponse {
   items: OrderItem[];
   subtotal: number;
   status: OrderStatus;
+  isDemo: boolean;
+  paymentStatus: PaymentStatus;
 }
 
 export interface AccountOrder {
@@ -499,7 +512,8 @@ export interface AccountOrder {
   placedAt: string;
   items: OrderItem[];
   subtotal: number;
-  isDemo: true;
+  isDemo: boolean;
+  paymentStatus: PaymentStatus;
 }
 
 export interface AccountOrderListResponse {
@@ -519,6 +533,8 @@ export interface AdminOrder {
   userId: string | null;
   /** @nullable */
   adminNotes: string | null;
+  isDemo: boolean;
+  paymentStatus: PaymentStatus;
 }
 
 export interface OrderListResponse {

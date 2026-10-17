@@ -11,6 +11,7 @@ import {
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import clerkWebhookRouter from "./routes/clerk-webhook";
+import { stripeWebhookHandler } from "./routes/stripe-payments";
 
 const app: Express = express();
 
@@ -37,6 +38,7 @@ app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 app.use(cors({ credentials: true, origin: true }));
 app.use("/api/webhooks/clerk", express.raw({ type: "application/json" }), clerkWebhookRouter);
+app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), stripeWebhookHandler);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

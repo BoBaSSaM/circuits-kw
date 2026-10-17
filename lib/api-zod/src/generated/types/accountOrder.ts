@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { OrderItem } from './orderItem';
+import type { PaymentStatus } from './paymentStatus';
 
 export interface AccountOrder {
   id: string;
@@ -13,5 +14,6 @@ export interface AccountOrder {
   placedAt: Date;
   items: OrderItem[];
   subtotal: number;
-  isDemo: true;
+  isDemo: boolean;
+  paymentStatus: PaymentStatus;
 }

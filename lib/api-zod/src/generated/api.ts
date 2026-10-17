@@ -170,7 +170,8 @@ export const GetMyOrdersResponse = zod.object({
   "qty": zod.number().int()
 })),
   "subtotal": zod.number(),
-  "isDemo": zod.literal(true)
+  "isDemo": zod.boolean(),
+  "paymentStatus": zod.enum(['not_required', 'pending', 'paid', 'failed', 'expired'])
 }))
 })
 
@@ -251,7 +252,9 @@ export const CreateCheckoutOrderResponse = zod.object({
   "qty": zod.number().int()
 })),
   "subtotal": zod.number(),
-  "status": zod.enum(['new', 'confirmed', 'preparing', 'completed', 'cancelled'])
+  "status": zod.enum(['new', 'confirmed', 'preparing', 'completed', 'cancelled']),
+  "isDemo": zod.boolean(),
+  "paymentStatus": zod.enum(['not_required', 'pending', 'paid', 'failed', 'expired'])
 })
 
 
@@ -723,7 +726,9 @@ export const GetAdminOrdersResponse = zod.object({
   "notes": zod.string().max(getAdminOrdersResponseOrdersItemShippingNotesMax).optional()
 }),
   "userId": zod.string().nullable(),
-  "adminNotes": zod.string().nullable()
+  "adminNotes": zod.string().nullable(),
+  "isDemo": zod.boolean(),
+  "paymentStatus": zod.enum(['not_required', 'pending', 'paid', 'failed', 'expired'])
 }))
 })
 
@@ -845,7 +850,9 @@ export const CreateAdminOrderResponse = zod.object({
   "notes": zod.string().max(createAdminOrderResponseShippingNotesMax).optional()
 }),
   "userId": zod.string().nullable(),
-  "adminNotes": zod.string().nullable()
+  "adminNotes": zod.string().nullable(),
+  "isDemo": zod.boolean(),
+  "paymentStatus": zod.enum(['not_required', 'pending', 'paid', 'failed', 'expired'])
 })
 
 
@@ -919,7 +926,9 @@ export const UpdateAdminOrderResponse = zod.object({
   "notes": zod.string().max(updateAdminOrderResponseShippingNotesMax).optional()
 }),
   "userId": zod.string().nullable(),
-  "adminNotes": zod.string().nullable()
+  "adminNotes": zod.string().nullable(),
+  "isDemo": zod.boolean(),
+  "paymentStatus": zod.enum(['not_required', 'pending', 'paid', 'failed', 'expired'])
 })
 
 

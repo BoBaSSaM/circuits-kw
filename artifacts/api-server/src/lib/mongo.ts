@@ -28,6 +28,10 @@ export async function getMongoDatabase(): Promise<Db> {
       database.collection("project_kits").createIndex({ code: 1 }, { unique: true }),
       database.collection("orders").createIndex({ orderNumber: 1 }, { unique: true }),
       database.collection("orders").createIndex({ placedAt: -1 }),
+      database.collection("orders").createIndex(
+        { stripeCheckoutSessionId: 1 },
+        { unique: true, sparse: true },
+      ),
       database.collection("users").createIndex({ role: 1 }),
       database.collection("dashboard_audit").createIndex({ timestamp: -1 }),
     ])

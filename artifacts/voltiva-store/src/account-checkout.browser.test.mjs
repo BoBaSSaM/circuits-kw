@@ -23,6 +23,7 @@ const savedOrderSnapshot = {
   orderNumber: 'CKW-SNAPSHOT-001',
   placedAt: '2026-10-15T12:00:00.000Z',
   isDemo: true,
+  paymentStatus: 'not_required',
   items: [{
     id: 'archived-component',
     kind: 'component',

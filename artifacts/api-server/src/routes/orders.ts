@@ -35,7 +35,7 @@ type ProjectKitDocument = ProjectKitInput & {
   description?: string;
 };
 
-type OrderDocument = {
+export type OrderDocument = {
   _id: ObjectId;
   orderNumber: string;
   placedAt: Date;
@@ -47,10 +47,14 @@ type OrderDocument = {
   userId: string | null;
   adminNotes: string | null;
   createdBy: string | null;
-  isDemo: true;
+  isDemo: boolean;
+  paymentStatus?: "not_required" | "pending" | "paid" | "failed" | "expired";
+  stripeCheckoutSessionId?: string | null;
+  stripePaymentIntentId?: string | null;
+  paidAt?: Date | null;
 };
 
-class OrderInputError extends Error {
+export class OrderInputError extends Error {
   constructor(
     readonly errorCode: string,
     readonly statusCode = 400,
@@ -61,7 +65,7 @@ class OrderInputError extends Error {
 
 const router: IRouter = Router();
 
-function roundKwd(value: number): number {
+export function roundKwd(value: number): number {
   return Math.round((value + Number.EPSILON) * 1000) / 1000;
 }
 
@@ -74,7 +78,7 @@ function isDuplicateKeyError(error: unknown): boolean {
   );
 }
 
-async function resolveOrderItems(
+export async function resolveOrderItems(
   items: OrderItemInput[],
   database: Awaited<ReturnType<typeof getMongoDatabase>>,
 ): Promise<OrderItem[]> {
@@ -156,6 +160,7 @@ export async function storeOrder(
     adminNotes: null,
     createdBy: options.createdBy,
     isDemo: true,
+    paymentStatus: "not_required",
   };
 
   await database.collection<OrderDocument>("orders").insertOne(document);
@@ -170,6 +175,8 @@ export async function storeOrder(
     shipping: document.shipping,
     userId: document.userId,
     adminNotes: document.adminNotes,
+    isDemo: document.isDemo ?? true,
+    paymentStatus: document.paymentStatus ?? "not_required",
   };
 }
 
@@ -202,6 +209,8 @@ function toAdminOrder(document: OrderDocument): AdminOrder {
     shipping: document.shipping,
     userId: document.userId,
     adminNotes: document.adminNotes,
+    isDemo: document.isDemo ?? true,
+    paymentStatus: document.paymentStatus ?? "not_required",
   };
 }
 
@@ -212,7 +221,8 @@ function toAccountOrder(document: OrderDocument): AccountOrder {
     placedAt: document.placedAt,
     items: document.items,
     subtotal: document.subtotal,
-    isDemo: true,
+    isDemo: document.isDemo ?? true,
+    paymentStatus: document.paymentStatus ?? "not_required",
   };
 }
 
@@ -236,7 +246,7 @@ export function createAccountOrdersHandler({
       const database = await getMongoDatabase();
       const documents = await database
         .collection<OrderDocument>("orders")
-        .find({ userId, isDemo: true })
+        .find({ userId })
         .sort({ placedAt: -1 })
         .toArray();
       res.json(
@@ -280,6 +290,8 @@ router.post("/orders", async (req, res) => {
         items: order.items,
         subtotal: order.subtotal,
         status: order.status,
+        isDemo: order.isDemo,
+        paymentStatus: order.paymentStatus,
       }),
     );
   } catch (error) {

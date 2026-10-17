@@ -436,6 +436,11 @@ input[type=range] { width:100%; accent-color:#007b91; }
 .checkout-success { display:flex; align-items:flex-start; gap:9px; padding:12px; border:1px solid #b9e1cf; border-radius:8px; background:#f0faf4; color:#26734b; font-size:10px; line-height:1.5; }
 .checkout-success svg { flex:none; margin-top:1px; }
 .checkout-submit { width:100%; min-height:44px; justify-content:center; }
+.checkout-demo-submit { margin-top:8px; }
+.adm-payment-status { display:inline-flex; align-items:center; white-space:nowrap; padding:4px 8px; border:1px solid #d7e5e8; border-radius:999px; color:#52616c; background:#f5f8f9; font-size:10px; font-weight:700; }
+.adm-payment-status.paid { border-color:#b6dfc9; color:#17633f; background:#eff9f2; }
+.adm-payment-status.pending { border-color:#f1d9a8; color:#765719; background:#fff8e9; }
+.adm-payment-status.failed,.adm-payment-status.expired { border-color:#efc3bf; color:#9a332b; background:#fff4f2; }
 .checkout-privacy { margin:-6px 0 0; color:#72808a; font-size:9px; text-align:center; }
 .checkout-summary { position:sticky; top:92px; padding:18px; }
 .checkout-summary h2 { margin:8px 0 12px; color:#172d3b; font-size:19px; }

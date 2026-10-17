@@ -24,6 +24,7 @@ type TestOrder = {
   adminNotes: null;
   createdBy: null;
   isDemo: boolean;
+  paymentStatus: "not_required" | "pending" | "paid" | "failed" | "expired";
 };
 
 function order(id: string, userId: string | null, isDemo = true): TestOrder {
@@ -47,6 +48,7 @@ function order(id: string, userId: string | null, isDemo = true): TestOrder {
     adminNotes: null,
     createdBy: null,
     isDemo,
+    paymentStatus: isDemo ? "not_required" : "paid",
   };
 }
 
@@ -66,22 +68,20 @@ function responseRecorder() {
 }
 
 function makeHandler(orders: TestOrder[]) {
-  const queries: { userId: string; isDemo: true }[] = [];
+  const queries: { userId: string }[] = [];
   let databaseCalls = 0;
   const database = {
     collection: (name: string) => {
       assert.equal(name, "orders");
       return {
-        find: (filter: { userId: string; isDemo: true }) => {
+        find: (filter: { userId: string }) => {
           queries.push(filter);
           return {
             sort: (sort: { placedAt: -1 }) => {
               assert.deepEqual(sort, { placedAt: -1 });
               return {
                 toArray: async () =>
-                  orders.filter(
-                    (entry) => entry.userId === filter.userId && entry.isDemo === filter.isDemo,
-                  ),
+                    orders.filter((entry) => entry.userId === filter.userId),
               };
             },
           };
@@ -117,7 +117,7 @@ test("account order history rejects requests without a signed-in buyer", async (
   assert.equal(fixture.databaseCalls, 0);
 });
 
-test("account order history returns each signed-in buyer's demo snapshots only", async () => {
+test("account order history returns all signed-in orders and excludes guest orders", async () => {
   const fixture = makeHandler([
     order("buyer-a-order", "buyer-a"),
     order("buyer-b-order", "buyer-b"),
@@ -133,28 +133,27 @@ test("account order history returns each signed-in buyer's demo snapshots only",
   assert.equal(buyerAResponse.result.statusCode, 200);
   assert.deepEqual(
     Object.keys((buyerAResponse.result.body as { orders: Record<string, unknown>[] }).orders[0]).sort(),
-    ["id", "isDemo", "items", "orderNumber", "placedAt", "subtotal"],
+    ["id", "isDemo", "items", "orderNumber", "paymentStatus", "placedAt", "subtotal"],
   );
   assert.deepEqual(
-    (buyerAResponse.result.body as { orders: { id: string; isDemo: true }[] }).orders.map(
+    (buyerAResponse.result.body as { orders: { id: string; isDemo: boolean }[] }).orders.map(
       ({ id }) => id,
     ),
-    ["buyer-a-order"],
+    ["buyer-a-order", "non-demo-order"],
   );
   assert.deepEqual(
-    (buyerBResponse.result.body as { orders: { id: string; isDemo: true }[] }).orders.map(
+    (buyerBResponse.result.body as { orders: { id: string; isDemo: boolean }[] }).orders.map(
       ({ id }) => id,
     ),
     ["buyer-b-order"],
   );
-  assert.ok(
-    (buyerAResponse.result.body as { orders: { isDemo: true }[] }).orders.every(
-      ({ isDemo }) => isDemo,
-    ),
+  assert.deepEqual(
+    (buyerAResponse.result.body as { orders: { isDemo: boolean }[] }).orders.map(({ isDemo }) => isDemo),
+    [true, false],
   );
   assert.deepEqual(fixture.queries, [
-    { userId: "buyer-a", isDemo: true },
-    { userId: "buyer-b", isDemo: true },
+    { userId: "buyer-a" },
+    { userId: "buyer-b" },
   ]);
 });
 
@@ -203,14 +202,12 @@ test("saved order history keeps product and kit snapshots after catalog edits an
         insertOne: async (document: Record<string, unknown>) => {
           savedOrders.push(document);
         },
-        find: (filter: { userId: string; isDemo: true }) => ({
+        find: (filter: { userId: string }) => ({
           sort: (sort: { placedAt: -1 }) => {
             assert.deepEqual(sort, { placedAt: -1 });
             return {
               toArray: async () =>
-                savedOrders.filter(
-                  (entry) => entry.userId === filter.userId && entry.isDemo === filter.isDemo,
-                ),
+                savedOrders.filter((entry) => entry.userId === filter.userId),
             };
           },
         }),

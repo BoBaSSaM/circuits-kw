@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -46,7 +46,7 @@ import {
 
 type Item = { id: string; name: string; price: number; kind: 'component' | 'kit' | 'bom'; sku: string; qty: number; priceSource?: 'catalog' | 'supplier-list' };
 type AddItem = Omit<Item, 'qty'> & { qty?: number };
-type DemoOrder = { orderNumber:string; placedAt:string; items:Item[]; subtotal:number };
+type DemoOrder = { orderNumber:string; placedAt:string; items:Item[]; subtotal:number; isDemo:boolean; paymentStatus:'not_required'|'pending'|'paid'|'failed'|'expired' };
 type Product = CatalogProduct;
 type Kit = CatalogKit;
 type PriceListState = { pricesBySku: Record<string, number>; source: string; updatedAt: string };
@@ -311,12 +311,15 @@ function demoReceiptHtml(order:DemoOrder, language:Language) {
   const isArabic=language==='ar';
   const escape=escapeReceiptHtml;
   const items=order.items.map(item=>`<tr><td>${escape(item.name)}</td><td>${escape(t('Qty',language))} ${item.qty}</td><td>${escape(fmt(item.price*item.qty))}</td></tr>`).join('');
+  const title=t(order.isDemo?'Demo receipt':'Payment receipt',language);
+  const label=t(order.isDemo?'DEMO ORDER · NO PAYMENT TAKEN':'PAID · STRIPE CHECKOUT',language);
+  const notice=t(order.isDemo?'This is a demo order receipt. No payment or fulfillment is connected.':'Payment was confirmed by Stripe. Delivery details are saved for order management.',language);
   return `<!doctype html>
 <html lang="${isArabic?'ar':'en'}" dir="${isArabic?'rtl':'ltr'}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escape(t('Demo receipt',language))} ${escape(order.orderNumber)}</title>
+  <title>${escape(title)} ${escape(order.orderNumber)}</title>
   <style>
     body{font:16px/1.5 Arial,sans-serif;color:#172d3b;margin:0;padding:36px}
     main{max-width:720px;margin:0 auto}
@@ -333,15 +336,15 @@ function demoReceiptHtml(order:DemoOrder, language:Language) {
 </head>
 <body>
   <main>
-    <span class="label">${escape(t('DEMO ORDER · NO PAYMENT TAKEN',language))}</span>
-    <h1>${escape(t('Demo receipt',language))}</h1>
+    <span class="label">${escape(label)}</span>
+    <h1>${escape(title)}</h1>
     <p class="number">${escape(t('Order number',language))}: <strong>${escape(order.orderNumber)}</strong></p>
     <table>
       <thead><tr><th>${escape(t('Item',language))}</th><th>${escape(t('Quantity',language))}</th><th>${escape(t('Amount',language))}</th></tr></thead>
       <tbody>${items}</tbody>
     </table>
     <div class="total"><span>${escape(t('Subtotal',language))}</span><span>${escape(fmt(order.subtotal))}</span></div>
-    <p class="notice">${escape(t('This is a demo order receipt. No payment or fulfillment is connected.',language))}</p>
+    <p class="notice">${escape(notice)}</p>
   </main>
 </body>
 </html>`;
@@ -893,17 +896,67 @@ function checkoutFieldError(field:string,value:string):string|undefined {
 function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCart:()=>void;getLatestCartItems:()=>Item[]}) {
   const {language}=useLanguage();
   const {isLoaded,isSignedIn,user}=useUser();
-  useDocument(t('Checkout',language),t('Demo orders are saved for Circuits KW order management.',language));
+  useDocument(t('Checkout',language),t('Pay securely with Stripe or save a demo order.',language));
   const createOrder=useCreateCheckoutOrder();
+  const checkoutFormRef=useRef<HTMLFormElement|null>(null);
   const orderSubmissionInFlight=useRef(false);
+  const stripeSubmissionInFlight=useRef(false);
+  const stripeReturnHandled=useRef(false);
   const [placedOrder,setPlacedOrder]=useState<DemoOrder|null>(null);
   const [orderError,setOrderError]=useState('');
+  const [paymentNotice,setPaymentNotice]=useState('');
+  const [stripePaymentPending,setStripePaymentPending]=useState(false);
+  const [paymentVerifying,setPaymentVerifying]=useState(false);
   const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
   useEffect(()=>{
     if(!placedOrder) return;
     const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({top:0,left:0,behavior:reducedMotion?'auto':'smooth'});
   },[placedOrder]);
+  useEffect(()=>{
+    if(stripeReturnHandled.current) return;
+    const params=new URLSearchParams(window.location.search);
+    const stripeState=params.get('stripe');
+    if(stripeState==='cancelled'){
+      stripeReturnHandled.current=true;
+      setPaymentNotice(t('Payment was cancelled. Your cart is unchanged.',language));
+      window.history.replaceState(null,'',`${basePath}/checkout`);
+      return;
+    }
+    if(stripeState!=='success') return;
+    stripeReturnHandled.current=true;
+    const sessionId=params.get('session_id');
+    if(!sessionId){
+      setOrderError(t('Payment could not be verified. Your cart is unchanged.',language));
+      return;
+    }
+    let active=true;
+    setPaymentVerifying(true);
+    fetch(`${basePath}/api/stripe/verify?session_id=${encodeURIComponent(sessionId)}`,{cache:'no-store'})
+      .then(async response=>{
+        const payload=await response.json().catch(()=>null);
+        if(!response.ok) throw new Error(payload?.error||'payment_verification_unavailable');
+        return payload;
+      })
+      .then(saved=>{
+        if(!active) return;
+        setPlacedOrder({
+          orderNumber:saved.orderNumber,
+          placedAt:new Date(saved.placedAt).toISOString(),
+          items:saved.items,
+          subtotal:saved.subtotal,
+          isDemo:false,
+          paymentStatus:'paid',
+        });
+        clearCart();
+        window.history.replaceState(null,'',`${basePath}/checkout`);
+      })
+      .catch(()=>{
+        if(active) setOrderError(t('Payment could not be verified yet. Your cart is unchanged; refresh this page to retry.',language));
+      })
+      .finally(()=>{if(active)setPaymentVerifying(false);});
+    return ()=>{active=false;};
+  },[clearCart,language]);
   const subtotal=calculateCartSubtotal(items);
   const openReceiptForPrint=()=>{
     if(!placedOrder) return;
@@ -929,13 +982,9 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
     link.remove();
     window.setTimeout(()=>URL.revokeObjectURL(receiptUrl),1000);
   };
-  const submitDemoOrder=(event:FormEvent<HTMLFormElement>)=>{
-    event.preventDefault();
-    if(orderSubmissionInFlight.current||placedOrder) return;
-    const latestItems=getLatestCartItems();
-    if(!latestItems.length) return;
+  const collectCheckoutInput=(form:HTMLFormElement,latestItems:Item[])=>{
+    if(!latestItems.length) return null;
     setOrderError('');
-    const form=event.currentTarget;
     const formData=new FormData(form);
     const value=(field:string)=>String(formData.get(field)??'').trim();
     const errors:Record<string,string>={};
@@ -945,7 +994,7 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
     });
     setFieldErrors(errors);
     if(Object.keys(errors).length){
-       setOrderError(t('Check the highlighted fields.',language));
+      setOrderError(t('Check the highlighted fields.',language));
       const firstInvalid=form.elements.namedItem(Object.keys(errors)[0]);
       window.requestAnimationFrame(()=>{
         if(firstInvalid instanceof HTMLElement){
@@ -953,29 +1002,37 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
           firstInvalid.scrollIntoView({behavior:'smooth',block:'center'});
         }
       });
-      return;
+      return null;
     }
+    return {
+      customer:{name:value('name'),email:value('email'),phone:value('phone')},
+      shipping:{
+        governorate:value('governorate'),
+        area:value('area'),
+        block:value('block'),
+        street:value('street'),
+        building:value('building'),
+        ...(value('unit')?{unit:value('unit')}:{ }),
+        ...(value('notes')?{notes:value('notes')}:{ }),
+      },
+      items:latestItems.map(item=>({
+        id:item.id,
+        kind:item.kind,
+        sku:item.sku,
+        qty:item.qty,
+        ...(item.kind==='bom'?{estimateUnitPrice:item.price}:{}),
+      })),
+    };
+  };
+  const submitDemoOrder=()=>{
+    if(orderSubmissionInFlight.current||placedOrder) return;
+    const latestItems=getLatestCartItems();
+    if(!latestItems.length) return;
+    const payload=checkoutFormRef.current?collectCheckoutInput(checkoutFormRef.current,latestItems):null;
+    if(!payload) return;
     orderSubmissionInFlight.current=true;
     createOrder.mutate({
-      data:{
-        customer:{name:value('name'),email:value('email'),phone:value('phone')},
-        shipping:{
-          governorate:value('governorate'),
-          area:value('area'),
-          block:value('block'),
-          street:value('street'),
-          building:value('building'),
-          ...(value('unit')?{unit:value('unit')}:{ }),
-          ...(value('notes')?{notes:value('notes')}:{ }),
-        },
-        items:latestItems.map(item=>({
-          id:item.id,
-          kind:item.kind,
-          sku:item.sku,
-          qty:item.qty,
-          ...(item.kind==='bom'?{estimateUnitPrice:item.price}:{}),
-        })),
-      },
+      data:payload,
     },{
       onSuccess:saved=>{
         orderSubmissionInFlight.current=false;
@@ -988,6 +1045,8 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
           placedAt:new Date(saved.placedAt).toISOString(),
           items:saved.items.map(item=>({id:item.id,name:item.name,price:item.price,kind:item.kind,sku:item.sku,qty:item.qty})),
           subtotal:saved.subtotal,
+          isDemo:true,
+          paymentStatus:'not_required',
         });
         clearCart();
       },
@@ -1006,13 +1065,15 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
         }
         if(payload?.error==='invalid_order'&&Array.isArray(payload.details)){
           const fieldByPath:Record<string,string>={'customer.name':'name','customer.email':'email','customer.phone':'phone','shipping.governorate':'governorate','shipping.area':'area','shipping.block':'block','shipping.street':'street','shipping.building':'building'};
+          const currentForm=checkoutFormRef.current;
+          const currentValue=(field:string)=>currentForm?String(new FormData(currentForm).get(field)??'').trim():'';
           const fields=Array.from(new Set(payload.details.flatMap(issue=>{
             if(!issue||typeof issue!=='object'||!('path' in issue)||!Array.isArray(issue.path))return [];
             const field=fieldByPath[issue.path.join('.')];
             return field?[field]:[];
           })));
           if(fields.length){
-            setFieldErrors(current=>({...current,...Object.fromEntries(fields.map(field=>[field,checkoutFieldError(field,value(field))||t('Please check this field.',language)]))}));
+            setFieldErrors(current=>({...current,...Object.fromEntries(fields.map(field=>[field,checkoutFieldError(field,currentValue(field))||t('Please check this field.',language)]))}));
             setOrderError(t('The server could not validate some details. Review the highlighted fields.',language));
             return;
           }
@@ -1021,16 +1082,55 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
       },
     });
   };
+  const submitStripePayment=async()=>{
+    if(stripeSubmissionInFlight.current||placedOrder) return;
+    const latestItems=getLatestCartItems();
+    if(!latestItems.length) return;
+    const payload=checkoutFormRef.current?collectCheckoutInput(checkoutFormRef.current,latestItems):null;
+    if(!payload) return;
+    if(latestItems.some(item=>item.kind==='bom')){
+      setOrderError(t('Build Assist prices are stored only in this browser, so Stripe cannot verify them yet. Remove those items or save a demo order.',language));
+      return;
+    }
+    stripeSubmissionInFlight.current=true;
+    setStripePaymentPending(true);
+    setOrderError('');
+    try{
+      const response=await fetch(`${basePath}/api/stripe/checkout`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+      });
+      const result=await response.json().catch(()=>null);
+      if(!response.ok){
+        if(result?.error==='payment_not_configured') setOrderError(t('Stripe is not configured for this deployment yet. Your cart is unchanged.',language));
+        else if(result?.error==='supplier_priced_items_unverified') setOrderError(t('Build Assist prices are stored only in this browser, so Stripe cannot verify them yet. Remove those items or save a demo order.',language));
+        else if(result?.error==='catalog_item_unavailable') setOrderError(t('One or more items are no longer available. Refresh the catalog and update your cart.',language));
+        else setOrderError(t('Stripe checkout could not start. Your cart is unchanged; please try again.',language));
+        return;
+      }
+      if(typeof result?.checkoutUrl!=='string'||!result.checkoutUrl.startsWith('https://checkout.stripe.com/')){
+        setOrderError(t('Stripe returned an invalid checkout link. Your cart is unchanged.',language));
+        return;
+      }
+      window.location.assign(result.checkoutUrl);
+    }catch{
+      setOrderError(t('Stripe checkout could not start. Your cart is unchanged; please try again.',language));
+    }finally{
+      stripeSubmissionInFlight.current=false;
+      setStripePaymentPending(false);
+    }
+  };
   if(placedOrder) return <div className="container page-top checkout-confirmation" data-testid="demo-order-confirmation">
-    <div className="eyebrow">{t('DEMO ORDER PLACED · SAVED',language)}</div>
+    <div className="eyebrow">{t(placedOrder.isDemo?'DEMO ORDER PLACED · SAVED':'PAYMENT COMPLETE · SAVED',language)}</div>
     <div className="checkout-confirmation-card surface">
       <div className="checkout-confirmation-icon"><CheckCircle2 size={26}/></div>
-      <h1>{t('Order placed.',language)}</h1>
-       <p className="lead" style={{fontSize:13,margin:'0 auto 18px'}} data-testid="text-order-storage-status">{t('Saved for demo order management. No payment or fulfillment is connected.',language)}</p>
-      <div className="demo-order-number"><span>{t('DEMO ORDER NUMBER',language)}</span><strong data-testid="text-demo-order-number">{placedOrder.orderNumber}</strong><small>{new Date(placedOrder.placedAt).toLocaleString(language==='ar'?'ar-KW':'en-KW')}</small></div>
+      <h1>{t(placedOrder.isDemo?'Order placed.':'Payment confirmed.',language)}</h1>
+       <p className="lead" style={{fontSize:13,margin:'0 auto 18px'}} data-testid="text-order-storage-status">{t(placedOrder.isDemo?'Saved for demo order management. No payment or fulfillment is connected.':'Stripe confirmed your payment. Your order is saved for management.',language)}</p>
+      <div className="demo-order-number"><span>{t(placedOrder.isDemo?'DEMO ORDER NUMBER':'ORDER NUMBER',language)}</span><strong data-testid="text-demo-order-number">{placedOrder.orderNumber}</strong><small>{new Date(placedOrder.placedAt).toLocaleString(language==='ar'?'ar-KW':'en-KW')}</small></div>
       <div className="demo-order-items">{placedOrder.items.map(item=><div key={item.id} data-testid={`row-confirmation-${item.id}`}><span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span><strong>{fmt(item.price*item.qty)}</strong></div>)}</div>
-      <div className="summary-line summary-total"><span>{t('Demo total',language)}</span><span className="mono" data-testid="text-demo-order-subtotal">{fmt(placedOrder.subtotal)}</span></div>
-        <p className="checkout-order-disclaimer">{t('Order contact and delivery details are saved for admin review. Payment and fulfillment are not connected.',language)}</p>
+      <div className="summary-line summary-total"><span>{t(placedOrder.isDemo?'Demo total':'Paid total',language)}</span><span className="mono" data-testid="text-demo-order-subtotal">{fmt(placedOrder.subtotal)}</span></div>
+        <p className="checkout-order-disclaimer">{t(placedOrder.isDemo?'Order contact and delivery details are saved for admin review. Payment and fulfillment are not connected.':'Order contact and delivery details are saved. Delivery and fulfillment are managed separately.',language)}</p>
       <div className="checkout-receipt-actions">
         <button className="button button-outline" type="button" onClick={openReceiptForPrint} data-testid="button-print-demo-receipt"><Printer size={15}/>{t('Print receipt',language)}</button>
         <button className="button button-outline" type="button" onClick={downloadReceipt} data-testid="button-download-demo-receipt"><Download size={15}/>{t('Download receipt',language)}</button>
@@ -1040,8 +1140,8 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
   </div>;
   if(!items.length) return <div className="container page-top"><div className="eyebrow">{t('ORDER REVIEW · CHECKOUT PREVIEW',language)}</div><div className="surface empty-state"><div className="empty-icon"><ShoppingCart size={23}/></div><h3>{t('Your cart is empty.',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Add parts or a kit before checkout.',language)}</p><Link className="button button-primary" href="/components">{t('Browse components',language)}</Link></div></div>;
   return <div className="container page-top">
-     <div className="checkout-heading"><div><div className="eyebrow">{t('ORDER REVIEW · LOCAL DEMO',language)}</div><h1>{t('Checkout',language)}</h1><p className="lead" style={{fontSize:13}}>{t('Demo order only. Contact and delivery details are saved for order management.',language)}</p></div><span className="tag"><ShieldCheck size={13}/> {t('No payment connected',language)}</span></div>
-    <form className="checkout-layout" noValidate onSubmit={submitDemoOrder} onChange={event=>{
+      <div className="checkout-heading"><div><div className="eyebrow">{t('SECURE CHECKOUT',language)}</div><h1>{t('Checkout',language)}</h1><p className="lead" style={{fontSize:13}}>{t('Pay with Stripe or save an unpaid demo order.',language)}</p></div><span className="tag"><ShieldCheck size={13}/> {t('Stripe Checkout',language)}</span></div>
+     <form ref={checkoutFormRef} className="checkout-layout" noValidate onSubmit={event=>{event.preventDefault();void submitStripePayment();}} onChange={event=>{
       const changedTarget=event.nativeEvent.target;
       const field=changedTarget instanceof HTMLInputElement||changedTarget instanceof HTMLSelectElement||changedTarget instanceof HTMLTextAreaElement?changedTarget.name:'';
       if(field){
@@ -1095,12 +1195,15 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
             <label className="checkout-field checkout-field-wide"><span>{t('Delivery notes',language)} <small>{t('Optional',language)}</small></span><textarea name="notes" rows={3} placeholder={t('Anything the courier should know?',language)}/></label>
           </div>
         </section>
-        <section className="checkout-payment-note">
-          <ShieldCheck size={18}/><div><strong>{t('Local demo order only',language)}</strong><p>{t('Saves an order record for admin review. No payment or fulfillment.',language)}</p></div>
+         <section className="checkout-payment-note">
+           <ShieldCheck size={18}/><div><strong>{t('Secure Stripe payment',language)}</strong><p>{t('Card details are entered on Stripe. Payment confirmation is saved to the order in MongoDB.',language)}</p></div>
         </section>
+         {paymentVerifying&&<div className="checkout-payment-note" role="status">{t('Verifying Stripe payment…',language)}</div>}
+         {paymentNotice&&<div className="checkout-payment-note" role="status">{paymentNotice}</div>}
         {orderError&&<div className="checkout-error" role="alert" data-testid="checkout-order-error">{orderError}</div>}
-        <button type="submit" className="button button-primary checkout-submit" disabled={createOrder.isPending} data-testid="button-place-demo-order">{createOrder.isPending?t('Saving order',language):t('Place demo order',language)} <ArrowRight size={15}/></button>
-        <p className="checkout-privacy">{t('Contact and delivery details are saved with the demo order for admin order management.',language)}</p>
+         <button type="submit" className="button button-primary checkout-submit" disabled={stripePaymentPending||paymentVerifying||createOrder.isPending} data-testid="button-pay-with-stripe">{stripePaymentPending?t('Connecting to Stripe…',language):t('Pay securely with Stripe',language)} <ArrowRight size={15}/></button>
+         <button type="button" className="button button-outline checkout-submit checkout-demo-submit" onClick={submitDemoOrder} disabled={createOrder.isPending||stripePaymentPending||paymentVerifying} data-testid="button-place-demo-order">{createOrder.isPending?t('Saving order',language):t('Save as demo order',language)}</button>
+         <p className="checkout-privacy">{t('Demo orders are unpaid. Stripe card details are never stored on this website.',language)}</p>
       </div>
       <aside className="surface checkout-summary">
         <div className="eyebrow">{t('YOUR PARTS LIST',language)}</div><h2>{t('Order summary',language)}</h2>
@@ -1199,28 +1302,28 @@ function AccountPage() {
       <div className="eyebrow">{t('Account details',language)}</div>
       <h2>{user.fullName||t('Your account',language)}</h2>
       <p className="account-email">{user.primaryEmailAddress?.emailAddress}</p>
-      <p className="account-demo-note">{t('Demo orders you place while signed in are saved here. Guest orders are not linked to your account.',language)}</p>
+      <p className="account-demo-note">{t('Orders you place while signed in are saved here. Guest orders are not linked to your account.',language)}</p>
       <div className="account-actions">
         <Link href="/sign-out" className="button button-outline" data-testid="link-sign-out">{t('Sign out',language)}</Link>
         <Link href="/" className="button button-quiet">{t('Return to store',language)}</Link>
       </div>
     </section>
     <section className="surface account-panel account-orders-panel" data-testid="account-demo-orders">
-      <div className="eyebrow">{t('DEMO ORDER HISTORY',language)}</div>
-      <h2>{t('Your demo orders',language)}</h2>
-      <p className="account-orders-intro">{t('These saved records are demos only. No payment or fulfillment is connected.',language)}</p>
+      <div className="eyebrow">{t('ORDER HISTORY',language)}</div>
+      <h2>{t('Your orders',language)}</h2>
+      <p className="account-orders-intro">{t('Demo orders are unpaid. Stripe orders appear after payment is confirmed.',language)}</p>
       {ordersQuery.isLoading
-        ? <p className="account-orders-state" aria-live="polite">{t('Loading your demo orders…',language)}</p>
+        ? <p className="account-orders-state" aria-live="polite">{t('Loading your orders…',language)}</p>
         : ordersQuery.isError
           ? <div className="account-orders-state" role="alert">
-              <p>{t('Your demo orders could not be loaded.',language)}</p>
+              <p>{t('Your orders could not be loaded.',language)}</p>
               <button className="button button-outline small-button" type="button" onClick={()=>void ordersQuery.refetch()}>{t('Retry',language)}</button>
             </div>
           : ordersQuery.data?.orders.length
             ? <div className="account-orders-list">
                 {ordersQuery.data.orders.map(order=><article className="account-order-card" key={order.id} data-testid={`account-demo-order-${order.id}`}>
                   <div className="account-order-heading">
-                    <div><span className="account-order-label">{t('Demo order',language)}</span><strong>{order.orderNumber}</strong></div>
+                    <div><span className="account-order-label">{t(order.isDemo?'Demo order':'Stripe order',language)}</span><strong>{order.orderNumber}</strong><small>{t(order.paymentStatus==='paid'?'Paid with Stripe':order.paymentStatus==='pending'?'Awaiting payment':order.paymentStatus==='failed'?'Payment failed':'Demo · unpaid',language)}</small></div>
                     <time dateTime={new Date(order.placedAt).toISOString()}>{new Date(order.placedAt).toLocaleString(language==='ar'?'ar-KW':'en-KW')}</time>
                   </div>
                   <div className="account-order-items">
@@ -1229,10 +1332,10 @@ function AccountPage() {
                       <strong>{fmt(item.price*item.qty)}</strong>
                     </div>)}
                   </div>
-                  <div className="account-order-total"><span>{t('Demo total',language)}</span><strong>{fmt(order.subtotal)}</strong></div>
+                  <div className="account-order-total"><span>{t(order.isDemo?'Demo total':'Order total',language)}</span><strong>{fmt(order.subtotal)}</strong></div>
                 </article>)}
               </div>
-            : <p className="account-orders-state">{t('No demo orders are linked to your account yet. Orders placed as a guest are not included.',language)}</p>}
+            : <p className="account-orders-state">{t('No orders are linked to your account yet. Orders placed as a guest are not included.',language)}</p>}
     </section>
   </AuthPageFrame>;
 }

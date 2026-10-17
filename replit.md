@@ -19,6 +19,8 @@ A Kuwait-focused electronics storefront for components, project kits, and build 
 - Storefront, API, and component preview: Next.js 16
 - API routes: Next.js route handlers wrapping the existing Express 5 router
 - Product, order, and user data: MongoDB Atlas
+- Stripe Checkout: Replit preview can use the connected Stripe integration; Vercel needs `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` configured in its project environment. Register `https://<production-domain>/api/stripe/webhook` as the Stripe webhook endpoint.
+- Stripe Checkout amounts are resolved server-side from MongoDB catalog prices. Browser-only Build Assist supplier estimates are not eligible for paid checkout until those prices are stored and verified server-side.
 - Authentication: Clerk
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)

@@ -597,6 +597,9 @@ components:
     OrderStatus:
       type: string
       enum: [new, confirmed, preparing, completed, cancelled]
+    PaymentStatus:
+      type: string
+      enum: [not_required, pending, paid, failed, expired]
     CatalogProduct:
       type: object
       properties:
@@ -794,7 +797,9 @@ components:
         items: { type: array, items: { $ref: "#/components/schemas/OrderItem" } }
         subtotal: { type: number }
         status: { $ref: "#/components/schemas/OrderStatus" }
-      required: [id, orderNumber, placedAt, items, subtotal, status]
+        isDemo: { type: boolean }
+        paymentStatus: { $ref: "#/components/schemas/PaymentStatus" }
+      required: [id, orderNumber, placedAt, items, subtotal, status, isDemo, paymentStatus]
     AccountOrder:
       type: object
       properties:
@@ -803,8 +808,9 @@ components:
         placedAt: { type: string, format: date-time }
         items: { type: array, items: { $ref: "#/components/schemas/OrderItem" } }
         subtotal: { type: number }
-        isDemo: { type: boolean, const: true }
-      required: [id, orderNumber, placedAt, items, subtotal, isDemo]
+        isDemo: { type: boolean }
+        paymentStatus: { $ref: "#/components/schemas/PaymentStatus" }
+      required: [id, orderNumber, placedAt, items, subtotal, isDemo, paymentStatus]
     AccountOrderListResponse:
       type: object
       properties:
@@ -823,7 +829,9 @@ components:
         shipping: { $ref: "#/components/schemas/OrderShipping" }
         userId: { type: ["string", "null"] }
         adminNotes: { type: ["string", "null"] }
-      required: [id, orderNumber, placedAt, items, subtotal, status, customer, shipping, userId, adminNotes]
+        isDemo: { type: boolean }
+        paymentStatus: { $ref: "#/components/schemas/PaymentStatus" }
+      required: [id, orderNumber, placedAt, items, subtotal, status, customer, shipping, userId, adminNotes, isDemo, paymentStatus]
     OrderListResponse:
       type: object
       properties:
