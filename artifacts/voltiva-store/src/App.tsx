@@ -1098,10 +1098,10 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
       });
       const result=await response.json().catch(()=>null);
       if(!response.ok){
-        if(result?.error==='payment_not_configured') setOrderError(t('Stripe is not configured for this deployment yet. Your cart is unchanged.',language));
+        if(result?.error==='payment_not_configured') setOrderError(`${t('Stripe is not configured for this deployment yet. Your cart is unchanged.',language)}${typeof result.details==='string'?` ${result.details}`:''}`);
         else if(result?.error==='supplier_priced_items_unverified') setOrderError(t('Build Assist prices are stored only in this browser, so Stripe cannot verify them yet. Remove those items or save a demo order.',language));
         else if(result?.error==='catalog_item_unavailable') setOrderError(t('One or more items are no longer available. Refresh the catalog and update your cart.',language));
-        else setOrderError(t('Stripe checkout could not start. Your cart is unchanged; please try again.',language));
+        else setOrderError(`${t('Stripe checkout could not start. Your cart is unchanged; please try again.',language)}${typeof result?.details==='string'?` ${result.details}`:''}`);
         return;
       }
       if(typeof result?.checkoutUrl!=='string'||!result.checkoutUrl.startsWith('https://checkout.stripe.com/')){

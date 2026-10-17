@@ -8,12 +8,24 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { ObjectId } from "mongodb";
 import Stripe from "stripe";
 import { getMongoDatabase } from "../lib/mongo";
-import { getStripeClient, getStripeSettings, StripeConfigurationError } from "../lib/stripe";
+import {
+  createStripeCheckoutSession,
+  getStripeWebhookSettings,
+  retrieveStripeCheckoutSession,
+  StripeConfigurationError,
+  StripeProxyError,
+} from "../lib/stripe";
 import { logger } from "../lib/logger";
 import { OrderInputError, resolveOrderItems, roundKwd, type OrderDocument } from "./orders";
 
 const router: IRouter = Router();
 const currency = "kwd";
+
+function safeDevelopmentErrorDetail(error: unknown): string | undefined {
+  if (process.env.NODE_ENV !== "development") return undefined;
+  const message = error instanceof Error ? error.message : "Unknown error.";
+  return message.replace(/\b(?:sk|rk)_(?:test|live)_[A-Za-z0-9_]+|\bwhsec_[A-Za-z0-9_]+/g, "[redacted Stripe credential]");
+}
 
 export function kwdToStripeMinorUnits(amountKwd: number): number {
   if (!Number.isFinite(amountKwd) || amountKwd <= 0) {
@@ -141,7 +153,6 @@ router.post("/stripe/checkout", async (req, res) => {
 
   let order: OrderDocument | undefined;
   try {
-    const stripe = await getStripeClient();
     const origin = getPublicOrigin(req);
     const database = await getMongoDatabase();
     const items = await resolveOrderItems(parsed.data.items, database);
@@ -178,7 +189,7 @@ router.post("/stripe/checkout", async (req, res) => {
     const orders = database.collection<OrderDocument>("orders");
     await orders.insertOne(order);
 
-    const session = await stripe.checkout.sessions.create(
+    const session = await createStripeCheckoutSession(
       {
         mode: "payment",
         customer_email: order.customer.email,
@@ -201,7 +212,7 @@ router.post("/stripe/checkout", async (req, res) => {
         success_url: `${origin}/checkout?stripe=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/checkout?stripe=cancelled`,
       },
-      { idempotencyKey: order._id.toHexString() },
+      order._id.toHexString(),
     );
 
     if (!session.url) {
@@ -234,14 +245,40 @@ router.post("/stripe/checkout", async (req, res) => {
       return;
     }
     if (error instanceof StripeConfigurationError) {
-      res.status(503).json({ error: "payment_not_configured" });
+      logger.error({ stripeConfigurationReason: error.reason }, "Stripe credentials unavailable");
+      res.status(503).json({
+        error: "payment_not_configured",
+        ...(safeDevelopmentErrorDetail(error) ? { details: safeDevelopmentErrorDetail(error) } : {}),
+      });
       return;
     }
+    const stripeStatus =
+      error instanceof StripeProxyError
+        ? error.status
+        : error instanceof Stripe.errors.StripeError
+          ? error.statusCode ?? null
+          : null;
+    const stripeRejectedRequest =
+      stripeStatus !== null && stripeStatus >= 400 && stripeStatus < 500;
     logger.error(
-      { errorName: error instanceof Error ? error.name : "UnknownError" },
+      {
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        ...(error instanceof Stripe.errors.StripeError
+          ? { stripeType: error.type, stripeCode: error.code ?? null }
+          : {}),
+        ...(error instanceof StripeProxyError
+          ? { stripeType: error.stripeType, stripeCode: error.stripeCode, stripeStatus: error.status }
+          : {}),
+        ...(safeDevelopmentErrorDetail(error)
+          ? { developmentDetails: safeDevelopmentErrorDetail(error) }
+          : {}),
+      },
       "Could not create Stripe Checkout session",
     );
-    res.status(503).json({ error: "stripe_checkout_unavailable" });
+    res.status(stripeRejectedRequest ? 400 : 503).json({
+      error: stripeRejectedRequest ? "stripe_checkout_rejected" : "stripe_checkout_unavailable",
+      ...(safeDevelopmentErrorDetail(error) ? { details: safeDevelopmentErrorDetail(error) } : {}),
+    });
   }
 });
 
@@ -253,8 +290,7 @@ router.get("/stripe/verify", async (req, res) => {
   }
 
   try {
-    const stripe = await getStripeClient();
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const session = await retrieveStripeCheckoutSession(sessionId);
     if (session.payment_status !== "paid") {
       res.status(409).json({ error: "payment_not_completed" });
       return;
@@ -269,10 +305,21 @@ router.get("/stripe/verify", async (req, res) => {
     res.json(serializePaymentOrder(order));
   } catch (error) {
     logger.error(
-      { errorName: error instanceof Error ? error.name : "UnknownError" },
+      {
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        ...(error instanceof StripeProxyError
+          ? { stripeType: error.stripeType, stripeCode: error.stripeCode, stripeStatus: error.status }
+          : {}),
+        ...(safeDevelopmentErrorDetail(error)
+          ? { developmentDetails: safeDevelopmentErrorDetail(error) }
+          : {}),
+      },
       "Could not verify Stripe Checkout session",
     );
-    res.status(503).json({ error: "payment_verification_unavailable" });
+    res.status(503).json({
+      error: "payment_verification_unavailable",
+      ...(safeDevelopmentErrorDetail(error) ? { details: safeDevelopmentErrorDetail(error) } : {}),
+    });
   }
 });
 
@@ -287,14 +334,14 @@ export async function stripeWebhookHandler(
   }
 
   try {
-    const settings = await getStripeSettings();
-    if (!settings.webhookSecret) {
+    const { secretKey, webhookSecret } = getStripeWebhookSettings();
+    if (!webhookSecret || !secretKey) {
       res.status(503).json({ error: "stripe_webhook_not_configured" });
       return;
     }
 
-    const stripe = new Stripe(settings.secretKey, { maxNetworkRetries: 2, timeout: 15_000 });
-    const event = stripe.webhooks.constructEvent(req.body, signature, settings.webhookSecret);
+    const stripe = new Stripe(secretKey, { maxNetworkRetries: 2, timeout: 15_000 });
+    const event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
     const session = event.data.object as Stripe.Checkout.Session;
 
     if (
