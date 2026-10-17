@@ -5,9 +5,9 @@ let clientPromise: Promise<MongoClient> | undefined;
 let indexesPromise: Promise<void> | undefined;
 
 export async function getMongoDatabase(): Promise<Db> {
-  const uri = process.env.MONGODB_URL;
+  const uri = process.env.MONGODB_URI?.trim() || process.env.MONGODB_URL?.trim();
   if (!uri) {
-    throw new Error("MONGODB_URL is required.");
+    throw new Error("MONGODB_URI (or the legacy MONGODB_URL) is required.");
   }
 
   if (!clientPromise) {

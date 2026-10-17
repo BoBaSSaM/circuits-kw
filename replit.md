@@ -11,7 +11,7 @@ A Kuwait-focused electronics storefront for components, project kits, and build 
 - `npm run build` — typecheck and build every Next.js app
 - `npm run codegen --workspace=@workspace/api-spec` — regenerate API hooks and Zod schemas
 - `npm run push --workspace=@workspace/db` — update the development Drizzle schema only
-- Required secrets: `MONGODB_URL` and Clerk publishable/secret keys
+- Required secrets: `MONGODB_URI` and Clerk publishable/secret keys (`MONGODB_URL` remains supported as a legacy alias)
 
 ## Stack
 
