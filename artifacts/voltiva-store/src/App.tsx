@@ -1647,7 +1647,17 @@ function StorefrontRuntime() {
     return ()=>window.clearTimeout(timer);
   },[cartNotice?.id]);
   const changeCart=(change:(current:Item[])=>Item[])=>{
-    const nextItems=change(cartItemsRef.current);
+    let nextItems=change(cartItemsRef.current);
+    if(cartModeRef.current==='guest'||cartModeRef.current==='loading') {
+      const stored=readStoredCartSnapshot();
+      if(stored.storageAvailable) {
+        nextItems=mergeConcurrentCartChanges(sharedCartRef.current,nextItems,stored.items);
+        sharedCartRef.current=stored.items;
+      }
+      const saved=writeBrowserStorage('circuits-kw-cart',JSON.stringify(nextItems));
+      if(saved) sharedCartRef.current=nextItems;
+      setCartStorageUnavailable(!initialCart.storageAvailable||!saved);
+    }
     cartItemsRef.current=nextItems;
     if(cartModeRef.current==='account-loading'||cartModeRef.current==='account-error') {
       pendingCartMergeRef.current=nextItems;

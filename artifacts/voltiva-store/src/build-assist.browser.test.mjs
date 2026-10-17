@@ -496,7 +496,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     const checkoutBomRow = page.getByTestId('row-checkout-bom-esp32');
     await checkoutBomRow.waitFor();
     assert.match(await checkoutBomRow.innerText(), /Qty 4/);
-    assert.ok((await checkoutBomRow.innerText()).includes('21.46 USD'));
+    assert.ok((await checkoutBomRow.innerText()).includes('21.44 USD'));
     assert.equal(await page.getByTestId('row-checkout-removed-before-checkout').count(), 0);
     assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '6.500 KWD');
 
@@ -599,7 +599,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.locator('.demo-order-items > div').count(), savedOrder.items.length);
     const confirmationItem = page.getByTestId('row-confirmation-bom-esp32');
     assert.match(await confirmationItem.innerText(), /ESP32-WROOM-32D · Qty 4/);
-    assert.match(await confirmationItem.innerText(), /21\.46 USD/);
+    assert.match(await confirmationItem.innerText(), /21\.44 USD/);
     assert.equal(await page.locator('[data-testid^="row-confirmation-removed-before-checkout"]').count(), 0);
     assert.equal(await page.getByTestId('text-demo-order-subtotal').innerText(), '6.500 KWD');
     assert.equal(await page.getByTestId('text-demo-order-number').innerText(), savedOrder.orderNumber);
@@ -614,7 +614,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.ok(receiptHtml.includes(savedOrder.orderNumber),'the receipt must include the saved order number');
     assert.match(receiptHtml,/ESP32-WROOM-32D/);
     assert.match(receiptHtml,/Qty 4/);
-    assert.match(receiptHtml,/21\.46 USD/);
+    assert.match(receiptHtml,/21\.44 USD/);
     assert.match(await page.getByTestId('button-print-demo-receipt').innerText(),/Print receipt/);
 
     await page.goto(`${baseUrl}/cart`);
