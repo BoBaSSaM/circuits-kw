@@ -607,6 +607,7 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
   const [notice,setNotice]=useState('');
   const [preview,setPreview]=useState<'wiring'|'code'|null>(null);
   const [priceList,setPriceList]=useState<PriceListState|null>(readSavedPriceList);
+  const priceListRef=useRef(priceList);
   const [priceListRemoved,setPriceListRemoved]=useState(false);
   const [priceSource,setPriceSource]=useState(()=>readSavedPriceList()?.source??'');
   const [priceUpdatedAt,setPriceUpdatedAt]=useState(()=>readSavedPriceList()?.updatedAt??new Date().toISOString().slice(0,10));
@@ -615,6 +616,30 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
   const priceFileInputRef=useRef<HTMLInputElement>(null);
   const priceListIsStale=priceList!==null&&isPriceListStale(priceList.updatedAt);
   useEffect(()=>{setAssemblyOverride(null);setPartQuantities({});setGenerated(false);setPriceListRemoved(false);setNotice('');setPreview(null)},[selectedProjectId]);
+  useEffect(()=>{
+    const syncPriceListFromOtherTab=(event:StorageEvent)=>{
+      if(event.key!==PRICE_LIST_STORAGE_KEY&&event.key!==null) return;
+      const nextPriceList=readSavedPriceList();
+      if(nextPriceList) {
+        const previousPriceList=priceListRef.current;
+        if(JSON.stringify(previousPriceList)===JSON.stringify(nextPriceList)) return;
+        replaceSupplierPricedItems(nextPriceList.pricesBySku,previousPriceList?.pricesBySku);
+        priceListRef.current=nextPriceList;
+        setPriceList(nextPriceList);
+        setPriceListRemoved(false);
+        return;
+      }
+      if(event.newValue!==null) return;
+      const previousPriceList=priceListRef.current;
+      if(previousPriceList) removeSupplierPricedItems(previousPriceList.pricesBySku);
+      priceListRef.current=null;
+      setPriceList(null);
+      setPriceListRemoved(true);
+      setGenerated(false);
+    };
+    window.addEventListener('storage',syncPriceListFromOtherTab);
+    return ()=>window.removeEventListener('storage',syncPriceListFromOtherTab);
+  },[removeSupplierPricedItems,replaceSupplierPricedItems]);
    const plan=useMemo(()=>buildPlanFromPrompt(prompt,voltage,products),[prompt,voltage,products]);
   const bom=plan.parts.map(part=>({
     ...part,
@@ -664,6 +689,7 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
       const nextPriceList={...imported,source:priceSource.trim(),updatedAt:priceUpdatedAt};
       const saved=writeBrowserStorage(PRICE_LIST_STORAGE_KEY,JSON.stringify(nextPriceList));
       const cartChanges=replaceSupplierPricedItems(nextPriceList.pricesBySku,priceList?.pricesBySku);
+      priceListRef.current=nextPriceList;
       setPriceList(nextPriceList);
       setPriceListRemoved(false);
       setPriceImportError('');
@@ -690,6 +716,7 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
       ?removeSupplierPricedItems(priceList.pricesBySku)
       :0;
     const removed=removeBrowserStorage(PRICE_LIST_STORAGE_KEY);
+    priceListRef.current=null;
     setPriceList(null);
     setPriceListRemoved(true);
     setPriceSource('');
