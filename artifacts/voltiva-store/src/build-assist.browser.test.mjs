@@ -649,47 +649,85 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     await page.getByTestId('button-add-nucleo').click();
     await page.goto(`${baseUrl}/build-assist`);
     await page.getByTestId('row-bom-esp32').waitFor();
+    if (!(await page.getByTestId('details-price-list').evaluate(element => element.open))) {
+      await page.getByTestId('summary-price-list').click();
+    }
+    await page.getByTestId('button-remove-price-list').click();
+    await page.getByTestId('button-build-project-stm32-weather-node').click();
+    await page.getByTestId('button-generate-bom').click();
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '8.150 KWD');
+    assert.match(await page.getByTestId('text-price-source').innerText(), /Illustrative catalog prices/);
+    await page.getByTestId('button-add-bom-cart').click();
+    await page.getByTestId('link-cart').click();
+    await page.getByTestId('row-cart-bom-nucleo').waitFor();
+    await page.getByTestId('row-cart-bom-bme280').waitFor();
+    assert.equal(await page.getByTestId('row-cart-bom-nucleo').locator('.price').innerText(), '6.200 KWD');
+    assert.equal(await page.getByTestId('row-cart-bom-bme280').locator('.price').innerText(), '1.950 KWD');
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '14.350 KWD');
+
+    await page.goto(`${baseUrl}/build-assist`);
+    await page.getByTestId('row-bom-esp32').waitFor();
+    if (!(await page.getByTestId('details-price-list').evaluate(element => element.open))) {
+      await page.getByTestId('summary-price-list').click();
+    }
+    await page.getByTestId('input-price-list-source').fill('ESP32 supplier');
+    await page.getByTestId('input-price-list-updated').fill(dateDaysAgo(0));
+    await page.getByTestId('input-price-list-file').setInputFiles({
+      name: 'esp32-supplier-prices.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('sku,unit_price,currency\nESP32-WRM-32D,1.625,KWD\n'),
+    });
+    await page.getByTestId('button-import-price-csv').click();
+    await page.waitForFunction(() =>
+      document.querySelector('[data-testid="text-price-source"]')?.textContent?.includes('ESP32 supplier'),
+    );
+    await page.getByTestId('button-build-project-soil-monitor').click();
+    await page.getByTestId('button-generate-bom').click();
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '1.625 KWD');
     await page.getByTestId('button-add-bom-cart').click();
     await page.getByTestId('link-cart').click();
     const supplierPricedCartRow = page.getByTestId('row-cart-bom-esp32');
     await supplierPricedCartRow.waitFor();
     assert.equal(await supplierPricedCartRow.locator('.price').innerText(), '1.625 KWD');
+    assert.equal(await page.getByTestId('row-cart-bom-soil').count(), 0);
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '15.975 KWD');
     assert.equal(await page.getByTestId('row-cart-nucleo').count(), 1);
     assert.equal(await page.getByTestId('text-cart-supplier-nucleo').count(), 0);
-    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '7.825 KWD');
 
     await page.goto(`${baseUrl}/build-assist`);
     await page.getByTestId('row-bom-esp32').waitFor();
-    const previewBeforePriceListRemoval = await page.locator('.assist-output-head p').innerText();
-    await page.getByTestId('button-generate-bom').click();
-    assert.notEqual(await page.locator('.assist-output-head p').innerText(), previewBeforePriceListRemoval);
     await page.getByTestId('summary-price-list').click();
     await page.getByTestId('button-remove-price-list').click();
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '—');
     assert.equal(await page.getByTestId('text-line-total-esp32').innerText(), '—');
     assert.match(await page.getByTestId('text-price-source').innerText(), /No current price list loaded/);
-    assert.equal(await page.locator('.assist-output-head p').innerText(), previewBeforePriceListRemoval);
     assert.match(await page.getByTestId('status-build-assist').innerText(), /Price list removed/);
     assert.match(await page.getByTestId('status-build-assist').innerText(), /1 supplier-priced BOM cart item/);
     assert.match(await page.getByTestId('button-generate-bom').innerText(), /Generate local demo BOM/);
     await page.waitForFunction((key) => localStorage.getItem(key) === null, priceListStorageKey);
     await page.waitForFunction(() => {
       const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
-      return cart.length === 1 && cart[0].id === 'nucleo' && cart[0].price === 6.2;
+      return cart.length === 3 && cart.every((item) => item.id !== 'bom-esp32');
     });
     assert.deepEqual(
-      await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]').map(({ id, price, qty }) => ({ id, price, qty }))),
-      [{ id: 'nucleo', price: 6.2, qty: 1 }],
-      'removing the supplier prices should remove only its BOM item and preserve the unrelated catalog item',
+      await page.evaluate(() => JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]')
+        .map(({ id, price, qty, priceSource }) => ({ id, price, qty, priceSource }))),
+      [
+        { id: 'nucleo', price: 6.2, qty: 1, priceSource: undefined },
+        { id: 'bom-nucleo', price: 6.2, qty: 1, priceSource: 'catalog' },
+        { id: 'bom-bme280', price: 1.95, qty: 1, priceSource: 'catalog' },
+      ],
+      'removing supplier prices should remove its BOM line and preserve catalog-priced BOM lines and the unrelated catalog component',
     );
 
     await page.goto(`${baseUrl}/cart`);
     await page.getByTestId('row-cart-nucleo').waitFor();
-    assert.equal(await page.locator('[data-testid^="row-cart-"]').count(), 1);
+    assert.equal(await page.locator('[data-testid^="row-cart-"]').count(), 3);
     assert.equal(await page.getByTestId('row-cart-bom-esp32').count(), 0);
+    assert.equal(await page.getByTestId('row-cart-bom-nucleo').locator('.price').innerText(), '6.200 KWD');
+    assert.equal(await page.getByTestId('row-cart-bom-bme280').locator('.price').innerText(), '1.950 KWD');
     assert.equal(await page.getByTestId('row-cart-nucleo').locator('.price').innerText(), '6.200 KWD');
-    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '6.200 KWD');
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '14.350 KWD');
 
     await page.goto(`${baseUrl}/build-assist`);
     await page.reload();
