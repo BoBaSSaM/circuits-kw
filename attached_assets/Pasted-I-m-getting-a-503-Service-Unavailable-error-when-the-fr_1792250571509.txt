@@ -1,0 +1,36 @@
+I'm getting a 503 (Service Unavailable) error when the frontend calls my Stripe checkout endpoint.
+
+Error:
+POST https://<my-repl>.replit.dev/api/stripe/checkout 503 (Service Unavailable)
+Triggered from App.tsx line ~1094 (inside a click handler, around line 1139)
+
+Please debug and fix this. Work through these steps:
+
+1. Inspect the backend route for POST /api/stripe/checkout.
+   - Confirm the route exists, is registered correctly, and is mounted under the /api prefix.
+   - Check that the server is actually running and not crashing on startup or on this request. Review the server console/logs for the real error behind the 503.
+
+2. Check Stripe configuration.
+   - Verify STRIPE_SECRET_KEY (and any price ID / webhook secret variables) are set in Replit Secrets and are being read correctly by the server.
+   - If the Stripe key is missing or undefined, the route should not crash the server. Return a clear JSON error instead, and log which variable is missing.
+   - Confirm the Stripe client is initialized correctly and the API version is valid.
+
+3. Check the checkout session creation logic.
+   - Verify the price ID / product used actually exists in my Stripe account, and that test keys are not being mixed with live-mode price IDs (or vice versa).
+   - Make sure success_url and cancel_url use a valid absolute URL (use the Replit dev domain or an env variable such as APP_URL).
+   - Wrap the Stripe call in try/catch and return the actual Stripe error message in the JSON response during development.
+
+4. Check authentication middleware (I'm using Clerk).
+   - Confirm the route isn't failing because Clerk middleware can't verify the session (missing CLERK_SECRET_KEY or CLERK_PUBLISHABLE_KEY).
+   - Make sure the frontend sends the auth token/session with the request, and the backend reads it correctly.
+
+5. Check frontend code in App.tsx (~line 1094).
+   - Make sure the fetch call uses the correct URL, method, headers (Content-Type: application/json, plus the auth token if needed) and body.
+   - Add proper error handling: if the response is not ok, parse the JSON error and show it to the user instead of failing silently.
+   - Make sure the frontend and backend are being served so that /api requests reach the backend (check proxy/CORS config and that the backend isn't on a different port).
+
+6. After fixing, test the full flow: click the checkout button, confirm a Stripe Checkout session URL is returned, and confirm redirect to Stripe works.
+
+Please tell me the root cause you found, what you changed, and whether I need to add or change any Replit Secrets.
+
+Note: Ignore the Clerk "preloaded but not used" loader.js warning. It's a harmless browser warning and unrelated to this bug.
