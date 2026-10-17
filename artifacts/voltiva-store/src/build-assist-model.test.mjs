@@ -151,7 +151,7 @@ test('imports KWD price rows by normalized SKU and never falls back for missing 
 });
 
 test('rejects malformed, duplicate, and non-KWD supplier price rows', () => {
-  assert.throws(() => parseAuthorizedPriceCsv('sku,price\nESP32-WRM-32D,-1'), /non-negative KWD price/);
+  assert.throws(() => parseAuthorizedPriceCsv('sku,price\nESP32-WRM-32D,-1'), /non-negative KWD supplier price/);
   assert.throws(() => parseAuthorizedPriceCsv('sku,price,currency\nA,1,USD'), /currency must be KWD/);
   assert.throws(() => parseAuthorizedPriceCsv('sku,price\nA,1\nA,2'), /duplicate SKU A/);
   assert.throws(() => parseAuthorizedPriceCsv('sku,cost\nA,1'), /SKU and price/);

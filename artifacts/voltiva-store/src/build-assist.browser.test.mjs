@@ -32,7 +32,8 @@ const assert = new Proxy(strictAssert, {
           const actualAmounts = [...actualText.matchAll(/(\d+\.\d{2}) USD/g)].map((match) => Number(match[1]));
           strictAssert.equal(actualAmounts.length, amounts.length, message);
           amounts.forEach((amount, index) => {
-            strictAssert.ok(Math.abs(actualAmounts[index] - amount * 3.3) <= 0.02, message ?? `Expected ${amount} KWD to display at the fixed USD rate`);
+            // Totals can differ by a few cents because each converted unit is rounded before quantity is applied.
+            strictAssert.ok(Math.abs(actualAmounts[index] - amount * 3.3) <= 0.05, message ?? `Expected ${amount} KWD to display at the fixed USD rate`);
           });
           return;
         }
@@ -155,9 +156,10 @@ async function installApiMocks(context) {
       const source = item.kind === 'kit'
         ? catalogFixture.kits.find(kit => kit.id === item.id || kit.code === item.sku)
         : catalogFixture.products.find(product => product.id === item.id || product.sku === item.sku);
-      const price = item.kind === 'bom' && item.estimateUnitPrice !== undefined
+      const priceKwd = item.kind === 'bom' && item.estimateUnitPrice !== undefined
         ? item.estimateUnitPrice
         : source?.price ?? 2.5;
+      const price = Math.round((priceKwd * 3.3 + Number.EPSILON) * 100) / 100;
       return {
         id: item.id,
         kind: item.kind,
@@ -175,7 +177,9 @@ async function installApiMocks(context) {
         orderNumber: 'CKW-MOCK-0001',
         placedAt: new Date().toISOString(),
         items,
-        subtotal: items.reduce((total, item) => total + item.price * item.qty, 0),
+        subtotal: Math.round(items.reduce((total, item) => total + item.price * item.qty, 0) * 100) / 100,
+        currency: 'USD',
+        exchangeRateKwdToUsd: 3.3,
         currency: 'USD',
         status: 'new',
       }),
@@ -568,8 +572,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     await page.getByTestId('button-place-demo-order').click();
     await checkoutOrderSaveStarted;
     await page.getByTestId('form-checkout').evaluate(form => {
-      const submitter = form.querySelector('[data-testid="button-place-demo-order"]');
-      for (let attempt = 0; attempt < 3; attempt += 1) form.requestSubmit(submitter);
+      for (let attempt = 0; attempt < 3; attempt += 1) form.requestSubmit();
     });
     releaseCheckoutOrderSave();
     const orderResponse = await savedOrderResponse;
@@ -590,10 +593,10 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
       kind: 'bom',
       sku: 'ESP32-WRM-32D',
       name: 'ESP32-WROOM-32D',
-      price: 1.625,
+      price: 5.36,
       qty: 4,
     }]);
-    assert.equal(savedOrder.subtotal, 6.5);
+    assert.equal(savedOrder.subtotal, 21.44);
 
     await page.getByTestId('demo-order-confirmation').waitFor();
     assert.equal(await page.getByTestId('demo-order-confirmation').count(), 1);
@@ -840,7 +843,7 @@ test('replaces supplier prices on BOM cart lines and removes lines omitted by th
     await page.getByTestId('button-import-price-csv').click();
     await page.waitForFunction(() => {
       return document.querySelector('[data-testid="text-price-source"]')?.textContent?.includes('Replacement supplier')
-        && document.querySelector('[data-testid="text-line-total-esp32"]')?.textContent === '16.500 KWD';
+        && document.querySelector('[data-testid="text-line-total-esp32"]')?.textContent === '54.48 USD';
     });
     const importNotice = page.getByTestId('status-build-assist');
     assert.match(await importNotice.innerText(), /1 supplier-priced BOM cart item.*repriced/);
@@ -853,7 +856,7 @@ test('replaces supplier prices on BOM cart lines and removes lines omitted by th
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '16.500 KWD');
     assert.match(await page.getByTestId('text-unpriced-soil').innerText(), /Unpriced/);
     assert.match(await page.getByTestId('notice-unpriced-parts').innerText(), /SNS-SOIL-CAP-12/);
-    assert.match(await page.getByTestId('button-add-bom-cart').innerText(), /54\.45 USD/);
+    assert.match(await page.getByTestId('button-add-bom-cart').innerText(), /54\.48 USD/);
     await page.waitForFunction(() => {
       const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
       return cart.some((item) => item.id === 'bom-esp32' && item.price === 2.75 && item.qty === 6)
