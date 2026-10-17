@@ -5,6 +5,12 @@ description: How this app should access the Replit Stripe connection and handle 
 
 When running in Replit without `STRIPE_SECRET_KEY`, use `@replit/connectors-sdk` to proxy Stripe API calls. The connection may be usable through the proxy even when no Stripe secret is present in Replit Secrets or returned by the connection-settings endpoint. Separate deployments such as Vercel still need a server-side `STRIPE_SECRET_KEY`; webhook processing also needs `STRIPE_WEBHOOK_SECRET`.
 
+The storefront should offer both KWD and USD checkout. The catalog currently stores KWD prices, so USD amounts need an explicit pricing rule rather than an assumed conversion.
+
 **Why:** The Replit-connected Stripe account returned successful test-mode API requests through the SDK proxy, while the direct credential lookup returned no secret key.
 
 **How to apply:** Keep keys out of logs and use the authenticated proxy in Replit. The connected test account did not support KWD, and Stripe rejected a KWD Checkout Session. Do not change or convert catalog prices automatically; the account must enable KWD or the user must choose a supported checkout currency and provide a pricing/conversion policy.
+
+**Why:** The user requested both KWD and USD.
+
+**How to apply:** Preserve KWD prices and ask for an explicit source for USD amounts before adding dual-currency checkout.
