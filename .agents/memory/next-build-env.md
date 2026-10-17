@@ -8,3 +8,9 @@ Keep `PORT` and `BASE_PATH` optional during production builds. Root workspace bu
 **Why:** A workspace deployment build previously failed when build configuration assumed a preview workflow had supplied `PORT`.
 
 **How to apply:** When changing artifact build configuration or workspace commands, verify the root build with `PORT` and `BASE_PATH` unset. Keep listening ports and preview routing configuration in the runtime workflow.
+
+Each Next.js workspace deployed independently should also declare `typescript` in its own `devDependencies`; do not rely on a root-only TypeScript dependency when Vercel builds from an app subdirectory.
+
+**Why:** Vercel's storefront build could not find TypeScript when it was only declared at the monorepo root.
+
+**How to apply:** Add TypeScript to the app workspace's manifest and keep the workspace lock entry in sync before deploying that app separately.
