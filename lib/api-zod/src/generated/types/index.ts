@@ -32,6 +32,7 @@ export * from './currentUserResponse';
 export * from './dashboardRole';
 export * from './deleteResponse';
 export * from './errorResponse';
+export * from './getAdminAuditLogParams';
 export * from './healthStatus';
 export * from './orderCustomer';
 export * from './orderItem';

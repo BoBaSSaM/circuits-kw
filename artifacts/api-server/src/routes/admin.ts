@@ -8,6 +8,7 @@ import {
   UpdateUserRoleResponse,
 } from "@workspace/api-zod";
 import { Router, type IRouter } from "express";
+import type { Filter } from "mongodb";
 import { logger } from "../lib/logger";
 import { requireDashboardRoles } from "../lib/dashboard-auth";
 import { getMongoDatabase } from "../lib/mongo";
@@ -24,21 +25,88 @@ import {
 } from "../lib/user-profiles";
 
 const router: IRouter = Router();
+const auditRecordTypes = ["product", "project_kit", "order", "user"] as const;
+
+function parseAuditDate(value: unknown): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value
+    ? null
+    : date;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 router.get(
   "/admin/audit-log",
   requireDashboardRoles("admin"),
-  async (_req, res) => {
+  async (req, res) => {
+    const page = req.query.page === undefined ? 1 : Number(req.query.page);
+    const pageSize = req.query.pageSize === undefined ? 25 : Number(req.query.pageSize);
+    const offset = (page - 1) * pageSize;
+    const actor = typeof req.query.actor === "string" ? req.query.actor.trim() : "";
+    const recordType = req.query.recordType;
+    const from = parseAuditDate(req.query.from);
+    const to = parseAuditDate(req.query.to);
+    if (
+      !Number.isSafeInteger(page) ||
+      page < 1 ||
+      !Number.isInteger(pageSize) ||
+      pageSize < 1 ||
+      pageSize > 100 ||
+      !Number.isSafeInteger(offset) ||
+      offset > 2_147_483_647 ||
+      (req.query.actor !== undefined &&
+        (typeof req.query.actor !== "string" || actor.length > 100)) ||
+      (recordType !== undefined &&
+        (typeof recordType !== "string" ||
+          !auditRecordTypes.includes(recordType as (typeof auditRecordTypes)[number]))) ||
+      from === null ||
+      to === null ||
+      (from && to && from > to)
+    ) {
+      res.status(400).json({ error: "invalid_audit_query" });
+      return;
+    }
+
     try {
       const database = await getMongoDatabase();
-      const entries = await database
-        .collection<DashboardAuditDocument>("dashboard_audit")
-        .find({})
-        .sort({ timestamp: -1, _id: -1 })
-        .limit(100)
-        .toArray();
+      const filter: Filter<DashboardAuditDocument> = {};
+      if (actor) {
+        const actorPattern = escapeRegex(actor);
+        filter.$or = [
+          { actorId: { $regex: actorPattern, $options: "i" } },
+          { actorName: { $regex: actorPattern, $options: "i" } },
+        ];
+      }
+      if (typeof recordType === "string") {
+        filter.recordType = recordType as (typeof auditRecordTypes)[number];
+      }
+      if (from || to) {
+        filter.timestamp = {
+          ...(from ? { $gte: from } : {}),
+          ...(to ? { $lt: new Date(to.getTime() + 24 * 60 * 60 * 1000) } : {}),
+        };
+      }
+
+      const auditCollection = database.collection<DashboardAuditDocument>("dashboard_audit");
+      const [entries, total] = await Promise.all([
+        auditCollection
+          .find(filter)
+          .sort({ timestamp: -1, _id: -1 })
+          .skip(offset)
+          .limit(pageSize)
+          .toArray(),
+        auditCollection.countDocuments(filter),
+      ]);
       res.json(
         GetAdminAuditLogResponse.parse({
+          page,
+          pageSize,
+          total,
           entries: entries.map((entry) => ({
             id: entry._id,
             actorId: entry.actorId,

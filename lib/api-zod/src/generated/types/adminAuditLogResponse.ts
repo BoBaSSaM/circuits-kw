@@ -9,4 +9,7 @@ import type { AdminAuditEntry } from './adminAuditEntry';
 
 export interface AdminAuditLogResponse {
   entries: AdminAuditEntry[];
+  page: number;
+  pageSize: number;
+  total: number;
 }

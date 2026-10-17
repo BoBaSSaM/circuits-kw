@@ -13,7 +13,7 @@ import {
   useCreateProjectKit, useUpdateProjectKit, useDeleteProjectKit,
   useUpdateUserRole, useCreateAdminOrder, useUpdateAdminOrder, useDeleteAdminOrder,
 } from '@workspace/api-client-react';
-import type { AdminAuditEntry, AuditDetails, AdminOrder, CatalogKit, CatalogProduct, DashboardRole, OrderStatus, ProductInput, ProjectKitInput } from '@workspace/api-client-react';
+import type { AdminAuditEntry, AuditDetails, AdminOrder, CatalogKit, CatalogProduct, DashboardRole, GetAdminAuditLogParams, OrderStatus, ProductInput, ProjectKitInput } from '@workspace/api-client-react';
 import { Activity, ArrowUpRight, Box, ChevronDown, CircleAlert, CircuitBoard, ClipboardList, Cpu, History, Layers3, LoaderCircle, Package, Plus, RefreshCw, Search, ShieldCheck, ShoppingBag, Trash2, Users, Wrench, X } from 'lucide-react';
 import './AdminDashboardPage.css';
 
@@ -42,6 +42,7 @@ type KitValues = z.infer<typeof kitSchema>;
 type OrderValues = z.infer<typeof orderSchema>;
 type Tab = 'overview' | 'catalog' | 'orders' | 'users' | 'history';
 type Editor = { kind: 'product'; item?: CatalogProduct } | { kind: 'kit'; item?: CatalogKit } | { kind: 'order' } | null;
+type AuditFilters = Pick<GetAdminAuditLogParams, 'actor' | 'recordType' | 'from' | 'to'>;
 
 const productDefaults: ProductValues = { name: '', sku: '', category: 'Microcontrollers', price: 0, stock: 0, package: '', description: '', voltage: '', interface: '', icon: 'cpu', imageUrl: null, isActive: true };
 const kitDefaults: KitValues = { code: '', title: '', category: 'IoT & Smart Home', level: 'Beginner', domain: 'iot', duration: '', price: 0, desc: '', partsText: '', count: '', manual: '', icon: 'weather', isActive: true };
@@ -76,11 +77,14 @@ export function AdminDashboardPage() {
   const catalog = useGetAdminCatalog({ query: { enabled: !!allowed, queryKey: getGetAdminCatalogQueryKey() } });
   const ordersQuery = useGetAdminOrders({ query: { enabled: !!allowed, queryKey: getGetAdminOrdersQueryKey() } });
   const usersQuery = useGetAdminUsers({ query: { enabled: !!admin, queryKey: getGetAdminUsersQueryKey() } });
-  const auditQuery = useGetAdminAuditLog({ query: { enabled: !!admin, queryKey: getGetAdminAuditLogQueryKey() } });
   const [tab, setTab] = useState<Tab>('overview');
   const [search, setSearch] = useState('');
   const [editor, setEditor] = useState<Editor>(null);
   const [notice, setNotice] = useState('');
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditFilters, setAuditFilters] = useState<AuditFilters>({});
+  const auditParams: GetAdminAuditLogParams = { page: auditPage, pageSize: 25, ...auditFilters };
+  const auditQuery = useGetAdminAuditLog(auditParams, { query: { enabled: !!admin, queryKey: getGetAdminAuditLogQueryKey(auditParams) } });
 
   const createProduct = useCreateProduct(), updateProduct = useUpdateProduct(), deleteProduct = useDeleteProduct();
   const createKit = useCreateProjectKit(), updateKit = useUpdateProjectKit(), deleteKit = useDeleteProjectKit();
@@ -106,7 +110,7 @@ export function AdminDashboardPage() {
     { key: 'overview', label: 'Overview', icon: Activity },
     { key: 'catalog', label: 'Catalog', icon: CircuitBoard, count: products.length + kits.length },
     { key: 'orders', label: 'Orders', icon: ClipboardList, count: orders.length },
-    ...(admin ? [{ key: 'users' as Tab, label: 'Users', icon: Users, count: users.length }, { key: 'history' as Tab, label: 'History', icon: History, count: auditQuery.data?.entries.length }] : []),
+    ...(admin ? [{ key: 'users' as Tab, label: 'Users', icon: Users, count: users.length }, { key: 'history' as Tab, label: 'History', icon: History, count: auditQuery.data?.total }] : []),
   ];
   const mutationError = createProduct.error || updateProduct.error || deleteProduct.error || createKit.error || updateKit.error || deleteKit.error || updateRole.error || createOrder.error || updateOrder.error || deleteOrder.error;
 
@@ -127,7 +131,7 @@ export function AdminDashboardPage() {
           </section>}
           {tab === 'orders' && <section className="adm-panel"><div className="adm-toolbar"><div className="adm-search"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search order number or customer…" aria-label="Search orders" data-testid="input-orders-search" /></div><span className="adm-record-count">{filteredOrders.length} orders</span></div>{ordersQuery.isLoading ? <StatePanel mode="loading" message="Loading order desk." /> : ordersQuery.isError ? <StatePanel mode="error" message="Orders could not be loaded." retry={() => ordersQuery.refetch()} /> : filteredOrders.length ? <div className="adm-order-list">{filteredOrders.map(order => <OrderCard key={order.id} order={order} onSave={(status, adminNotes) => act(() => updateOrder.mutateAsync({ id: order.id, data: { status, adminNotes: adminNotes || null } }), `Order ${order.orderNumber} updated.`)} onDelete={() => { if (window.confirm(`Delete order ${order.orderNumber}? This cannot be undone.`)) act(() => deleteOrder.mutateAsync({ id: order.id }), 'Order deleted.'); }} busy={busy} />)}</div> : <EmptyMini label="No orders match this search." />}</section>}
           {tab === 'users' && admin && <section className="adm-panel"><div className="adm-toolbar"><div className="adm-copy"><strong>Account directory</strong><span>Manage dashboard permissions for synced customer profiles.</span></div><span className="adm-record-count">{users.length} accounts</span></div>{usersQuery.isLoading ? <StatePanel mode="loading" message="Loading account profiles." /> : usersQuery.isError ? <StatePanel mode="error" message="Account profiles could not be loaded." retry={() => usersQuery.refetch()} /> : users.length ? <div className="adm-user-list">{users.map(user => <div className="adm-user-row" key={user.id} data-testid={`row-user-${user.id}`}><div className="adm-user-avatar">{(user.firstName || user.email || '?').slice(0, 1).toUpperCase()}</div><div className="adm-user-main"><b data-testid={`text-user-${user.id}`}>{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Unnamed account'}</b><span>{user.email || 'No email on profile'}</span><small>Synced {new Date(user.lastSyncedAt).toLocaleDateString()}</small></div><label className="adm-role-label" htmlFor={`role-${user.id}`}>Workspace role</label><select id={`role-${user.id}`} value={user.role} disabled={busy} onChange={e => act(() => updateRole.mutateAsync({ id: user.id, data: { role: e.target.value as DashboardRole } }), 'Account role updated.', invalidateUsers)} data-testid={`select-user-role-${user.id}`}>{roles.map(value => <option key={value} value={value}>{value}</option>)}</select></div>)}</div> : <EmptyMini label="No synced accounts found." />}<p className="adm-footnote"><ShieldCheck size={14} /> User profiles are synced from account sign-in. Clerk accounts are not created or deleted here.</p></section>}
-          {tab === 'history' && admin && <AuditHistory entries={auditQuery.data?.entries ?? []} loading={auditQuery.isLoading} error={auditQuery.isError} retry={() => auditQuery.refetch()} />}
+          {tab === 'history' && admin && <AuditHistory entries={auditQuery.data?.entries ?? []} page={auditQuery.data?.page ?? auditPage} pageSize={auditQuery.data?.pageSize ?? 25} total={auditQuery.data?.total ?? 0} filters={auditFilters} onApplyFilters={filters => { setAuditFilters(filters); setAuditPage(1); }} onPageChange={setAuditPage} loading={auditQuery.isLoading} error={auditQuery.isError} retry={() => auditQuery.refetch()} />}
           <footer className="adm-footer"><span>Circuits KW <i>·</i> Workshop operations</span><span>Illustrative storefront records <b className="mono">KWD</b></span></footer>
         </section>
       </div>
@@ -208,10 +212,19 @@ function describeAuditDetails(details: AuditDetails | null): string {
     .join(' · ') || 'No safe detail recorded';
 }
 
-function AuditHistory({ entries, loading, error, retry }: { entries: AdminAuditEntry[]; loading: boolean; error: boolean; retry: () => void }) {
+function AuditHistory({ entries, page, pageSize, total, filters, onApplyFilters, onPageChange, loading, error, retry }: { entries: AdminAuditEntry[]; page: number; pageSize: number; total: number; filters: AuditFilters; onApplyFilters: (filters: AuditFilters) => void; onPageChange: (page: number) => void; loading: boolean; error: boolean; retry: () => void }) {
+  const [draftFilters, setDraftFilters] = useState<AuditFilters>(filters);
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   return <section className="adm-panel adm-audit-panel">
-    <div className="adm-toolbar"><div className="adm-copy"><strong>Recent dashboard changes</strong><span>Up to 100 most recent product, kit, order, and role changes. Customer contact details and internal note text are never included.</span></div><span className="adm-record-count">{entries.length} entries</span></div>
-    {loading ? <StatePanel mode="loading" message="Loading recent dashboard changes." /> : error ? <StatePanel mode="error" message="Change history could not be loaded." retry={retry} /> : entries.length ? <div className="adm-audit-list">{entries.map(entry => <article className="adm-audit-row" key={entry.id} data-testid={`audit-entry-${entry.id}`}>
+    <div className="adm-toolbar"><div className="adm-copy"><strong>Dashboard change history</strong><span>Review product, kit, order, and role changes. Customer contact details and internal note text are never included.</span></div><span className="adm-record-count">{total} matching {total === 1 ? 'entry' : 'entries'}</span></div>
+    <form className="adm-audit-filters" onSubmit={event => { event.preventDefault(); onApplyFilters({ ...draftFilters, actor: draftFilters.actor?.trim() || undefined, recordType: draftFilters.recordType || undefined, from: draftFilters.from || undefined, to: draftFilters.to || undefined }); }}>
+      <label>Actor name or ID<input aria-label="Filter by actor" value={draftFilters.actor || ''} maxLength={100} placeholder="Any actor" onChange={event => setDraftFilters(filters => ({ ...filters, actor: event.target.value }))} data-testid="input-audit-actor" /></label>
+      <label>Record type<select aria-label="Filter by record type" value={draftFilters.recordType || ''} onChange={event => setDraftFilters(filters => ({ ...filters, recordType: (event.target.value || undefined) as AuditFilters['recordType'] }))} data-testid="select-audit-record-type"><option value="">All record types</option><option value="product">Product</option><option value="project_kit">Project kit</option><option value="order">Order</option><option value="user">User role</option></select></label>
+      <label>From date (UTC)<input aria-label="Filter from date" type="date" value={draftFilters.from || ''} onChange={event => setDraftFilters(filters => ({ ...filters, from: event.target.value || undefined }))} data-testid="input-audit-from" /></label>
+      <label>To date (UTC)<input aria-label="Filter to date" type="date" value={draftFilters.to || ''} onChange={event => setDraftFilters(filters => ({ ...filters, to: event.target.value || undefined }))} data-testid="input-audit-to" /></label>
+      <div className="adm-audit-filter-actions"><button className="adm-button adm-button-primary adm-button-small" type="submit" data-testid="button-audit-apply">Apply filters</button><button className="adm-button adm-button-quiet adm-button-small" type="button" onClick={() => { const emptyFilters: AuditFilters = {}; setDraftFilters(emptyFilters); onApplyFilters(emptyFilters); }} data-testid="button-audit-clear">Clear</button></div>
+    </form>
+    {loading ? <StatePanel mode="loading" message="Loading dashboard change history." /> : error ? <StatePanel mode="error" message="Change history could not be loaded." retry={retry} /> : entries.length ? <div className="adm-audit-list">{entries.map(entry => <article className="adm-audit-row" key={entry.id} data-testid={`audit-entry-${entry.id}`}>
       <div className="adm-audit-mark"><History size={15} /></div>
       <div className="adm-audit-main">
         <div className="adm-audit-heading"><strong>{entry.actorName || entry.actorId}</strong><span className="adm-audit-role">{entry.actorRole}</span><span className={`adm-audit-action ${entry.action}`}>{entry.action}</span><b>{entry.recordType === 'project_kit' ? 'Project kit' : entry.recordType === 'user' ? 'User role' : entry.recordType}</b></div>
@@ -219,6 +232,7 @@ function AuditHistory({ entries, loading, error, retry }: { entries: AdminAuditE
         <div className="adm-audit-diff"><span><small>Before</small>{describeAuditDetails(entry.before)}</span><ArrowUpRight size={13} /><span><small>After</small>{describeAuditDetails(entry.after)}</span></div>
       </div>
       <time className="adm-audit-time" dateTime={entry.timestamp}>{new Date(entry.timestamp).toLocaleString()}</time>
-    </article>)}</div> : <EmptyMini label="No dashboard changes have been recorded yet." />}
+    </article>)}</div> : <EmptyMini label={total ? 'No changes match these filters on this page.' : 'No dashboard changes match these filters.'} />}
+    {!loading && !error && total > 0 && <nav className="adm-audit-pagination" aria-label="Change history pages"><span>Page {page} of {pageCount}</span><div><button className="adm-button adm-button-outline adm-button-small" type="button" onClick={() => onPageChange(page - 1)} disabled={page <= 1} data-testid="button-audit-previous">Previous</button><button className="adm-button adm-button-outline adm-button-small" type="button" onClick={() => onPageChange(page + 1)} disabled={page >= pageCount} data-testid="button-audit-next">Next</button></div></nav>}
   </section>;
 }

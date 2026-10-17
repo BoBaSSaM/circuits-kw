@@ -36,14 +36,30 @@ function matches(document: Document, filter: Document): boolean {
     if (key === "$or") {
       return (expected as Document[]).some((candidate) => matches(document, candidate));
     }
-    if (
-      expected &&
-      typeof expected === "object" &&
-      "$ne" in expected
-    ) {
-      return !sameValue(document[key], expected.$ne);
+    if (expected && typeof expected === "object") {
+      if ("$ne" in expected && sameValue(document[key], expected.$ne)) return false;
+      if ("$regex" in expected) {
+        const options = String(expected.$options ?? "");
+        if (!new RegExp(String(expected.$regex), options).test(String(document[key] ?? ""))) {
+          return false;
+        }
+      }
+      const actual = document[key] instanceof Date
+        ? (document[key] as Date).getTime()
+        : document[key];
+      if ("$gte" in expected) {
+        const lower = expected.$gte instanceof Date ? expected.$gte.getTime() : expected.$gte;
+        if ((actual as number) < (lower as number)) return false;
+      }
+      if ("$lt" in expected) {
+        const upper = expected.$lt instanceof Date ? expected.$lt.getTime() : expected.$lt;
+        if ((actual as number) >= (upper as number)) return false;
+      }
     }
-    return sameValue(document[key], expected);
+    return expected && typeof expected === "object" &&
+      ("$ne" in expected || "$regex" in expected || "$gte" in expected || "$lt" in expected)
+      ? true
+      : sameValue(document[key], expected);
   });
 }
 
@@ -89,6 +105,10 @@ const database = {
           },
           limit(count: number) {
             result = result.slice(0, count);
+            return cursor;
+          },
+          skip(count: number) {
+            result = result.slice(count);
             return cursor;
           },
           async toArray() {
@@ -491,5 +511,94 @@ test("dashboard audit history records safe changes and is admin-only", async (t)
     "private-session-token",
   ]) {
     assert.ok(!serializedResponse.includes(privateValue), `Audit response leaked ${privateValue}`);
+  }
+
+  for (let index = 0; index < 110; index += 1) {
+    collections.dashboard_audit.push({
+      _id: `archive-entry-${index}`,
+      actorId: "archive-admin",
+      actorName: "Archive Reviewer",
+      actorRole: "admin",
+      action: "updated",
+      recordType: index % 2 === 0 ? "product" : "order",
+      recordId: `archive-record-${index}`,
+      timestamp: new Date(Date.now() - (index + 1) * 24 * 60 * 60 * 1000),
+      before: null,
+      after: null,
+    });
+  }
+
+  const laterAuditPageResponse = await request(
+    baseUrl,
+    "/admin/audit-log?page=5&pageSize=25",
+    { userId: "admin-user" },
+  );
+  assert.equal(laterAuditPageResponse.status, 200);
+  const laterAuditPage = (await laterAuditPageResponse.json()) as Document;
+  assert.equal(laterAuditPage.page, 5);
+  assert.equal(laterAuditPage.pageSize, 25);
+  assert.equal(laterAuditPage.total, expected.length + 110);
+  assert.equal(laterAuditPage.entries.length, 21);
+  assert.ok(
+    new Date(laterAuditPage.entries[0].timestamp).getTime() <
+      Date.now() - 80 * 24 * 60 * 60 * 1000,
+    "Later pages should include changes older than the previous 100-entry window",
+  );
+
+  const filteredAuditResponse = await request(
+    baseUrl,
+    "/admin/audit-log?page=1&pageSize=100&actor=archive&recordType=product",
+    { userId: "admin-user" },
+  );
+  assert.equal(filteredAuditResponse.status, 200);
+  const filteredAudit = (await filteredAuditResponse.json()) as Document;
+  assert.equal(filteredAudit.total, 55);
+  assert.ok(filteredAudit.entries.every((entry: Document) =>
+    entry.actorId === "archive-admin" && entry.recordType === "product"));
+
+  const actorNameAuditResponse = await request(
+    baseUrl,
+    "/admin/audit-log?actor=ARCHIVE%20REVIEWER&pageSize=100",
+    { userId: "admin-user" },
+  );
+  assert.equal(actorNameAuditResponse.status, 200);
+  assert.equal(((await actorNameAuditResponse.json()) as Document).total, 110);
+
+  const archiveDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const dateFilteredAuditResponse = await request(
+    baseUrl,
+    `/admin/audit-log?actor=archive-admin&from=${archiveDate}&to=${archiveDate}`,
+    { userId: "admin-user" },
+  );
+  assert.equal(dateFilteredAuditResponse.status, 200);
+  const dateFilteredAudit = (await dateFilteredAuditResponse.json()) as Document;
+  assert.equal(dateFilteredAudit.total, 1);
+  assert.equal(dateFilteredAudit.entries[0].recordId, "archive-record-0");
+
+  for (const invalidQuery of [
+    "?page=0",
+    "?pageSize=101",
+    "?recordType=unknown",
+    "?from=2026-02-30",
+    "?from=2026-02-02&to=2026-02-01",
+    `?actor=${"a".repeat(101)}`,
+  ]) {
+    assert.equal(
+      (await request(baseUrl, `/admin/audit-log${invalidQuery}`, { userId: "admin-user" })).status,
+      400,
+      `Expected invalid query ${invalidQuery} to be rejected`,
+    );
+  }
+
+  for (const path of [
+    "/admin/audit-log?page=2&pageSize=25",
+    "/admin/audit-log?actor=archive&recordType=product",
+    `/admin/audit-log?from=${archiveDate}&to=${archiveDate}`,
+  ]) {
+    assert.equal(
+      (await request(baseUrl, path, { userId: "editor-user" })).status,
+      403,
+      "Audit filtering and paging must remain admin-only",
+    );
   }
 });

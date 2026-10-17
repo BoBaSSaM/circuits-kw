@@ -267,8 +267,26 @@ export const GetAdminAccessResponse = zod.object({
 
 
 /**
- * @summary Get recent dashboard changes
+ * @summary Search dashboard changes
  */
+export const getAdminAuditLogQueryPageDefault = 1;
+
+export const getAdminAuditLogQueryPageSizeDefault = 25;
+export const getAdminAuditLogQueryPageSizeMax = 100;
+
+export const getAdminAuditLogQueryActorMax = 100;
+
+
+
+export const GetAdminAuditLogQueryParams = zod.object({
+  "page": zod.coerce.number().int().min(1).default(getAdminAuditLogQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(getAdminAuditLogQueryPageSizeMax).default(getAdminAuditLogQueryPageSizeDefault),
+  "actor": zod.coerce.string().max(getAdminAuditLogQueryActorMax).optional(),
+  "recordType": zod.enum(['product', 'project_kit', 'order', 'user']).optional(),
+  "from": zod.date().optional().describe('Include changes made on or after this date (UTC).'),
+  "to": zod.date().optional().describe('Include changes made on or before this date (UTC).')
+})
+
 export const GetAdminAuditLogResponse = zod.object({
   "entries": zod.array(zod.object({
   "id": zod.string(),
@@ -281,7 +299,10 @@ export const GetAdminAuditLogResponse = zod.object({
   "timestamp": zod.coerce.date(),
   "before": zod.union([zod.record(zod.string(), zod.union([zod.string(),zod.number(),zod.boolean(),zod.null()])),zod.null()]),
   "after": zod.union([zod.record(zod.string(), zod.union([zod.string(),zod.number(),zod.boolean(),zod.null()])),zod.null()])
-}))
+})),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int(),
+  "total": zod.number().int()
 })
 
 

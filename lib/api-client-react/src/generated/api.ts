@@ -39,6 +39,7 @@ import type {
   CurrentUserResponse,
   DeleteResponse,
   ErrorResponse,
+  GetAdminAuditLogParams,
   HealthStatus,
   OrderListResponse,
   ProductInput,
@@ -834,20 +835,27 @@ export function useGetAdminAccess<TData = Awaited<ReturnType<typeof getAdminAcce
 
 
 
-export const getGetAdminAuditLogUrl = () => {
+export const getGetAdminAuditLogUrl = (params?: GetAdminAuditLogParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/admin/audit-log`
+  return stringifiedParams.length > 0 ? `/api/admin/audit-log?${stringifiedParams}` : `/api/admin/audit-log`
 }
 
 /**
- * @summary Get recent dashboard changes
+ * @summary Search dashboard changes
  */
-export const getAdminAuditLog = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminAuditLogResponse> => {
+export const getAdminAuditLog = async (params?: GetAdminAuditLogParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminAuditLogResponse> => {
 
-  return customFetch<AdminAuditLogResponse>(getGetAdminAuditLogUrl(),
+  return customFetch<AdminAuditLogResponse>(getGetAdminAuditLogUrl(params),
   {
     ...options,
     method: 'GET'
@@ -860,23 +868,23 @@ export const getAdminAuditLog = async ( options?: Parameters<typeof customFetch>
 
 
 
-export const getGetAdminAuditLogQueryKey = () => {
+export const getGetAdminAuditLogQueryKey = (params?: GetAdminAuditLogParams,) => {
     return [
-    `/api/admin/audit-log`
+    `/api/admin/audit-log`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetAdminAuditLogQueryOptions = <TData = Awaited<ReturnType<typeof getAdminAuditLog>>, TError = ErrorType<ErrorResponse>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+export const getGetAdminAuditLogQueryOptions = <TData = Awaited<ReturnType<typeof getAdminAuditLog>>, TError = ErrorType<ErrorResponse>>(params?: GetAdminAuditLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetAdminAuditLogQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminAuditLogQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminAuditLog>>> = ({ signal }) => getAdminAuditLog({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminAuditLog>>> = ({ signal }) => getAdminAuditLog(params, { signal, ...requestOptions });
 
 
 
@@ -890,7 +898,7 @@ export type GetAdminAuditLogQueryError = ErrorType<ErrorResponse>
 
 
 export function useGetAdminAuditLog<TData = Awaited<ReturnType<typeof getAdminAuditLog>>, TError = ErrorType<ErrorResponse>>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>> & Pick<
+ params: undefined |  GetAdminAuditLogParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getAdminAuditLog>>,
           TError,
@@ -900,7 +908,7 @@ export function useGetAdminAuditLog<TData = Awaited<ReturnType<typeof getAdminAu
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetAdminAuditLog<TData = Awaited<ReturnType<typeof getAdminAuditLog>>, TError = ErrorType<ErrorResponse>>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>> & Pick<
+ params?: GetAdminAuditLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getAdminAuditLog>>,
           TError,
@@ -910,19 +918,19 @@ export function useGetAdminAuditLog<TData = Awaited<ReturnType<typeof getAdminAu
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetAdminAuditLog<TData = Awaited<ReturnType<typeof getAdminAuditLog>>, TError = ErrorType<ErrorResponse>>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ params?: GetAdminAuditLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Get recent dashboard changes
+ * @summary Search dashboard changes
  */
 
 export function useGetAdminAuditLog<TData = Awaited<ReturnType<typeof getAdminAuditLog>>, TError = ErrorType<ErrorResponse>>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ params?: GetAdminAuditLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getGetAdminAuditLogQueryOptions(options)
+  const queryOptions = getGetAdminAuditLogQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

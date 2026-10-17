@@ -59,6 +59,9 @@ export interface AdminAuditEntry {
 
 export interface AdminAuditLogResponse {
   entries: AdminAuditEntry[];
+  page: number;
+  pageSize: number;
+  total: number;
 }
 
 export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
@@ -534,4 +537,29 @@ export interface AdminOrderUpdate {
 export interface DeleteResponse {
   deleted: boolean;
 }
+
+export type GetAdminAuditLogParams = {
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+/**
+ * @maxLength 100
+ */
+actor?: string;
+recordType?: AuditRecordType;
+/**
+ * Include changes made on or after this date (UTC).
+ */
+from?: string;
+/**
+ * Include changes made on or before this date (UTC).
+ */
+to?: string;
+};
 
