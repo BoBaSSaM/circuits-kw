@@ -1,0 +1,4 @@
+{
+  "installCommand": "npm install --workspace=@workspace/api-server",
+  "buildCommand": "npm run build"
+}
