@@ -1,0 +1,25 @@
+My Vercel deployment is failing during the build step. Please diagnose and fix it.
+
+Failing package: @workspace/api-server (path: artifacts/api-server, in an npm workspaces monorepo)
+Build command that fails: `next build` (run via `npm run build`)
+Vercel error:
+  npm error Lifecycle script `build` failed with error: code 1
+  npm error workspace @workspace/api-server@0.0.0
+  npm error command sh -c next build
+  Error: [BUILD_UTILS_SPAWN_1] Command "npm run build" exited with 1
+
+Steps:
+1. From the repo root, run `npm install`, then `npm run build --workspace=@workspace/api-server` (or `cd artifacts/api-server && npx next build`) and capture the FULL output. The real error is above the "Lifecycle script failed" line.
+2. Identify the root cause. Check these common causes:
+   - TypeScript or ESLint errors that fail `next build` (fix them properly; don't just disable checks)
+   - Imports from other workspace packages (@workspace/*) that aren't built yet or aren't listed in dependencies / transpilePackages
+   - Missing environment variables referenced at build time (list them, don't hardcode secrets)
+   - Missing or mismatched dependencies, or lockfile out of sync (run `npm install` and commit package-lock.json)
+   - Node version mismatch (set "engines" in package.json to match what Vercel uses)
+   - Server-only code (Express, fs, database clients) running during static page generation
+   - Case-sensitive import paths that work on Replit/macOS but fail on Linux
+3. Check whether this package is actually meant to be a Next.js app. If it's a plain API server (Express/Fastify) being built with `next build` by mistake, tell me and fix the build script or Vercel config rather than forcing Next to work.
+4. Verify Vercel project settings are consistent with the monorepo: Root Directory should be artifacts/api-server, with "Include source files outside of the Root Directory" enabled so workspace packages resolve. Tell me if I need to change anything in the Vercel dashboard.
+5. Re-run the build locally until it exits with code 0.
+
+When done, give me: the root cause, the exact files changed, and any env vars or Vercel dashboard settings I need to update manually.
