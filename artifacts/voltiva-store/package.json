@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --webpack --hostname 0.0.0.0 --port ${PORT:-19607}",
-    "build": "next build",
+    "build": "npm --prefix ../../lib/api-spec run codegen && next build",
     "start": "next start --hostname 0.0.0.0 --port ${PORT:-3000}",
     "serve": "npm run start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -59,6 +59,7 @@
     "input-otp": "^1.4.2",
     "lucide-react": "^0.545.0",
     "next-themes": "^0.4.6",
+    "orval": "^8.30.0",
     "playwright": "^1.64.0",
     "react-day-picker": "^9.11.1",
     "react-hook-form": "^7.55.0",

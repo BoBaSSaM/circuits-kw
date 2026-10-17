@@ -5,7 +5,7 @@
   "packageManager": "npm@11.21.0",
   "engines": {
     "node": ">=20.9.0",
-    "npm": ">=11.21.0"
+    "npm": ">=11.0.0"
   },
   "workspaces": [
     "artifacts/*",
@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "build": "npm run typecheck && npm run build --workspaces --if-present",
-    "typecheck:libs": "tsc --build",
+    "typecheck:libs": "tsc --build --force",
     "typecheck": "npm run typecheck:libs && npm run typecheck --workspaces --if-present"
   },
   "private": true,
