@@ -14,3 +14,9 @@ Each Next.js workspace deployed independently should also declare `typescript` i
 **Why:** Vercel's storefront build could not find TypeScript when it was only declared at the monorepo root.
 
 **How to apply:** Add TypeScript to the app workspace's manifest and keep the workspace lock entry in sync before deploying that app separately.
+
+When a storefront build depends on TypeScript project-reference declarations, run code generation first and force-build the referenced libraries before `next build`. Ordinary incremental `tsc --build` may trust stale build-info files even when a referenced `dist` output has been removed.
+
+**Why:** A clean deployment test reproduced TS6305 because cached `.tsbuildinfo` caused the library build to skip regenerating missing declarations.
+
+**How to apply:** In clean deployment and CI builds, run the repository's generator, then `tsc --build --force` for the referenced projects before Next.js type-checks the app.
