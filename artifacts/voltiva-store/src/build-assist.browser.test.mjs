@@ -357,6 +357,17 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '6.000 KWD');
     assert.equal(await page.getByTestId('button-add-bom-cart').isDisabled(), false);
     assert.match(await page.getByTestId('text-price-source').innerText(), /Illustrative catalog prices/);
+    await page.getByTestId('button-add-bom-cart').click();
+    await page.getByTestId('link-cart').click();
+    const catalogBomRow = page.getByTestId('row-cart-bom-esp32');
+    await catalogBomRow.waitFor();
+    assert.equal(await page.locator('[data-testid^="text-cart-supplier-"]').count(), 0);
+    await page.reload();
+    await page.getByTestId('row-cart-bom-esp32').waitFor();
+    assert.equal(await page.locator('[data-testid^="text-cart-supplier-"]').count(), 0);
+    await page.getByTestId('button-clear-cart').click();
+    await page.goto(`${baseUrl}/build-assist`);
+    await page.getByTestId('row-bom-esp32').waitFor();
     const previewDescription = await page.locator('.assist-output-head p').innerText();
     await page.getByTestId('button-generate-bom').click();
     await page.getByTestId('status-build-assist').waitFor();
@@ -465,6 +476,10 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.getByTestId('row-cart-bom-bme280').count(), 0);
     assert.equal(await page.getByTestId('input-quantity-bom-esp32').inputValue(), '2');
     assert.equal(await restoredBomRow.locator('.price').innerText(), '3.250 KWD');
+    const supplierContext = page.getByTestId('text-cart-supplier-bom-esp32');
+    await supplierContext.waitFor();
+    assert.match(await supplierContext.innerText(), /Fresh supplier list/);
+    assert.match(await supplierContext.innerText(), new RegExp(freshUpdatedAt));
     assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '3.250 KWD');
 
     await page.getByTestId('input-quantity-bom-esp32').fill('4');
@@ -641,6 +656,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     await supplierPricedCartRow.waitFor();
     assert.equal(await supplierPricedCartRow.locator('.price').innerText(), '1.625 KWD');
     assert.equal(await page.getByTestId('row-cart-nucleo').count(), 1);
+    assert.equal(await page.getByTestId('text-cart-supplier-nucleo').count(), 0);
     assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '7.825 KWD');
 
     await page.goto(`${baseUrl}/build-assist`);

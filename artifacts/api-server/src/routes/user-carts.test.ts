@@ -107,6 +107,33 @@ test("buyers read and replace only their own saved carts", async () => {
   assert.equal(fixture.carts.has("buyer-b"), false);
 });
 
+test("signed-in carts retain supplier attribution on saved BOM lines", async () => {
+  const fixture = makeFixture();
+  const supplierLine = {
+    id: "bom-controller",
+    name: "Controller",
+    price: 1.625,
+    kind: "bom",
+    sku: "CTRL-001",
+    qty: 2,
+    priceSource: "supplier-list",
+    supplierName: "Verified supplier",
+    supplierUpdatedAt: "2026-10-17",
+  };
+  const saveResponse = responseRecorder();
+  await fixture.handlers.saveCart(
+    fixture.request("buyer-a", { items: [supplierLine] }),
+    saveResponse.response,
+  );
+  assert.equal(saveResponse.result.statusCode, 200);
+  assert.deepEqual(fixture.carts.get("buyer-a")?.items, [supplierLine]);
+
+  const loadResponse = responseRecorder();
+  await fixture.handlers.getCart(fixture.request("buyer-a"), loadResponse.response);
+  assert.equal(loadResponse.result.statusCode, 200);
+  assert.deepEqual(loadResponse.result.body, { items: [supplierLine] });
+});
+
 test("cart saves reject malformed lines and strip unrecognized cart metadata", async () => {
   const fixture = makeFixture();
   const malformedResponse = responseRecorder();

@@ -247,14 +247,44 @@ test('replacing a supplier list reprices matching BOM lines and removes unpriced
   }, {
     'ESP32-WRM-32D': 1.625,
     'SNS-SOIL-CAP-12': 0.75,
+  }, {
+    supplierName: 'Replacement supplier',
+    supplierUpdatedAt: '2026-10-17',
   });
 
   assert.equal(replacement.updatedCount, 1);
   assert.equal(replacement.removedCount, 1);
   assert.deepEqual(replacement.items, [
-    { ...items[0], price: 2.75 },
+    { ...items[0], price: 2.75, supplierName: 'Replacement supplier', supplierUpdatedAt: '2026-10-17' },
     items[2],
     items[3],
   ]);
   assert.equal(calculateCartSubtotal(replacement.items), 15);
+});
+
+test('refreshes supplier attribution when a replacement list keeps the same unit price', () => {
+  const items = [{
+    id: 'bom-esp32',
+    kind: 'bom',
+    sku: 'ESP32-WRM-32D',
+    price: 1.625,
+    priceSource: 'supplier-list',
+    supplierName: 'Original supplier',
+    supplierUpdatedAt: '2026-09-01',
+    qty: 1,
+  }];
+
+  const replacement = replaceSupplierPricedBomItems(items, {
+    'ESP32-WRM-32D': 1.625,
+  }, {}, {
+    supplierName: 'Replacement supplier',
+    supplierUpdatedAt: '2026-10-17',
+  });
+
+  assert.equal(replacement.updatedCount, 0);
+  assert.deepEqual(replacement.items[0], {
+    ...items[0],
+    supplierName: 'Replacement supplier',
+    supplierUpdatedAt: '2026-10-17',
+  });
 });

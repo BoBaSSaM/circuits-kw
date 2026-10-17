@@ -6,6 +6,8 @@ export type CartLine = {
   kind?: string;
   sku?: string;
   priceSource?: 'catalog' | 'supplier-list';
+  supplierName?: string;
+  supplierUpdatedAt?: string;
   cartAddBaseQty?: number;
   cartAddOperations?: Record<string, number>;
 };
@@ -100,6 +102,8 @@ function sameCartItem(left: CartLine | undefined, right: CartLine | undefined): 
     && left.kind === right.kind
     && left.sku === right.sku
     && left.priceSource === right.priceSource
+    && left.supplierName === right.supplierName
+    && left.supplierUpdatedAt === right.supplierUpdatedAt
     && left.qty === right.qty;
 }
 
@@ -212,6 +216,7 @@ export function replaceSupplierPricedBomItems<T extends CartLine>(
   items: readonly T[],
   pricesBySku: Readonly<Record<string, number>>,
   previousPricesBySku: Readonly<Record<string, number>> = {},
+  supplierDetails?: { supplierName: string; supplierUpdatedAt: string },
 ): { items: T[]; updatedCount: number; removedCount: number } {
   const supplierPrices = new Map(
     Object.entries(pricesBySku).map(([sku, price]) => [sku.trim().toLocaleUpperCase('en-US'), price]),
@@ -235,11 +240,12 @@ export function replaceSupplierPricedBomItems<T extends CartLine>(
       removedCount += 1;
       return [];
     }
-    if (replacementPrice !== item.price) {
-      updatedCount += 1;
-      return [{ ...item, price: replacementPrice }];
-    }
-    return [item];
+    if (replacementPrice !== item.price) updatedCount += 1;
+    return [{
+      ...item,
+      price: replacementPrice,
+      ...(supplierDetails ?? {}),
+    }];
   });
 
   return { items: nextItems, updatedCount, removedCount };

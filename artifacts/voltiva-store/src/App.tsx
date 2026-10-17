@@ -45,7 +45,7 @@ import {
   Search, ShieldCheck, ShoppingCart, SlidersHorizontal, Trash2, Truck, UserRound, Wifi, X,
 } from 'lucide-react';
 
-type Item = { id: string; name: string; price: number; kind: 'component' | 'kit' | 'bom'; sku: string; qty: number; priceSource?: 'catalog' | 'supplier-list' };
+type Item = { id: string; name: string; price: number; kind: 'component' | 'kit' | 'bom'; sku: string; qty: number; priceSource?: 'catalog' | 'supplier-list'; supplierName?: string; supplierUpdatedAt?: string };
 type AddItem = Omit<Item, 'qty'> & { qty?: number };
 type DemoOrder = { orderNumber:string; placedAt:string; items:Item[]; subtotal:number; currency:MoneyCurrency; isDemo:boolean; paymentStatus:'not_required'|'pending'|'paid'|'failed'|'expired' };
 type Product = CatalogProduct;
@@ -592,7 +592,7 @@ function getPriceCsvImportError(error: unknown, language: Language) {
     : t('CSV could not be imported. Check supplier columns, KWD source prices, and duplicate SKUs.', language);
 }
 
-function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedItems,products,loading,error,retry}:{add:(item:AddItem)=>void;removeSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>)=>number;replaceSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>)=>{updatedCount:number;removedCount:number};products:Product[];loading:boolean;error:boolean;retry:()=>void}) {
+function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedItems,products,loading,error,retry}:{add:(item:AddItem)=>void;removeSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>)=>number;replaceSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>,supplierDetails?:{supplierName:string;supplierUpdatedAt:string})=>{updatedCount:number;removedCount:number};products:Product[];loading:boolean;error:boolean;retry:()=>void}) {
   const {language}=useLanguage();
    useDocument(t('Build Assist',language),t('Choose a project and preview its parts and saved prices.',language));
   const [selectedProjectId,setSelectedProjectId]=useState(buildOptions[0].id);
@@ -623,7 +623,10 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
       if(nextPriceList) {
         const previousPriceList=priceListRef.current;
         if(JSON.stringify(previousPriceList)===JSON.stringify(nextPriceList)) return;
-        replaceSupplierPricedItems(nextPriceList.pricesBySku,previousPriceList?.pricesBySku);
+        replaceSupplierPricedItems(nextPriceList.pricesBySku,previousPriceList?.pricesBySku,{
+          supplierName:nextPriceList.source,
+          supplierUpdatedAt:nextPriceList.updatedAt,
+        });
         priceListRef.current=nextPriceList;
         setPriceList(nextPriceList);
         setPriceListRemoved(false);
@@ -688,7 +691,10 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
       const imported=parseAuthorizedPriceCsv(csv);
       const nextPriceList={...imported,source:priceSource.trim(),updatedAt:priceUpdatedAt};
       const saved=writeBrowserStorage(PRICE_LIST_STORAGE_KEY,JSON.stringify(nextPriceList));
-      const cartChanges=replaceSupplierPricedItems(nextPriceList.pricesBySku,priceList?.pricesBySku);
+      const cartChanges=replaceSupplierPricedItems(nextPriceList.pricesBySku,priceList?.pricesBySku,{
+        supplierName:nextPriceList.source,
+        supplierUpdatedAt:nextPriceList.updatedAt,
+      });
       priceListRef.current=nextPriceList;
       setPriceList(nextPriceList);
       setPriceListRemoved(false);
@@ -737,6 +743,10 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
     items.forEach(item=>add({
       ...item,
       priceSource:priceList?'supplier-list':'catalog',
+      ...(priceList?{
+        supplierName:priceList.source,
+        supplierUpdatedAt:priceList.updatedAt,
+      }:{}),
     }));
     setNotice(items.length?t('Priced BOM items added to your cart. Unpriced parts were skipped.',language):t('No priced BOM items are available to add.',language));
   };
@@ -897,7 +907,7 @@ function CartPage({items,update,remove,clearCart}:{items:Item[];update:(id:strin
   const subtotalUsd=roundMoneyAmount(items.reduce((sum,item)=>sum+convertKwdToCurrency(item.price,'USD')*item.qty,0),'USD');
   return <div className="container page-top"><div className="eyebrow">{t('YOUR BUILD / LOCAL CART',language)}</div><h1 style={{fontSize:38}}>{t('Cart review',language)}</h1><p className="lead" style={{fontSize:14}}>{t('Place a demo order. Payment and shipping are not connected.',language)}</p>
     {!items.length?<div className="surface empty-state"><div className="empty-icon"><ShoppingCart size={23}/></div><h3>{t('Your cart is ready for a build.',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Add parts or a kit to your cart.',language)}</p><div style={{display:'flex',justifyContent:'center',gap:9,flexWrap:'wrap'}}><Link className="button button-primary" href="/components" data-testid="link-empty-cart-components">{t('Browse components',language)}</Link><Link className="button button-outline" href="/project-kits" data-testid="link-empty-cart-kits">{t('Explore kits',language)}</Link></div></div>:
-      <div className="cart-layout"><section className="cart-list surface" aria-label={t('Cart items',language)}>{items.map(i=><article className="cart-row" key={i.id} data-testid={`row-cart-${i.id}`}><div className="cart-product"><span className="cart-thumb">{i.kind==='kit'?<PackageCheck size={22}/>:i.kind==='bom'?<CircuitBoard size={22}/>:<Cpu size={22}/>}</span><span><strong>{t(i.name,language)}</strong><span>{i.sku} · {t(i.kind==='kit'?'Project kit':i.kind==='bom'?'Build Assist demo item':'Component',language)}</span></span></div><div className="quantity" aria-label={`${t('Quantity',language)} ${t(i.name,language)}`}><button aria-label={t('Decrease quantity',language)} onClick={()=>update(i.id,i.qty-1)} data-testid={`button-decrease-${i.id}`}><Minus size={12}/></button><input aria-label={`${t('Quantity',language)} ${t(i.name,language)}`} type="number" min="1" value={i.qty} onChange={e=>update(i.id,Math.max(1,Number(e.target.value)||1))} data-testid={`input-quantity-${i.id}`}/><button aria-label={t('Increase quantity',language)} onClick={()=>update(i.id,i.qty+1)} data-testid={`button-increase-${i.id}`}><Plus size={12}/></button></div><span className="price">{fmtUsd(convertKwdToCurrency(i.price,'USD')*i.qty)}</span><button className="remove" aria-label={`${t('Remove',language)} ${t(i.name,language)}`} onClick={()=>remove(i.id)} data-testid={`button-remove-${i.id}`}><Trash2 size={16}/></button></article>)}</section>
+      <div className="cart-layout"><section className="cart-list surface" aria-label={t('Cart items',language)}>{items.map(i=><article className="cart-row" key={i.id} data-testid={`row-cart-${i.id}`}><div className="cart-product"><span className="cart-thumb">{i.kind==='kit'?<PackageCheck size={22}/>:i.kind==='bom'?<CircuitBoard size={22}/>:<Cpu size={22}/>}</span><span><strong>{t(i.name,language)}</strong><span>{i.sku} · {t(i.kind==='kit'?'Project kit':i.kind==='bom'?'Build Assist demo item':'Component',language)}</span>{i.kind==='bom'&&i.priceSource==='supplier-list'&&i.supplierName&&i.supplierUpdatedAt&&<span className="cart-supplier-context" data-testid={`text-cart-supplier-${i.id}`}>{t('Supplier or price list',language)}: {i.supplierName} · {t('Updated',language)}: {i.supplierUpdatedAt}</span>}</span></div><div className="quantity" aria-label={`${t('Quantity',language)} ${t(i.name,language)}`}><button aria-label={t('Decrease quantity',language)} onClick={()=>update(i.id,i.qty-1)} data-testid={`button-decrease-${i.id}`}><Minus size={12}/></button><input aria-label={`${t('Quantity',language)} ${t(i.name,language)}`} type="number" min="1" value={i.qty} onChange={e=>update(i.id,Math.max(1,Number(e.target.value)||1))} data-testid={`input-quantity-${i.id}`}/><button aria-label={t('Increase quantity',language)} onClick={()=>update(i.id,i.qty+1)} data-testid={`button-increase-${i.id}`}><Plus size={12}/></button></div><span className="price">{fmtUsd(convertKwdToCurrency(i.price,'USD')*i.qty)}</span><button className="remove" aria-label={`${t('Remove',language)} ${t(i.name,language)}`} onClick={()=>remove(i.id)} data-testid={`button-remove-${i.id}`}><Trash2 size={16}/></button></article>)}</section>
           <aside className="summary-card surface"><div className="eyebrow">{t('CART SUMMARY',language)}</div><div className="summary-line"><span>{t('Items',language)}</span><strong>{items.reduce((n,i)=>n+i.qty,0)}</strong></div><div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono">{fmtUsd(subtotalUsd)}</strong></div><div className="summary-line"><span>{t('Delivery',language)}</span><span>{t('Not connected',language)}</span></div><div className="summary-line summary-total"><span>{t('Estimated total',language)}</span><span className="mono">{fmtUsd(subtotalUsd)}</span></div><p style={{fontSize:10,lineHeight:1.5,color:'#6c7880'}}>{t('Demo order only. No payment or fulfillment.',language)}</p><Link className="button button-primary" style={{width:'100%'}} href="/checkout" onClick={()=>trackCheckoutStarted(items.length,subtotal)} data-testid="link-checkout"><ArrowRight size={14}/> {t('Continue to checkout',language)}</Link><Link className="button button-outline" style={{width:'100%',marginTop:8}} href="/components" data-testid="link-continue-shopping"><ArrowDown size={14}/> {t('Continue shopping',language)}</Link><button className="button button-quiet" style={{width:'100%',marginTop:8}} onClick={clearCart} data-testid="button-clear-cart"><Trash2 size={14}/> {t('Clear cart',language)}</button></aside>
       </div>}
   </div>;
@@ -1672,8 +1682,10 @@ function StorefrontRuntime() {
   useEffect(()=>{
     if(cartMode!=='account'||!accountUserId) return;
     const userId=accountUserId;
-    const savedItems:CartItem[]=items.map(({id,name,price,kind,sku,qty,priceSource})=>({
+    const savedItems:CartItem[]=items.map(({id,name,price,kind,sku,qty,priceSource,supplierName,supplierUpdatedAt})=>({
       id,name,price,kind,sku,qty,...(priceSource?{priceSource}:{}),
+      ...(supplierName?{supplierName}:{}),
+      ...(supplierUpdatedAt?{supplierUpdatedAt}:{}),
     }));
     const timer=window.setTimeout(()=>{
       const save=async()=>{
@@ -1752,10 +1764,10 @@ function StorefrontRuntime() {
     });
     return removedCount;
   };
-  const replaceSupplierPricedItems=(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>)=>{
+  const replaceSupplierPricedItems=(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>,supplierDetails?:{supplierName:string;supplierUpdatedAt:string})=>{
     let result={updatedCount:0,removedCount:0};
     changeCart(current=>{
-      const replacement=replaceSupplierPricedBomItems(current,pricesBySku,previousPricesBySku);
+      const replacement=replaceSupplierPricedBomItems(current,pricesBySku,previousPricesBySku,supplierDetails);
       result={updatedCount:replacement.updatedCount,removedCount:replacement.removedCount};
       return replacement.items;
     });

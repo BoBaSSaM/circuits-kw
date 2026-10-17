@@ -78,6 +78,9 @@ export const getMyCartResponseItemsItemSkuMax = 80;
 
 export const getMyCartResponseItemsItemQtyMax = 999;
 
+export const getMyCartResponseItemsItemSupplierNameMax = 120;
+
+export const getMyCartResponseItemsItemSupplierUpdatedAtRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const getMyCartResponseItemsMax = 100;
 
 
@@ -90,7 +93,9 @@ export const GetMyCartResponse = zod.object({
   "kind": zod.enum(['component', 'kit', 'bom']),
   "sku": zod.string().max(getMyCartResponseItemsItemSkuMax),
   "qty": zod.number().int().min(1).max(getMyCartResponseItemsItemQtyMax),
-  "priceSource": zod.enum(['catalog', 'supplier-list']).optional()
+  "priceSource": zod.enum(['catalog', 'supplier-list']).optional(),
+  "supplierName": zod.string().min(1).max(getMyCartResponseItemsItemSupplierNameMax).optional(),
+  "supplierUpdatedAt": zod.string().regex(getMyCartResponseItemsItemSupplierUpdatedAtRegExp).optional()
 })).max(getMyCartResponseItemsMax)
 })
 
@@ -109,6 +114,9 @@ export const saveMyCartBodyItemsItemSkuMax = 80;
 
 export const saveMyCartBodyItemsItemQtyMax = 999;
 
+export const saveMyCartBodyItemsItemSupplierNameMax = 120;
+
+export const saveMyCartBodyItemsItemSupplierUpdatedAtRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const saveMyCartBodyItemsMax = 100;
 
 
@@ -121,7 +129,9 @@ export const SaveMyCartBody = zod.object({
   "kind": zod.enum(['component', 'kit', 'bom']),
   "sku": zod.string().max(saveMyCartBodyItemsItemSkuMax),
   "qty": zod.number().int().min(1).max(saveMyCartBodyItemsItemQtyMax),
-  "priceSource": zod.enum(['catalog', 'supplier-list']).optional()
+  "priceSource": zod.enum(['catalog', 'supplier-list']).optional(),
+  "supplierName": zod.string().min(1).max(saveMyCartBodyItemsItemSupplierNameMax).optional(),
+  "supplierUpdatedAt": zod.string().regex(saveMyCartBodyItemsItemSupplierUpdatedAtRegExp).optional()
 })).max(saveMyCartBodyItemsMax)
 })
 
@@ -136,6 +146,9 @@ export const saveMyCartResponseItemsItemSkuMax = 80;
 
 export const saveMyCartResponseItemsItemQtyMax = 999;
 
+export const saveMyCartResponseItemsItemSupplierNameMax = 120;
+
+export const saveMyCartResponseItemsItemSupplierUpdatedAtRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const saveMyCartResponseItemsMax = 100;
 
 
@@ -148,7 +161,9 @@ export const SaveMyCartResponse = zod.object({
   "kind": zod.enum(['component', 'kit', 'bom']),
   "sku": zod.string().max(saveMyCartResponseItemsItemSkuMax),
   "qty": zod.number().int().min(1).max(saveMyCartResponseItemsItemQtyMax),
-  "priceSource": zod.enum(['catalog', 'supplier-list']).optional()
+  "priceSource": zod.enum(['catalog', 'supplier-list']).optional(),
+  "supplierName": zod.string().min(1).max(saveMyCartResponseItemsItemSupplierNameMax).optional(),
+  "supplierUpdatedAt": zod.string().regex(saveMyCartResponseItemsItemSupplierUpdatedAtRegExp).optional()
 })).max(saveMyCartResponseItemsMax)
 })
 
