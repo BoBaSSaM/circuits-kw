@@ -170,6 +170,8 @@ export const GetMyOrdersResponse = zod.object({
   "qty": zod.number().int()
 })),
   "subtotal": zod.number(),
+  "currency": zod.enum(['KWD', 'USD']),
+  "exchangeRateKwdToUsd": zod.number().nullable(),
   "isDemo": zod.boolean(),
   "paymentStatus": zod.enum(['not_required', 'pending', 'paid', 'failed', 'expired'])
 }))
@@ -236,7 +238,8 @@ export const CreateCheckoutOrderBody = zod.object({
   "sku": zod.string().min(1).max(createCheckoutOrderBodyItemsItemSkuMax),
   "qty": zod.number().int().min(1).max(createCheckoutOrderBodyItemsItemQtyMax),
   "estimateUnitPrice": zod.number().min(createCheckoutOrderBodyItemsItemEstimateUnitPriceMin).max(createCheckoutOrderBodyItemsItemEstimateUnitPriceMax).optional()
-})).min(1).max(createCheckoutOrderBodyItemsMax)
+})).min(1).max(createCheckoutOrderBodyItemsMax),
+  "currency": zod.enum(['KWD', 'USD']).optional()
 })
 
 export const CreateCheckoutOrderResponse = zod.object({
@@ -252,6 +255,8 @@ export const CreateCheckoutOrderResponse = zod.object({
   "qty": zod.number().int()
 })),
   "subtotal": zod.number(),
+  "currency": zod.enum(['KWD', 'USD']),
+  "exchangeRateKwdToUsd": zod.number().nullable(),
   "status": zod.enum(['new', 'confirmed', 'preparing', 'completed', 'cancelled']),
   "isDemo": zod.boolean(),
   "paymentStatus": zod.enum(['not_required', 'pending', 'paid', 'failed', 'expired'])
@@ -710,6 +715,8 @@ export const GetAdminOrdersResponse = zod.object({
   "qty": zod.number().int()
 })),
   "subtotal": zod.number(),
+  "currency": zod.enum(['KWD', 'USD']),
+  "exchangeRateKwdToUsd": zod.number().nullable(),
   "status": zod.enum(['new', 'confirmed', 'preparing', 'completed', 'cancelled']),
   "customer": zod.object({
   "name": zod.string().min(getAdminOrdersResponseOrdersItemCustomerNameMin).max(getAdminOrdersResponseOrdersItemCustomerNameMax),
@@ -793,7 +800,8 @@ export const CreateAdminOrderBody = zod.object({
   "sku": zod.string().min(1).max(createAdminOrderBodyItemsItemSkuMax),
   "qty": zod.number().int().min(1).max(createAdminOrderBodyItemsItemQtyMax),
   "estimateUnitPrice": zod.number().min(createAdminOrderBodyItemsItemEstimateUnitPriceMin).max(createAdminOrderBodyItemsItemEstimateUnitPriceMax).optional()
-})).min(1).max(createAdminOrderBodyItemsMax)
+})).min(1).max(createAdminOrderBodyItemsMax),
+  "currency": zod.enum(['KWD', 'USD']).optional()
 })
 
 export const createAdminOrderResponseCustomerNameMin = 2;
@@ -834,6 +842,8 @@ export const CreateAdminOrderResponse = zod.object({
   "qty": zod.number().int()
 })),
   "subtotal": zod.number(),
+  "currency": zod.enum(['KWD', 'USD']),
+  "exchangeRateKwdToUsd": zod.number().nullable(),
   "status": zod.enum(['new', 'confirmed', 'preparing', 'completed', 'cancelled']),
   "customer": zod.object({
   "name": zod.string().min(createAdminOrderResponseCustomerNameMin).max(createAdminOrderResponseCustomerNameMax),
@@ -910,6 +920,8 @@ export const UpdateAdminOrderResponse = zod.object({
   "qty": zod.number().int()
 })),
   "subtotal": zod.number(),
+  "currency": zod.enum(['KWD', 'USD']),
+  "exchangeRateKwdToUsd": zod.number().nullable(),
   "status": zod.enum(['new', 'confirmed', 'preparing', 'completed', 'cancelled']),
   "customer": zod.object({
   "name": zod.string().min(updateAdminOrderResponseCustomerNameMin).max(updateAdminOrderResponseCustomerNameMax),

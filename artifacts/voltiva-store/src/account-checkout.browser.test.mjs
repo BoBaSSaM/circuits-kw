@@ -226,6 +226,10 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
     const checkoutRow = page.getByTestId('row-checkout-auth-flow-item');
     await checkoutRow.waitFor();
     assert.match(await checkoutRow.innerText(), /Qty 2/);
+    await page.getByTestId('button-checkout-currency-usd').click();
+    assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '18.82 USD');
+    assert.match(await page.getByTestId('text-checkout-currency-rate').innerText(), /1 KWD = 3.3 USD/);
+    await page.getByTestId('button-checkout-currency-kwd').click();
     assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '5.700 KWD');
     await page.evaluate(() => localStorage.removeItem('circuits-kw-cart'));
     await page.reload();

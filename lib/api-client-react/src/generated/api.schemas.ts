@@ -485,6 +485,14 @@ export interface OrderShipping {
   notes?: string;
 }
 
+export type OrderCurrency = typeof OrderCurrency[keyof typeof OrderCurrency];
+
+
+export const OrderCurrency = {
+  KWD: 'KWD',
+  USD: 'USD',
+} as const;
+
 export interface CheckoutOrderInput {
   customer: OrderCustomer;
   shipping: OrderShipping;
@@ -493,6 +501,7 @@ export interface CheckoutOrderInput {
      * @maxItems 100
      */
   items: OrderItemInput[];
+  currency?: OrderCurrency;
 }
 
 export interface CheckoutOrderResponse {
@@ -501,6 +510,9 @@ export interface CheckoutOrderResponse {
   placedAt: string;
   items: OrderItem[];
   subtotal: number;
+  currency: OrderCurrency;
+  /** @nullable */
+  exchangeRateKwdToUsd: number | null;
   status: OrderStatus;
   isDemo: boolean;
   paymentStatus: PaymentStatus;
@@ -512,6 +524,9 @@ export interface AccountOrder {
   placedAt: string;
   items: OrderItem[];
   subtotal: number;
+  currency: OrderCurrency;
+  /** @nullable */
+  exchangeRateKwdToUsd: number | null;
   isDemo: boolean;
   paymentStatus: PaymentStatus;
 }
@@ -526,6 +541,9 @@ export interface AdminOrder {
   placedAt: string;
   items: OrderItem[];
   subtotal: number;
+  currency: OrderCurrency;
+  /** @nullable */
+  exchangeRateKwdToUsd: number | null;
   status: OrderStatus;
   customer: OrderCustomer;
   shipping: OrderShipping;

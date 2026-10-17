@@ -16,6 +16,7 @@ import {
   type CheckoutOrderInput,
   type OrderItem,
   type OrderItemInput,
+  type OrderCurrency,
   type OrderStatus,
   type ProductInput,
   type ProjectKitInput,
@@ -23,6 +24,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { ObjectId } from "mongodb";
+import { convertKwdToCurrency, roundMoneyAmount, USD_PER_KWD } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 import { requireDashboardRoles } from "../lib/dashboard-auth";
 import { getMongoDatabase } from "../lib/mongo";
@@ -41,6 +43,8 @@ export type OrderDocument = {
   placedAt: Date;
   items: OrderItem[];
   subtotal: number;
+  currency?: OrderCurrency;
+  exchangeRateKwdToUsd?: number | null;
   status: OrderStatus;
   customer: CheckoutOrderInput["customer"];
   shipping: CheckoutOrderInput["shipping"];
@@ -143,8 +147,15 @@ export async function storeOrder(
   getDatabase: typeof getMongoDatabase = getMongoDatabase,
 ): Promise<AdminOrder> {
   const database = await getDatabase();
-  const items = await resolveOrderItems(input.items, database);
-  const subtotal = roundKwd(items.reduce((total, item) => total + item.price * item.qty, 0));
+  const currency: OrderCurrency = input.currency ?? "KWD";
+  const items = (await resolveOrderItems(input.items, database)).map((item) => ({
+    ...item,
+    price: convertKwdToCurrency(item.price, currency),
+  }));
+  const subtotal = roundMoneyAmount(
+    items.reduce((total, item) => total + item.price * item.qty, 0),
+    currency,
+  );
   const placedAt = new Date();
   const orderNumber = `CKW-${Date.now()}-${randomUUID().slice(0, 6).toUpperCase()}`;
   const document: OrderDocument = {
@@ -153,6 +164,8 @@ export async function storeOrder(
     placedAt,
     items,
     subtotal,
+    currency,
+    exchangeRateKwdToUsd: currency === "USD" ? USD_PER_KWD : null,
     status: "new",
     customer: input.customer,
     shipping: input.shipping,
@@ -170,6 +183,8 @@ export async function storeOrder(
     placedAt: document.placedAt,
     items: document.items,
     subtotal: document.subtotal,
+    currency: document.currency ?? "KWD",
+    exchangeRateKwdToUsd: document.exchangeRateKwdToUsd ?? null,
     status: document.status,
     customer: document.customer,
     shipping: document.shipping,
@@ -204,6 +219,8 @@ function toAdminOrder(document: OrderDocument): AdminOrder {
     placedAt: document.placedAt,
     items: document.items,
     subtotal: document.subtotal,
+    currency: document.currency ?? "KWD",
+    exchangeRateKwdToUsd: document.exchangeRateKwdToUsd ?? null,
     status: document.status,
     customer: document.customer,
     shipping: document.shipping,
@@ -221,6 +238,8 @@ function toAccountOrder(document: OrderDocument): AccountOrder {
     placedAt: document.placedAt,
     items: document.items,
     subtotal: document.subtotal,
+    currency: document.currency ?? "KWD",
+    exchangeRateKwdToUsd: document.exchangeRateKwdToUsd ?? null,
     isDemo: document.isDemo ?? true,
     paymentStatus: document.paymentStatus ?? "not_required",
   };
@@ -289,6 +308,8 @@ router.post("/orders", async (req, res) => {
         placedAt: order.placedAt,
         items: order.items,
         subtotal: order.subtotal,
+        currency: order.currency ?? "KWD",
+        exchangeRateKwdToUsd: order.exchangeRateKwdToUsd ?? null,
         status: order.status,
         isDemo: order.isDemo,
         paymentStatus: order.paymentStatus,

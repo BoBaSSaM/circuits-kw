@@ -781,12 +781,16 @@ components:
         unit: { type: string, maxLength: 80 }
         notes: { type: string, maxLength: 1000 }
       required: [governorate, area, block, street, building]
+    OrderCurrency:
+      type: string
+      enum: [KWD, USD]
     CheckoutOrderInput:
       type: object
       properties:
         customer: { $ref: "#/components/schemas/OrderCustomer" }
         shipping: { $ref: "#/components/schemas/OrderShipping" }
         items: { type: array, items: { $ref: "#/components/schemas/OrderItemInput" }, minItems: 1, maxItems: 100 }
+        currency: { $ref: "#/components/schemas/OrderCurrency" }
       required: [customer, shipping, items]
     CheckoutOrderResponse:
       type: object
@@ -796,10 +800,12 @@ components:
         placedAt: { type: string, format: date-time }
         items: { type: array, items: { $ref: "#/components/schemas/OrderItem" } }
         subtotal: { type: number }
+        currency: { $ref: "#/components/schemas/OrderCurrency" }
+        exchangeRateKwdToUsd: { type: ["number", "null"] }
         status: { $ref: "#/components/schemas/OrderStatus" }
         isDemo: { type: boolean }
         paymentStatus: { $ref: "#/components/schemas/PaymentStatus" }
-      required: [id, orderNumber, placedAt, items, subtotal, status, isDemo, paymentStatus]
+      required: [id, orderNumber, placedAt, items, subtotal, currency, exchangeRateKwdToUsd, status, isDemo, paymentStatus]
     AccountOrder:
       type: object
       properties:
@@ -808,9 +814,11 @@ components:
         placedAt: { type: string, format: date-time }
         items: { type: array, items: { $ref: "#/components/schemas/OrderItem" } }
         subtotal: { type: number }
+        currency: { $ref: "#/components/schemas/OrderCurrency" }
+        exchangeRateKwdToUsd: { type: ["number", "null"] }
         isDemo: { type: boolean }
         paymentStatus: { $ref: "#/components/schemas/PaymentStatus" }
-      required: [id, orderNumber, placedAt, items, subtotal, isDemo, paymentStatus]
+      required: [id, orderNumber, placedAt, items, subtotal, currency, exchangeRateKwdToUsd, isDemo, paymentStatus]
     AccountOrderListResponse:
       type: object
       properties:
@@ -824,6 +832,8 @@ components:
         placedAt: { type: string, format: date-time }
         items: { type: array, items: { $ref: "#/components/schemas/OrderItem" } }
         subtotal: { type: number }
+        currency: { $ref: "#/components/schemas/OrderCurrency" }
+        exchangeRateKwdToUsd: { type: ["number", "null"] }
         status: { $ref: "#/components/schemas/OrderStatus" }
         customer: { $ref: "#/components/schemas/OrderCustomer" }
         shipping: { $ref: "#/components/schemas/OrderShipping" }
@@ -831,7 +841,7 @@ components:
         adminNotes: { type: ["string", "null"] }
         isDemo: { type: boolean }
         paymentStatus: { $ref: "#/components/schemas/PaymentStatus" }
-      required: [id, orderNumber, placedAt, items, subtotal, status, customer, shipping, userId, adminNotes, isDemo, paymentStatus]
+      required: [id, orderNumber, placedAt, items, subtotal, currency, exchangeRateKwdToUsd, status, customer, shipping, userId, adminNotes, isDemo, paymentStatus]
     OrderListResponse:
       type: object
       properties:

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { OrderCurrency } from './orderCurrency';
 import type { OrderItem } from './orderItem';
 import type { OrderStatus } from './orderStatus';
 import type { PaymentStatus } from './paymentStatus';
@@ -15,6 +16,9 @@ export interface CheckoutOrderResponse {
   placedAt: Date;
   items: OrderItem[];
   subtotal: number;
+  currency: OrderCurrency;
+  /** @nullable */
+  exchangeRateKwdToUsd: number | null;
   status: OrderStatus;
   isDemo: boolean;
   paymentStatus: PaymentStatus;

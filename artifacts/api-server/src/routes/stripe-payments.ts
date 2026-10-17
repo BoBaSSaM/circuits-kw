@@ -1,7 +1,15 @@
 import { getAuth } from "@clerk/express";
 import {
   CreateCheckoutOrderBody,
+  type OrderCurrency,
   type OrderStatus,
+} from "@workspace/api-zod";
+import {
+  convertKwdToCurrency,
+  currencyMinorUnitScale,
+  roundMoneyAmount,
+  toStripeMinorUnits,
+  USD_PER_KWD,
 } from "@workspace/api-zod";
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
@@ -16,10 +24,9 @@ import {
   StripeProxyError,
 } from "../lib/stripe";
 import { logger } from "../lib/logger";
-import { OrderInputError, resolveOrderItems, roundKwd, type OrderDocument } from "./orders";
+import { OrderInputError, resolveOrderItems, type OrderDocument } from "./orders";
 
 const router: IRouter = Router();
-const currency = "kwd";
 
 function safeDevelopmentErrorDetail(error: unknown): string | undefined {
   if (process.env.NODE_ENV !== "development") return undefined;
@@ -28,14 +35,7 @@ function safeDevelopmentErrorDetail(error: unknown): string | undefined {
 }
 
 export function kwdToStripeMinorUnits(amountKwd: number): number {
-  if (!Number.isFinite(amountKwd) || amountKwd <= 0) {
-    throw new Error("A positive KWD amount is required.");
-  }
-  const minorUnits = Math.round((amountKwd + Number.EPSILON) * 1000);
-  if (minorUnits < 1 || Math.abs(amountKwd - minorUnits / 1000) > 1e-7) {
-    throw new Error("KWD prices must use no more than three decimal places.");
-  }
-  return minorUnits;
+  return toStripeMinorUnits(amountKwd, "KWD");
 }
 
 function getPublicOrigin(req: Request): string {
@@ -74,6 +74,8 @@ function serializePaymentOrder(document: OrderDocument) {
     placedAt: document.placedAt,
     items: document.items,
     subtotal: document.subtotal,
+    currency: document.currency ?? "KWD",
+    exchangeRateKwdToUsd: document.exchangeRateKwdToUsd ?? null,
     status: document.status as OrderStatus,
     paymentStatus: document.paymentStatus ?? "pending",
   };
@@ -84,8 +86,7 @@ async function updateOrderFromPaidSession(session: Stripe.Checkout.Session) {
   if (
     session.payment_status !== "paid" ||
     !orderId ||
-    !ObjectId.isValid(orderId) ||
-    session.currency !== currency
+    !ObjectId.isValid(orderId)
   ) {
     return null;
   }
@@ -98,7 +99,12 @@ async function updateOrderFromPaidSession(session: Stripe.Checkout.Session) {
     isDemo: false,
   };
   const document = await orders.findOne(filter);
-  if (!document || session.amount_total !== kwdToStripeMinorUnits(document.subtotal)) {
+  const currency: OrderCurrency = document?.currency ?? "KWD";
+  if (
+    !document ||
+    session.currency !== currency.toLowerCase() ||
+    session.amount_total !== toStripeMinorUnits(document.subtotal, currency)
+  ) {
     return null;
   }
 
@@ -155,12 +161,19 @@ router.post("/stripe/checkout", async (req, res) => {
   try {
     const origin = getPublicOrigin(req);
     const database = await getMongoDatabase();
-    const items = await resolveOrderItems(parsed.data.items, database);
+    const currency: OrderCurrency = parsed.data.currency ?? "KWD";
+    const items = (await resolveOrderItems(parsed.data.items, database)).map((item) => ({
+      ...item,
+      price: convertKwdToCurrency(item.price, currency),
+    }));
     const subtotalMinorUnits = items.reduce(
-      (sum, item) => sum + kwdToStripeMinorUnits(item.price) * item.qty,
+      (sum, item) => sum + toStripeMinorUnits(item.price, currency) * item.qty,
       0,
     );
-    const subtotal = roundKwd(subtotalMinorUnits / 1000);
+    const subtotal = roundMoneyAmount(
+      subtotalMinorUnits / currencyMinorUnitScale(currency),
+      currency,
+    );
     if (subtotal <= 0 || items.some((item) => item.price <= 0)) {
       res.status(400).json({ error: "invalid_payment_amount" });
       return;
@@ -174,6 +187,8 @@ router.post("/stripe/checkout", async (req, res) => {
       placedAt: now,
       items,
       subtotal,
+      currency,
+      exchangeRateKwdToUsd: currency === "USD" ? USD_PER_KWD : null,
       status: "new",
       customer: parsed.data.customer,
       shipping: parsed.data.shipping,
@@ -201,8 +216,8 @@ router.post("/stripe/checkout", async (req, res) => {
         line_items: order.items.map((item) => ({
           quantity: item.qty,
           price_data: {
-            currency,
-            unit_amount: kwdToStripeMinorUnits(item.price),
+            currency: currency.toLowerCase(),
+            unit_amount: toStripeMinorUnits(item.price, currency),
             product_data: {
               name: item.name,
               metadata: { sku: item.sku, kind: item.kind },

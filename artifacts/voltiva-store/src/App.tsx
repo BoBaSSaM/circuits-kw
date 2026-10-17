@@ -13,6 +13,7 @@ import { arSA, enUS } from '@clerk/localizations';
 import { shadcn } from '@clerk/themes';
 import { getGetAdminAccessQueryKey, getGetCatalogQueryKey, getGetMyOrdersQueryKey, getMyCart, saveMyCart, setBaseUrl, useCreateCheckoutOrder, useGetAdminAccess, useGetCatalog, useGetMyOrders, useSyncCurrentUser } from '@workspace/api-client-react';
 import type { CartItem, CatalogKit, CatalogProduct } from '@workspace/api-client-react';
+import { convertKwdToCurrency, formatMoney, roundMoneyAmount, USD_PER_KWD, type MoneyCurrency } from '@workspace/api-zod';
 import { LanguageProvider, t, useLanguage, type Language } from './i18n';
 import {
   buildPlanFromPrompt,
@@ -46,7 +47,7 @@ import {
 
 type Item = { id: string; name: string; price: number; kind: 'component' | 'kit' | 'bom'; sku: string; qty: number; priceSource?: 'catalog' | 'supplier-list' };
 type AddItem = Omit<Item, 'qty'> & { qty?: number };
-type DemoOrder = { orderNumber:string; placedAt:string; items:Item[]; subtotal:number; isDemo:boolean; paymentStatus:'not_required'|'pending'|'paid'|'failed'|'expired' };
+type DemoOrder = { orderNumber:string; placedAt:string; items:Item[]; subtotal:number; currency:MoneyCurrency; isDemo:boolean; paymentStatus:'not_required'|'pending'|'paid'|'failed'|'expired' };
 type Product = CatalogProduct;
 type Kit = CatalogKit;
 type PriceListState = { pricesBySku: Record<string, number>; source: string; updatedAt: string };
@@ -294,6 +295,7 @@ const buildOptions: BuildOption[] = [
 
 const kitDomains = ['All domains','Robotics','IoT & Smart Home','IoT & Automation','University Labs','Automation'];
 const fmt = (value:number) => `${value.toFixed(3)} KWD`;
+const fmtMoney = (value:number,currency:MoneyCurrency='KWD') => formatMoney(value,currency);
 const queryClient = new QueryClient();
 
 function escapeReceiptHtml(value:string) {
@@ -310,7 +312,7 @@ function escapeReceiptHtml(value:string) {
 function demoReceiptHtml(order:DemoOrder, language:Language) {
   const isArabic=language==='ar';
   const escape=escapeReceiptHtml;
-  const items=order.items.map(item=>`<tr><td>${escape(item.name)}</td><td>${escape(t('Qty',language))} ${item.qty}</td><td>${escape(fmt(item.price*item.qty))}</td></tr>`).join('');
+  const items=order.items.map(item=>`<tr><td>${escape(item.name)}</td><td>${escape(t('Qty',language))} ${item.qty}</td><td>${escape(fmtMoney(item.price*item.qty,order.currency))}</td></tr>`).join('');
   const title=t(order.isDemo?'Demo receipt':'Payment receipt',language);
   const label=t(order.isDemo?'DEMO ORDER · NO PAYMENT TAKEN':'PAID · STRIPE CHECKOUT',language);
   const notice=t(order.isDemo?'This is a demo order receipt. No payment or fulfillment is connected.':'Payment was confirmed by Stripe. Delivery details are saved for order management.',language);
@@ -343,7 +345,7 @@ function demoReceiptHtml(order:DemoOrder, language:Language) {
       <thead><tr><th>${escape(t('Item',language))}</th><th>${escape(t('Quantity',language))}</th><th>${escape(t('Amount',language))}</th></tr></thead>
       <tbody>${items}</tbody>
     </table>
-    <div class="total"><span>${escape(t('Subtotal',language))}</span><span>${escape(fmt(order.subtotal))}</span></div>
+    <div class="total"><span>${escape(t('Subtotal',language))}</span><span>${escape(fmtMoney(order.subtotal,order.currency))}</span></div>
     <p class="notice">${escape(notice)}</p>
   </main>
 </body>
@@ -919,6 +921,7 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
   const [stripePaymentPending,setStripePaymentPending]=useState(false);
   const [paymentVerifying,setPaymentVerifying]=useState(false);
   const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
+  const [selectedCurrency,setSelectedCurrency]=useState<MoneyCurrency>('KWD');
   useEffect(()=>{
     if(!placedOrder) return;
     const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -956,6 +959,7 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
           placedAt:new Date(saved.placedAt).toISOString(),
           items:saved.items,
           subtotal:saved.subtotal,
+          currency:saved.currency,
           isDemo:false,
           paymentStatus:'paid',
         });
@@ -968,7 +972,10 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
       .finally(()=>{if(active)setPaymentVerifying(false);});
     return ()=>{active=false;};
   },[clearCart,language]);
-  const subtotal=calculateCartSubtotal(items);
+  const subtotal=roundMoneyAmount(
+    items.reduce((total,item)=>total+convertKwdToCurrency(item.price,selectedCurrency)*item.qty,0),
+    selectedCurrency,
+  );
   const openReceiptForPrint=()=>{
     if(!placedOrder) return;
     printDemoReceipt(placedOrder,language);
@@ -1027,19 +1034,21 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
     if(!payload) return;
     orderSubmissionInFlight.current=true;
     createOrder.mutate({
-      data:payload,
+      data:{...payload,currency:selectedCurrency},
     },{
       onSuccess:saved=>{
         orderSubmissionInFlight.current=false;
         trackEvent('demo_order_completed',{
           line_count:saved.items.length,
-          subtotal_kwd:saved.subtotal,
+          subtotal:saved.subtotal,
+          currency:saved.currency,
         });
         setPlacedOrder({
           orderNumber:saved.orderNumber,
           placedAt:new Date(saved.placedAt).toISOString(),
           items:saved.items.map(item=>({id:item.id,name:item.name,price:item.price,kind:item.kind,sku:item.sku,qty:item.qty})),
           subtotal:saved.subtotal,
+          currency:saved.currency,
           isDemo:true,
           paymentStatus:'not_required',
         });
@@ -1094,7 +1103,7 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
       const response=await fetch(`${basePath}/api/stripe/checkout`,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(payload),
+        body:JSON.stringify({...payload,currency:selectedCurrency}),
       });
       const result=await response.json().catch(()=>null);
       if(!response.ok){
@@ -1123,8 +1132,8 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
       <h1>{t(placedOrder.isDemo?'Order placed.':'Payment confirmed.',language)}</h1>
        <p className="lead" style={{fontSize:13,margin:'0 auto 18px'}} data-testid="text-order-storage-status">{t(placedOrder.isDemo?'Saved for demo order management. No payment or fulfillment is connected.':'Stripe confirmed your payment. Your order is saved for management.',language)}</p>
       <div className="demo-order-number"><span>{t(placedOrder.isDemo?'DEMO ORDER NUMBER':'ORDER NUMBER',language)}</span><strong data-testid="text-demo-order-number">{placedOrder.orderNumber}</strong><small>{new Date(placedOrder.placedAt).toLocaleString(language==='ar'?'ar-KW':'en-KW')}</small></div>
-      <div className="demo-order-items">{placedOrder.items.map(item=><div key={item.id} data-testid={`row-confirmation-${item.id}`}><span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span><strong>{fmt(item.price*item.qty)}</strong></div>)}</div>
-      <div className="summary-line summary-total"><span>{t(placedOrder.isDemo?'Demo total':'Paid total',language)}</span><span className="mono" data-testid="text-demo-order-subtotal">{fmt(placedOrder.subtotal)}</span></div>
+      <div className="demo-order-items">{placedOrder.items.map(item=><div key={item.id} data-testid={`row-confirmation-${item.id}`}><span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span><strong>{fmtMoney(item.price*item.qty,placedOrder.currency)}</strong></div>)}</div>
+      <div className="summary-line summary-total"><span>{t(placedOrder.isDemo?'Demo total':'Paid total',language)}</span><span className="mono" data-testid="text-demo-order-subtotal">{fmtMoney(placedOrder.subtotal,placedOrder.currency)}</span></div>
         <p className="checkout-order-disclaimer">{t(placedOrder.isDemo?'Order contact and delivery details are saved for admin review. Payment and fulfillment are not connected.':'Order contact and delivery details are saved. Delivery and fulfillment are managed separately.',language)}</p>
       <div className="checkout-receipt-actions">
         <button className="button button-outline" type="button" onClick={openReceiptForPrint} data-testid="button-print-demo-receipt"><Printer size={15}/>{t('Print receipt',language)}</button>
@@ -1202,10 +1211,18 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
       </div>
       <aside className="surface checkout-summary">
         <div className="eyebrow">{t('YOUR PARTS LIST',language)}</div><h2>{t('Order summary',language)}</h2>
-        <div className="checkout-items">{items.map(item=><div className="checkout-item" key={item.id} data-testid={`row-checkout-${item.id}`}><div><strong>{t(item.name,language)}</strong><span>{item.sku} · {t('Qty',language)} {item.qty}</span></div><b>{fmt(item.price*item.qty)}</b></div>)}</div>
-        <div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono" data-testid="text-checkout-subtotal">{fmt(subtotal)}</strong></div>
+        <div className="checkout-currency-row">
+          <span>{t('Checkout currency',language)}</span>
+          <div className="checkout-currency-switch" role="group" aria-label={t('Checkout currency',language)}>
+            <button type="button" aria-pressed={selectedCurrency==='KWD'} onClick={()=>setSelectedCurrency('KWD')} data-testid="button-checkout-currency-kwd">KWD</button>
+            <button type="button" aria-pressed={selectedCurrency==='USD'} onClick={()=>setSelectedCurrency('USD')} data-testid="button-checkout-currency-usd">USD</button>
+          </div>
+        </div>
+        {selectedCurrency==='USD'&&<p className="checkout-currency-rate" data-testid="text-checkout-currency-rate">{t('Fixed exchange rate',language)} · 1 KWD = {USD_PER_KWD} USD</p>}
+        <div className="checkout-items">{items.map(item=><div className="checkout-item" key={item.id} data-testid={`row-checkout-${item.id}`}><div><strong>{t(item.name,language)}</strong><span>{item.sku} · {t('Qty',language)} {item.qty}</span></div><b>{fmtMoney(convertKwdToCurrency(item.price,selectedCurrency)*item.qty,selectedCurrency)}</b></div>)}</div>
+        <div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono" data-testid="text-checkout-subtotal">{fmtMoney(subtotal,selectedCurrency)}</strong></div>
         <div className="summary-line"><span>{t('Delivery',language)}</span><span>{t('Not connected',language)}</span></div>
-        <div className="summary-line summary-total"><span>{t('Estimated total',language)}</span><span className="mono">{fmt(subtotal)}</span></div>
+        <div className="summary-line summary-total"><span>{t('Estimated total',language)}</span><span className="mono">{fmtMoney(subtotal,selectedCurrency)}</span></div>
         <p className="checkout-total-note">{t('Sample KWD prices; delivery fees excluded.',language)}</p>
         <Link className="checkout-edit-link" href="/cart">← {t('Edit cart',language)}</Link>
       </aside>
@@ -1323,11 +1340,11 @@ function AccountPage() {
                   </div>
                   <div className="account-order-items">
                     {order.items.map((item,index)=><div key={`${item.id}-${index}`}>
-                      <span>{t(item.name,language)} · {t('Qty',language)} {item.qty} · {t('Unit price',language)} {fmt(item.price)}</span>
-                      <strong>{fmt(item.price*item.qty)}</strong>
+                      <span>{t(item.name,language)} · {t('Qty',language)} {item.qty} · {t('Unit price',language)} {fmtMoney(item.price,order.currency)}</span>
+                      <strong>{fmtMoney(item.price*item.qty,order.currency)}</strong>
                     </div>)}
                   </div>
-                  <div className="account-order-total"><span>{t(order.isDemo?'Demo total':'Order total',language)}</span><strong>{fmt(order.subtotal)}</strong></div>
+                  <div className="account-order-total"><span>{t(order.isDemo?'Demo total':'Order total',language)}</span><strong>{fmtMoney(order.subtotal,order.currency)}</strong></div>
                   {order.isDemo&&<div className="account-order-receipt-actions">
                     <button className="button button-outline small-button" type="button" onClick={()=>printDemoReceipt(order,language)} data-testid={`button-print-account-demo-receipt-${order.id}`}><Printer size={14}/>{t('Print receipt',language)}</button>
                     <button className="button button-outline small-button" type="button" onClick={()=>downloadDemoReceipt(order,language)} data-testid={`button-download-account-demo-receipt-${order.id}`}><Download size={14}/>{t('Download receipt',language)}</button>

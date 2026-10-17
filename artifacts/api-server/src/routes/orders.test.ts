@@ -133,7 +133,7 @@ test("account order history returns all signed-in orders and excludes guest orde
   assert.equal(buyerAResponse.result.statusCode, 200);
   assert.deepEqual(
     Object.keys((buyerAResponse.result.body as { orders: Record<string, unknown>[] }).orders[0]).sort(),
-    ["id", "isDemo", "items", "orderNumber", "paymentStatus", "placedAt", "subtotal"],
+    ["currency", "exchangeRateKwdToUsd", "id", "isDemo", "items", "orderNumber", "paymentStatus", "placedAt", "subtotal"],
   );
   assert.deepEqual(
     (buyerAResponse.result.body as { orders: { id: string; isDemo: boolean }[] }).orders.map(
@@ -235,6 +235,30 @@ test("saved order history keeps product and kit snapshots after catalog edits an
     { userId: "buyer-a", createdBy: null },
     getDatabase,
   );
+
+  const usdOrder = await storeOrder(
+    {
+      customer: { name: "USD Buyer", email: "usd@example.com", phone: "+965 5555 5556" },
+      shipping: {
+        governorate: "Capital",
+        area: "Kuwait City",
+        block: "1",
+        street: "Main Street",
+        building: "10",
+      },
+      currency: "USD",
+      items: [
+        { id: "component-1", kind: "component", sku: "COMP-1", qty: 2 },
+        { id: "kit-1", kind: "kit", sku: "KIT-1", qty: 1 },
+      ],
+    },
+    { userId: "buyer-usd", createdBy: null },
+    getDatabase,
+  );
+  assert.equal(usdOrder.currency, "USD");
+  assert.equal(usdOrder.exchangeRateKwdToUsd, 3.3);
+  assert.deepEqual(usdOrder.items.map((item) => item.price), [4.13, 15.68]);
+  assert.equal(usdOrder.subtotal, 23.94);
 
   product.name = "Renamed component";
   product.price = 99;

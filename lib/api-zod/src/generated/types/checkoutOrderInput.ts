@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { OrderCurrency } from './orderCurrency';
 import type { OrderCustomer } from './orderCustomer';
 import type { OrderItemInput } from './orderItemInput';
 import type { OrderShipping } from './orderShipping';
@@ -17,4 +18,5 @@ export interface CheckoutOrderInput {
      * @maxItems 100
      */
   items: OrderItemInput[];
+  currency?: OrderCurrency;
 }

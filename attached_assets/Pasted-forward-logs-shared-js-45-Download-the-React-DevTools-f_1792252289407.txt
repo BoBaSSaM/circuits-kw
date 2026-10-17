@@ -1,0 +1,22 @@
+forward-logs-shared.js:45 Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+forward-logs-shared.js:45 [HMR] connected
+forward-logs-shared.js:45 Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview
+warn @ forward-logs-shared.js:45
+api/stripe/checkout:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+forward-logs-shared.js:45 [Fast Refresh] rebuilding
+forward-logs-shared.js:45 [Fast Refresh] rebuilding
+forward-logs-shared.js:45 [Fast Refresh] done in 324ms
+forward-logs-shared.js:45 [Fast Refresh] done in 1771ms
+checkout:1 The resource https://e92611df-97dc-469d-afc5-5fee2b081447-00-27vcgiqx6cpt3.sisko.replit.dev/_next/static/css/app/layout.css?v=1792252260038 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.
+App.tsx:1103  POST https://e92611df-97dc-469d-afc5-5fee2b081447-00-27vcgiqx6cpt3.sisko.replit.dev/api/stripe/checkout 400 (Bad Request)
+(anonymous) @ App.tsx:1103
+event @ App.tsx:1148
+executeDispatch @ react-dom-client.development.js:20808
+runWithFiberInDEV @ react-dom-client.development.js:1046
+processDispatchQueue @ react-dom-client.development.js:20858
+eval @ react-dom-client.development.js:21431
+batchedUpdates$1 @ react-dom-client.development.js:3438
+dispatchEventForPluginEventSystem @ react-dom-client.development.js:21012
+dispatchEvent @ react-dom-client.development.js:26156
+dispatchDiscreteEvent @ react-dom-client.development.js:26124
+checkout:1 The resource https://e92611df-97dc-469d-afc5-5fee2b081447-00-27vcgiqx6cpt3.sisko.replit.dev/_next/static/css/app/layout.css?v=1792252260038 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.

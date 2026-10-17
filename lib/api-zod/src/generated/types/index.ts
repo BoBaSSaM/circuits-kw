@@ -34,6 +34,7 @@ export * from './deleteResponse';
 export * from './errorResponse';
 export * from './getAdminAuditLogParams';
 export * from './healthStatus';
+export * from './orderCurrency';
 export * from './orderCustomer';
 export * from './orderItem';
 export * from './orderItemInput';

@@ -479,6 +479,8 @@ const arabic: Record<string, string> = {
   'Pay securely with Stripe or save a demo order.': 'ادفع بأمان عبر Stripe أو احفظ طلباً تجريبياً.',
   'Pay with Stripe or save an unpaid demo order.': 'ادفع عبر Stripe أو احفظ طلباً تجريبياً غير مدفوع.',
   'Secure Stripe payment': 'دفع آمن عبر Stripe',
+  'Checkout currency': 'عملة الدفع',
+  'Fixed exchange rate': 'سعر الصرف الثابت',
   'Card details are entered on Stripe. Payment confirmation is saved to the order in MongoDB.': 'تُدخل بيانات البطاقة على Stripe، ويُحفظ تأكيد الدفع مع الطلب في MongoDB.',
   'Payment was cancelled. Your cart is unchanged.': 'تم إلغاء الدفع. لم تتغير محتويات سلتك.',
   'Payment could not be verified. Your cart is unchanged.': 'تعذر التحقق من الدفع. لم تتغير محتويات سلتك.',
