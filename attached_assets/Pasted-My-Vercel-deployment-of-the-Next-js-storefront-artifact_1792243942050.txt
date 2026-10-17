@@ -1,0 +1,22 @@
+My Vercel deployment of the Next.js storefront (artifacts/voltiva-store) is failing at the type-check step of `next build`. Please fix it so the build passes on a clean machine, without hiding errors.
+
+Root cause (from the Vercel log):
+- TS6305: "Output file '/vercel/path0/lib/api-zod/dist/index.d.ts' has not been built from source file '/vercel/path0/lib/api-zod/src/index.ts'" (same for lib/api-client-react).
+- This monorepo uses TypeScript project references, and the libs in lib/ must be compiled to dist/ before the storefront is type-checked. dist/ is gitignored, so it doesn't exist on Vercel's clean build.
+- The many TS7006 "implicitly has an 'any' type" errors in App.tsx, AdminDashboardPage.tsx and api-server/src/routes/catalog.ts are knock-on effects of the unresolved types and should disappear once the libs build.
+
+Please do the following:
+
+1. Update the build script in artifacts/voltiva-store/package.json so the libs are built first, e.g. `tsc --build ../../lib/api-zod ../../lib/api-client-react && next build`. If the libs are generated (Orval/OpenAPI/Zod codegen), run the codegen step before `tsc --build`. Check how they are generated locally and use the same steps.
+
+2. Check artifacts/voltiva-store/tsconfig.json. The errors reference ../api-server/src/routes/*.ts, so the storefront's tsconfig is including or referencing the API server. Remove api-server from `include`/`references` if the storefront doesn't need it, and keep only the libs it actually imports.
+
+3. Make sure the lib packages (lib/api-zod and lib/api-client-react) have `composite: true` and correct `references` in their tsconfig files so `tsc --build` works from a clean checkout.
+
+4. Do NOT use `typescript.ignoreBuildErrors` and do NOT add `any` types to silence errors.
+
+5. Verify by deleting all `dist/` folders and `.next`, then running a clean `npm install && npm run build` from the repo root or the storefront directory. Confirm it succeeds with no TS errors.
+
+6. Also, the log shows an EBADENGINE warning: package requires npm >=11.21.0 but Vercel has 11.19.0. If a strict npm engine isn't needed, relax the `engines.npm` field in the workspace package.json.
+
+When done, tell me which files you changed and what the final build command is, so I can set it in Vercel if needed.
