@@ -18,7 +18,6 @@ import { LanguageProvider, t, useLanguage, type Language } from './i18n';
 import {
   buildPlanFromPrompt,
   buildBomCartItems,
-  calculateBomLineTotal,
   calculateBomTotal,
   clampBuildQuantity,
   inferPartQuantity,
@@ -294,8 +293,9 @@ const buildOptions: BuildOption[] = [
 ];
 
 const kitDomains = ['All domains','Robotics','IoT & Smart Home','IoT & Automation','University Labs','Automation'];
-const fmt = (value:number) => `${value.toFixed(3)} KWD`;
-const fmtMoney = (value:number,currency:MoneyCurrency='KWD') => formatMoney(value,currency);
+const fmt = (value:number) => formatMoney(convertKwdToCurrency(value,'USD'),'USD');
+const fmtUsd = (value:number) => formatMoney(roundMoneyAmount(value,'USD'),'USD');
+const fmtOrderUsd = (value:number,currency:MoneyCurrency) => fmtUsd(currency==='KWD'?convertKwdToCurrency(value,'USD'):value);
 const queryClient = new QueryClient();
 
 function escapeReceiptHtml(value:string) {
@@ -312,7 +312,7 @@ function escapeReceiptHtml(value:string) {
 function demoReceiptHtml(order:DemoOrder, language:Language) {
   const isArabic=language==='ar';
   const escape=escapeReceiptHtml;
-  const items=order.items.map(item=>`<tr><td>${escape(item.name)}</td><td>${escape(t('Qty',language))} ${item.qty}</td><td>${escape(fmtMoney(item.price*item.qty,order.currency))}</td></tr>`).join('');
+  const items=order.items.map(item=>`<tr><td>${escape(item.name)}</td><td>${escape(t('Qty',language))} ${item.qty}</td><td>${escape(fmtOrderUsd(item.price*item.qty,order.currency))}</td></tr>`).join('');
   const title=t(order.isDemo?'Demo receipt':'Payment receipt',language);
   const label=t(order.isDemo?'DEMO ORDER · NO PAYMENT TAKEN':'PAID · STRIPE CHECKOUT',language);
   const notice=t(order.isDemo?'This is a demo order receipt. No payment or fulfillment is connected.':'Payment was confirmed by Stripe. Delivery details are saved for order management.',language);
@@ -345,7 +345,7 @@ function demoReceiptHtml(order:DemoOrder, language:Language) {
       <thead><tr><th>${escape(t('Item',language))}</th><th>${escape(t('Quantity',language))}</th><th>${escape(t('Amount',language))}</th></tr></thead>
       <tbody>${items}</tbody>
     </table>
-    <div class="total"><span>${escape(t('Subtotal',language))}</span><span>${escape(fmtMoney(order.subtotal,order.currency))}</span></div>
+    <div class="total"><span>${escape(t('Subtotal',language))}</span><span>${escape(fmtOrderUsd(order.subtotal,order.currency))}</span></div>
     <p class="notice">${escape(notice)}</p>
   </main>
 </body>
@@ -412,7 +412,7 @@ function Header({ count, search, onSearch }:{count:number; search:string; onSear
     <div className="header-actions">
       <Link href={accountHref} className={`header-account-link ${accountActive?'active':''}`} data-testid={isLoaded&&isSignedIn?'link-account':'link-sign-in'}><UserRound size={15}/><span>{accountLabel}</span></Link>
       <div className="language-switch" role="group" aria-label={t('Language preference',language)}>{([['en','EN'],['ar','العربية']] as const).map(([code,label])=><button type="button" key={code} aria-pressed={language===code} className={language===code?'selected':''} onClick={()=>setLanguage(code)} data-testid={`button-language-${code}`}>{label}</button>)}</div>
-      <span className="tag" aria-label={t('Prices in Kuwaiti Dinar',language)}>KWD</span>
+      <span className="tag" aria-label={t('Prices in US Dollars',language)}>USD</span>
       <Link href="/cart" className={`icon-button cart-link ${cartPulse?'cart-link-pulse':''}`} aria-label={language==='ar'?`السلة، ${count} عناصر`:`Cart, ${count} items`} data-testid="link-cart"><ShoppingCart key={`cart-icon-${cartPulse?count:'idle'}`} className={cartPulse?'cart-icon-pop':''} size={17}/>{count>0&&<span key={`cart-count-${cartPulse?count:'idle'}`} className={`cart-count ${cartPulse?'cart-count-pop':''}`} data-testid="cart-count">{count}</span>}</Link>
       <button className="icon-button mobile-toggle" aria-label={t(open?'Close navigation':'Open navigation',language)} aria-expanded={open} onClick={()=>setOpen(!open)} data-testid="button-mobile-menu">{open?<X size={18}/>:<Menu size={18}/>}</button>
     </div>
@@ -425,7 +425,7 @@ function Footer() {
      <div className="footer-grid"><div><Logo/><p>{t('Parts and practical guidance for Kuwait’s makers, students and engineers.',language)}</p><div className="footer-social"><span>KW</span><span>EST. SHUWAIKH</span><span>HARDWARE / LAB</span></div></div>
       <div><h4>{t('Shop',language)}</h4><Link href="/components">{t('Microcontrollers',language)}</Link><Link href="/components">{t('Sensors',language)}</Link><Link href="/components">{t('Components',language)}</Link><Link href="/components">{t('Tools & passives',language)}</Link><Link href="/project-kits">{t('Project Kits',language)}</Link></div>
       <div><h4>{t('Support',language)}</h4><Link href="/about#hub">{t('Contact & local operations',language)}</Link><Link href="/about#delivery">{t('Kuwait delivery overview',language)}</Link><Link href="/build-assist">{t('BOM planning',language)}</Link></div>
-      <div><h4>{t('Company & preferences',language)}</h4><Link href="/about">{t('About Circuits KW',language)}</Link><Link href="/cart">{t('Shopping Cart',language)}</Link><span className="footer-note">{t('EN · العربية-ready',language)}</span><span className="footer-note">{t('KWD (Kuwaiti Dinar)',language)}</span></div>
+      <div><h4>{t('Company & preferences',language)}</h4><Link href="/about">{t('About Circuits KW',language)}</Link><Link href="/cart">{t('Shopping Cart',language)}</Link><span className="footer-note">{t('EN · العربية-ready',language)}</span><span className="footer-note">{t('USD (US Dollar)',language)}</span></div>
      </div><div className="footer-bottom"><span>{t('© 2025 Circuits KW · Built for makers and engineers.',language)}</span><span><i/> {t('Kuwait-local details',language)} &nbsp; | &nbsp; {t('Illustrative catalog data',language)}</span></div>
   </div></footer>;
 }
@@ -487,7 +487,7 @@ function HomePage() {
     <section className="section feature-section"><div className="container">
        <div className="feature-head"><div><div className="eyebrow">{t('PRECISION CATALOG & WORKFLOW',language)}</div><h2>{t('The right parts. A clearer path to building.',language)}</h2><p className="lead" style={{fontSize:14,marginBottom:0}}>{t('Find, understand and combine components with a Kuwait-first point of view.',language)}</p></div><span className="tag">{t('DESIGNED FOR THE BENCH',language)}</span></div>
         <div className="feature-grid">
-          <article className="surface feature-card"><div><div className="feature-icon"><Search size={23}/></div><h3>{t('Find parts faster',language)}</h3><p>{t('Search by part, SKU or interface. Compare key specs fast.',language)}</p></div><div className="tag-row"><span className="tag">{t('SKU search',language)}</span><span className="tag">{t('Voltage details',language)}</span><span className="tag">{t('KWD pricing',language)}</span></div></article>
+          <article className="surface feature-card"><div><div className="feature-icon"><Search size={23}/></div><h3>{t('Find parts faster',language)}</h3><p>{t('Search by part, SKU or interface. Compare key specs fast.',language)}</p></div><div className="tag-row"><span className="tag">{t('SKU search',language)}</span><span className="tag">{t('Voltage details',language)}</span><span className="tag">{t('USD pricing',language)}</span></div></article>
           <article className="surface feature-card"><div><div className="feature-icon"><BookOpen size={23}/></div><h3>{t('Understand every component',language)}</h3><p>{t('Check voltage, interfaces and package before you build.',language)}</p></div><div className="tag-row"><span className="tag">{t('Specs up front',language)}</span><span className="tag">{t('Logic levels',language)}</span><span className="tag">{t('Clear identifiers',language)}</span></div></article>
           <article className="surface feature-card"><div><div className="feature-icon"><PackageCheck size={23}/></div><h3>{t('Build with curated kits',language)}</h3><p>{t('Curated kits for robotics, IoT and university labs.',language)}</p></div><div className="tag-row"><span className="tag">{t('Curated BOMs',language)}</span><span className="tag">{t('Beginner to advanced',language)}</span></div></article>
           <article className="surface feature-card assist-feature"><div><div className="feature-icon"><Bot size={23}/></div><h3>{t('Meet Build Assist',language)}</h3><p>{t('Plan a sample BOM, set voltage and budget, then add parts to your cart.',language)}</p></div><div className="feature-arrow"><Link href="/build-assist" data-testid="link-build-assist-feature">{t('Meet Build Assist',language)} <ArrowRight size={16}/></Link><span className="tag">{t('Rule-based local demo',language)}</span></div></article>
@@ -504,7 +504,7 @@ function CatalogLoadState({ loading, retry }:{loading:boolean;retry:()=>void}) {
 
 function CatalogPage({ add, globalSearch, products, loading, error, retry }:{add:(item:AddItem)=>void;globalSearch:string;products:Product[];loading:boolean;error:boolean;retry:()=>void}) {
   const {language}=useLanguage();
-   useDocument(t('Components catalog',language),t('Browse components with key specs and sample KWD prices.',language));
+   useDocument(t('Components catalog',language),t('Browse components with key specs and sample USD prices.',language));
   const [query,setQuery]=useState(globalSearch); const [category,setCategory]=useState('All components'); const [stockOnly,setStockOnly]=useState(false); const [voltage,setVoltage]=useState<string[]>([]); const [mount,setMount]=useState<string[]>([]); const [sort,setSort]=useState('verified');
    useEffect(()=>{setQuery(globalSearch)},[globalSearch]);
    const categories=useMemo(()=>['All components',...Array.from(new Set(products.map(product=>product.category)))],[products]);
@@ -519,7 +519,7 @@ function CatalogPage({ add, globalSearch, products, loading, error, retry }:{add
    if(loading||error) return <CatalogLoadState loading={loading} retry={retry}/>;
    return <div className="container page-top">
      <div className="catalog-breadcrumb"><Link href="/">{t('Home',language)}</Link><span>/</span><span>{t('Components',language)}</span><span>/</span><b>{t('Catalog',language)}</b><span className="sample-sync"><i/> {t('SAMPLE CATALOG DATA',language)}</span></div>
-      <div className="page-heading-row"><div><div className="eyebrow">{t('LOCAL INVENTORY · KUWAIT REFERENCE',language)}</div><h1>{t('Electronic components.',language)}</h1><p className="lead" style={{fontSize:14,marginBottom:20}}>{t('Search parts and compare specs. Prices and stock are samples.',language)}</p></div><span className="tag"><MapPin size={12}/> {t('KWD · Kuwait-focused',language)}</span></div>
+      <div className="page-heading-row"><div><div className="eyebrow">{t('LOCAL INVENTORY · KUWAIT REFERENCE',language)}</div><h1>{t('Electronic components.',language)}</h1><p className="lead" style={{fontSize:14,marginBottom:20}}>{t('Search parts and compare specs. Prices and stock are samples.',language)}</p></div><span className="tag"><MapPin size={12}/> {t('USD · Kuwait-focused',language)}</span></div>
       <div className="catalog-search surface"><div className="search-field"><Search size={17}/><input aria-label={t('Search components by name or SKU',language)} placeholder={t('Search components or SKU…',language)} value={query} onChange={e=>setQuery(e.target.value)} data-testid="input-component-search"/></div><button className="button button-outline small-button" onClick={reset} data-testid="button-reset-filters"><SlidersHorizontal size={14}/> {t('Reset filters',language)}</button></div>
      <div className="quick-filters" aria-label={t('Popular categories',language)}>{['All components','Microcontrollers','Sensors','Power & Battery','Passives'].map(c=><button key={c} onClick={()=>setCategory(c)} className={category===c?'active':''} data-testid={`quick-category-${c.toLowerCase().replaceAll(' ','-').replace('&-','')}`}>{t(c,language)}</button>)}</div>
     <div className="catalog-layout">
@@ -579,7 +579,7 @@ function KitsPage({add,kits,loading,error,retry}:{add:(item:AddItem)=>void;kits:
 
 function getPriceCsvImportError(error: unknown, language: Language) {
   const message = error instanceof Error ? error.message : '';
-  const rowError = message.match(/^CSV row (\d+) (is missing an SKU or price|must have a non-negative KWD price with up to 3 decimals|currency must be KWD)\.$/);
+  const rowError = message.match(/^CSV row (\d+) (is missing an SKU or price|must have a non-negative KWD supplier price with up to 3 decimals|currency must be KWD)\.$/);
   if (rowError) {
     return t(`CSV row {row} ${rowError[2]}.`, language).replace('{row}', rowError[1]);
   }
@@ -588,7 +588,7 @@ function getPriceCsvImportError(error: unknown, language: Language) {
   const translated = t(message, language);
   return message && translated !== message
     ? translated
-    : t('CSV could not be imported. Check required columns, row values, KWD prices, and duplicate SKUs.', language);
+    : t('CSV could not be imported. Check supplier columns, KWD source prices, and duplicate SKUs.', language);
 }
 
 function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedItems,products,loading,error,retry}:{add:(item:AddItem)=>void;removeSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>)=>number;replaceSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>)=>{updatedCount:number;removedCount:number};products:Product[];loading:boolean;error:boolean;retry:()=>void}) {
@@ -628,6 +628,10 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
   const total=calculateBomTotal(
     pricedBom.map(part=>({unitPrice:part.price,quantityPerAssembly:quantityFor(part)})),
     assemblies,
+  );
+  const totalUsd=roundMoneyAmount(
+    pricedBom.reduce((sum,part)=>sum+convertKwdToCurrency(part.price,'USD')*quantityFor(part)*assemblies,0),
+    'USD',
   );
   if(loading||error) return <CatalogLoadState loading={loading} retry={retry}/>;
   const controller=bom.find(part=>['esp32','nucleo','pico'].includes(part.id));
@@ -726,7 +730,7 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
               <span className="price-list-summary-action">{priceList?t('Update prices',language):t('Add prices',language)}</span>
             </summary>
             <div className="price-list-fields">
-              <p>{t('CSV needs SKU and price; KWD only.',language)}</p>
+              <p>{t('CSV needs SKU and supplier prices in KWD; storefront prices are shown in USD.',language)}</p>
               <div className="price-list-grid">
                 <div>
                   <label htmlFor="price-list-source">{t('Source',language)}</label>
@@ -778,7 +782,7 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
           <div className="assist-section">
             <div className="range-line"><label htmlFor="budget-range" style={{margin:0}}>{t('Maximum BOM budget',language)}</label><strong data-testid="text-budget-value">{fmt(budget)}</strong></div>
             <input type="range" id="budget-range" min="3" max="45" step=".5" value={budget} onChange={e=>setBudget(Number(e.target.value))} data-testid="input-budget"/>
-            <div className="range-line" style={{color:'#849099',marginTop:4}}><span>3.000 KWD</span><span>45.000 KWD</span></div>
+            <div className="range-line" style={{color:'#849099',marginTop:4}}><span>{fmt(3)}</span><span>{fmt(45)}</span></div>
           </div>
           <button className="button button-primary" style={{width:'100%',height:48}} onClick={generate} data-testid="button-generate-bom"><CircuitBoard size={17}/> {t(generated?'Update local demo BOM':'Generate local demo BOM',language)}</button>
           <p className="mono" style={{textAlign:'center',fontSize:9,color:'#6b7880',margin:'10px 0 0'}}>{t('Rule-based local sample · no external service or live stock check',language)}</p>
@@ -807,19 +811,19 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
          <div className="bom-calculation-note">{t('Unit price × quantity × assemblies. Unpriced parts are excluded.',language)}</div>
         <div>{bom.map((part,index)=>{
           const quantity=quantityFor(part);
-          const lineTotal=part.price===null?null:calculateBomLineTotal(part.price,quantity,assemblies);
+           const lineTotal=part.price===null?null:roundMoneyAmount(convertKwdToCurrency(part.price,'USD')*quantity*assemblies,'USD');
           return <div className="bom-row" key={part.id} data-testid={`row-bom-${part.id}`}>
             <span className="mono bom-index">{String(index+1).padStart(2,'0')}</span>
             <div><div className="bom-name">{t(bomName(part),language)}</div><div className="bom-spec">{part.voltage} · {part.interface} · SKU {part.sku}</div><div className="bom-unit-price">{t('Unit cost',language)}: {part.price===null?<strong data-testid={`text-unpriced-${part.id}`}>{t('Unpriced',language)}</strong>:fmt(part.price)}</div></div>
             <div className="bom-line-controls">
               <label className="bom-quantity-label" htmlFor={`quantity-${part.id}`}>{t('Qty / assembly',language)}</label>
               <input id={`quantity-${part.id}`} className="bom-quantity-input" type="number" min="1" max="99" step="1" value={quantity} onChange={e=>setPartQuantities(current=>({...current,[part.id]:clampBuildQuantity(Number(e.target.value))}))} aria-label={`${t('Qty / assembly',language)} ${t(part.name,language)}`} data-testid={`input-part-quantity-${part.id}`}/>
-              <strong className="bom-line-total" data-testid={`text-line-total-${part.id}`}>{lineTotal===null?'—':fmt(lineTotal)}</strong>
+               <strong className="bom-line-total" data-testid={`text-line-total-${part.id}`}>{lineTotal===null?'—':fmtUsd(lineTotal)}</strong>
               <span className="bom-line-count">{quantity*assemblies} {t('total units',language)}</span>
             </div>
           </div>;
         })}</div>
-        <div className="bom-total"><span>{t('Priced parts subtotal',language)} · {assemblies} {t('assemblies',language)}</span><span className="mono" data-testid="text-build-assist-total">{pricedBom.length?fmt(total):'—'}</span></div>
+        <div className="bom-total"><span>{t('Priced parts subtotal',language)} · {assemblies} {t('assemblies',language)}</span><span className="mono" data-testid="text-build-assist-total">{pricedBom.length?fmtUsd(totalUsd):'—'}</span></div>
         {priceListIsStale&&<div className="notice" role="alert" data-testid="notice-stale-price-list"><strong>{t('Stale price warning:',language)}</strong> {t('Price list is',language)} {PRICE_LIST_FRESHNESS_DAYS} {t('days old. Verify with the supplier.',language)}</div>}
    <div className="bom-calculation-note" data-testid="text-price-source">{priceList?<><strong>{t('Price source:',language)}</strong> {priceList.source} · <strong>{t('Last updated:',language)}</strong> {priceList.updatedAt}</>:priceListRemoved?t('No current price list loaded. Import a dated, authorized CSV to calculate costs.',language):t('Illustrative catalog prices; supplier CSV overrides them.',language)}</div>
         {unpricedBom.length>0&&<div className="notice" data-testid="notice-unpriced-parts"><strong>{t('Unpriced parts excluded from subtotal:',language)}</strong> {unpricedBom.map(part=>`${part.name} (${part.sku})`).join(', ')}</div>}
@@ -835,7 +839,7 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
           <div className="preview-panel-head"><strong>{t(preview==='wiring'?'Connection notes':'Starter-code outline',language)}</strong><button className="icon-button" aria-label={t('Close preview',language)} onClick={()=>setPreview(null)}><X size={15}/></button></div>
           {preview==='wiring'?<p>{t(controller?.name??'ESP32-WROOM-32D',language)} inputs connect to the selected sensor modules following their datasheets. Power components shown in the BOM require independent compatibility checks; this is illustrative only, not a generated schematic.</p>:<pre>{`# Local example outline — not downloadable firmware\nread_sensor()\ncheck_threshold()\nnotify_placeholder()  # no messaging service connected`}</pre>}
         </div>}
-        <button className="button button-primary" style={{width:'100%'}} onClick={addBom} disabled={!pricedBom.length} data-testid="button-add-bom-cart"><ShoppingCart size={16}/> {t('Add priced BOM items to cart',language)} · {pricedBom.length?fmt(total):'—'}</button>
+        <button className="button button-primary" style={{width:'100%'}} onClick={addBom} disabled={!pricedBom.length} data-testid="button-add-bom-cart"><ShoppingCart size={16}/> {t('Add priced BOM items to cart',language)} · {pricedBom.length?fmtUsd(totalUsd):'—'}</button>
       </section>
     </div>
      <div className="assist-delivery-reference"><div><span className="eyebrow">{t('KUWAIT DELIVERY REFERENCE',language)}</span><strong>{t('Same-day dispatch concept · 15:00 AST cutoff',language)}</strong><span>{t('Shuwaikh hub is a reference only; delivery and pickup are not connected.',language)}</span></div><Link href="/about#delivery" className="button button-outline small-button" data-testid="link-assist-delivery">{t('View sample zones',language)} <ArrowRight size={13}/></Link></div>
@@ -847,10 +851,10 @@ function AboutPage() {
   useDocument(t('About Circuits KW',language),t('Parts, kits and local operations information for Kuwait.',language));
   const pillars=[['100% Genuine OEM Components','Source from authorized distributors; avoid gray-market and counterfeit parts.'],['Lab-Verified Datasheets & Pinouts','Key specs and pinouts for sensors, boards and level shifters.'],['Same-Day Local Dispatch','Sample 15:00 dispatch concept. No courier service is active.'],['Maker & University Support','For student projects, labs and local hardware teams.']];
   return <>
-      <section className="about-hero"><div className="container"><div className="eyebrow">{t('STATE OF KUWAIT · HARDWARE & LOCAL OPERATIONS',language)}</div><div className="about-grid"><div><h1>{t('Hardware innovation in Kuwait, from labs to prototypes.',language)}</h1><p className="lead">{t('Parts, kits and specs for Kuwait’s makers. Prices, stock and operations are illustrative.',language)}</p><span className="mono" style={{fontSize:10,color:'#64727d'}}>{t('LOCAL-FIRST · KWD · ENGLISH / العربية-READY',language)}</span></div><div className="about-stats surface"><div className="filter-title">{t('Kuwait operations reference',language)}</div><div className="stat-pair"><div><strong>Shuwaikh</strong><span>{t('Example hub location',language)}</span></div><div><strong>AST +03</strong><span>{t('Kuwait local time',language)}</span></div></div><span className="mono">{t('No account, shipping service, payment or live inventory is connected.',language)}</span></div></div>
+      <section className="about-hero"><div className="container"><div className="eyebrow">{t('STATE OF KUWAIT · HARDWARE & LOCAL OPERATIONS',language)}</div><div className="about-grid"><div><h1>{t('Hardware innovation in Kuwait, from labs to prototypes.',language)}</h1><p className="lead">{t('Parts, kits and specs for Kuwait’s makers. Prices, stock and operations are illustrative.',language)}</p><span className="mono" style={{fontSize:10,color:'#64727d'}}>{t('LOCAL-FIRST · USD · ENGLISH / العربية-READY',language)}</span></div><div className="about-stats surface"><div className="filter-title">{t('Kuwait operations reference',language)}</div><div className="stat-pair"><div><strong>Shuwaikh</strong><span>{t('Example hub location',language)}</span></div><div><strong>AST +03</strong><span>{t('Kuwait local time',language)}</span></div></div><span className="mono">{t('No account, shipping service, payment or live inventory is connected.',language)}</span></div></div>
        <div className="photo-strip"><div className="photo-panel"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuAOTORl_9CZpLmAwLhwVfBFB5ybinplJ3eM55r1M3DB4wK4b__OijqgC13WzPx7prHaXyIn3LVD74MEVX4lbJclBczJwnnSDJ31wQEMQTbupW9DM0WWW-h-LXxhPxSYsf0XU8Qu9e51ulGkefIzX4IMY3FYTRAn8N0ms2n5afBPDXzEGT7qFQ1NtJlyNnuNux_lsjfhhxf9iLZwfSAGI00TZb6uq5HYff0YVW8jOLws7qvRhI91LPeGtg" alt="" loading="lazy"/><div className="photo-caption"><span>{t('Local engineering context',language)}</span><b>{t('Test-bench thinking',language)}</b></div></div><div className="photo-panel"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuBent9Os7OUsL5ECe-pfG3Oq-_zTnZEr1c_pC8299wpEF8XlcsXukh-lOfP0n5kQeFikYA0gsAKNZ3eKBaHYj3uWEJyoPIQS9fhQMIRSWOgNrMCfeFVnFrbrGzT0hfu6_JdQP3r3tYVFXz3CLcbKNu3pAXBsz9G-l0szXlPSPoGf4ot5LOnkO_ARQb8tCvAgUkkFhWhsWdIt16cjkkXxdYfZ7487xGWc8qMKy3cw50A4SFP0IjgA5X1ZQ" alt="" loading="lazy"/><div className="photo-caption"><span>{t('Parts organization',language)}</span><b>{t('Ready for the workbench',language)}</b></div></div><div className="photo-panel"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPST6SmLa4prqF2kH9-dLdulQoTHGwTkYaFiJhhQhet5MFJLjY8IK-HNA7FCsaz0esaijTWJB6RbiQ7pfwHodNHq6KSwvK59ovbvxBnf2qUptZz6_-LJdDcbXlYwffjTyc85DgWqvH8NNmoD5400DiXPv57LmO0M-A80qeIcmV4vKVt8DHm_CTZbZUYRPJlUcwwGuwS6GMPNKxqSjf0z1-p1fAGQZQsueCLqdlVrqV0xEdoaxHsI-PWw" alt="" loading="lazy"/><div className="photo-caption"><span>{t('Academia & makers',language)}</span><b>{t('Capstone build support',language)}</b></div></div></div>
     </div></section>
-      <section className="section" id="delivery"><div className="container mission-layout"><div><div className="eyebrow">{t('SECTION 01 // CORE MISSION',language)}</div><h2>{t('Hardware sourcing, closer to the workbench.',language)}</h2><p className="lead" style={{fontSize:14}}>{t('Overseas orders can be slow and costly. This demo shows local sourcing.',language)}</p><p style={{fontSize:13,lineHeight:1.7,color:'#576671'}}><strong>Circuits KW</strong> {t('brings parts and engineering details closer to makers. Fulfillment and pickup are demo concepts only.',language)}</p><div className="arabic-note" dir={language==='ar'?'rtl':'ltr'} lang={language}><strong style={{color:'#00687b'}}>{t('Our mission in Kuwait',language)}</strong><p style={{fontSize:13,margin:'6px 0 0'}}>{t('Clear parts, kits and KWD pricing for Kuwait’s engineers, students and makers.',language)}</p></div></div>
+      <section className="section" id="delivery"><div className="container mission-layout"><div><div className="eyebrow">{t('SECTION 01 // CORE MISSION',language)}</div><h2>{t('Hardware sourcing, closer to the workbench.',language)}</h2><p className="lead" style={{fontSize:14}}>{t('Overseas orders can be slow and costly. This demo shows local sourcing.',language)}</p><p style={{fontSize:13,lineHeight:1.7,color:'#576671'}}><strong>Circuits KW</strong> {t('brings parts and engineering details closer to makers. Fulfillment and pickup are demo concepts only.',language)}</p><div className="arabic-note" dir={language==='ar'?'rtl':'ltr'} lang={language}><strong style={{color:'#00687b'}}>{t('Our mission in Kuwait',language)}</strong><p style={{fontSize:13,margin:'6px 0 0'}}>{t('Clear parts, kits and USD pricing for Kuwait’s engineers, students and makers.',language)}</p></div></div>
         <div className="surface" style={{padding:19}}><div className="eyebrow">{t('KUWAIT DELIVERY OVERVIEW · REFERENCE ONLY',language)}</div><h3 style={{margin:'11px 0 5px'}}>{t('Kuwait Same-Day Dispatch Map',language)}</h3><p style={{fontSize:11,color:'#67747e',marginBottom:15}}>{t('Sample routes only. No courier or live order data; cutoff 15:00 AST.',language)}</p><div className="coverage-grid">{[['Capital & Hawalli','Sharq · Shuwaikh · Jabriya · Hawalli · Salmiya','~2–3 hours · sample evening express'],['Ahmadi & Mubarak','Fintas · Egaila · Mahboula · Mangaf · Sabah Al-Salem','Same afternoon · sample scheduled route'],['Jahra & outlying','Jahra · Saad Al-Abdullah · Amghara · Sulaibiya','18:00 route · illustrative timing']].map(([a,b,c])=><div className="coverage-card surface" key={a}><strong>{t(a,language)}</strong><p>{t(b,language)}</p><span>{t(c,language)}</span></div>)}</div><div className="sample-performance"><div><strong>99.4%</strong><span>{t('sample on-schedule reference figure',language)}</span></div><div className="sample-bar"><i/></div><p>{t('Illustrative timing only—not live service data.',language)}</p></div><div style={{marginTop:13,padding:12,background:'#f2f5f7',borderRadius:7,fontSize:11,color:'#51616d'}}><Truck size={14} style={{verticalAlign:'middle',marginRight:6}}/>{t('Shuwaikh pickup and courier are demo concepts, not active services.',language)}</div></div>
     </div></section>
       <section className="section feature-section"><div className="container"><div className="eyebrow">{t('SECTION 02 // ENGINEERING ASSURANCE',language)}</div><h2>{t('The Four Circuits KW Pillars',language)}</h2><div className="pillar-grid" style={{marginTop:20}}>{pillars.map(([title,desc],i)=><article className="surface pillar-card" key={title}><span className="feature-icon"><span className="mono">0{i+1}</span></span><h3>{t(title,language)}</h3><p>{t(desc,language)}</p><span className="mono" style={{fontSize:9,color:'#007b91'}}>{t('CIRCUITS KW / FIELD NOTE',language)}</span></article>)}</div></div></section>
@@ -862,10 +866,11 @@ function CartPage({items,update,remove,clearCart}:{items:Item[];update:(id:strin
   const {language}=useLanguage();
   useDocument(t('Shopping cart',language),t('Review your cart. Signed-in demo orders are saved to your account; no payment is taken.',language));
   const subtotal=calculateCartSubtotal(items);
+  const subtotalUsd=roundMoneyAmount(items.reduce((sum,item)=>sum+convertKwdToCurrency(item.price,'USD')*item.qty,0),'USD');
   return <div className="container page-top"><div className="eyebrow">{t('YOUR BUILD / LOCAL CART',language)}</div><h1 style={{fontSize:38}}>{t('Cart review',language)}</h1><p className="lead" style={{fontSize:14}}>{t('Place a demo order. Payment and shipping are not connected.',language)}</p>
     {!items.length?<div className="surface empty-state"><div className="empty-icon"><ShoppingCart size={23}/></div><h3>{t('Your cart is ready for a build.',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t('Add parts or a kit to your cart.',language)}</p><div style={{display:'flex',justifyContent:'center',gap:9,flexWrap:'wrap'}}><Link className="button button-primary" href="/components" data-testid="link-empty-cart-components">{t('Browse components',language)}</Link><Link className="button button-outline" href="/project-kits" data-testid="link-empty-cart-kits">{t('Explore kits',language)}</Link></div></div>:
-      <div className="cart-layout"><section className="cart-list surface" aria-label={t('Cart items',language)}>{items.map(i=><article className="cart-row" key={i.id} data-testid={`row-cart-${i.id}`}><div className="cart-product"><span className="cart-thumb">{i.kind==='kit'?<PackageCheck size={22}/>:i.kind==='bom'?<CircuitBoard size={22}/>:<Cpu size={22}/>}</span><span><strong>{t(i.name,language)}</strong><span>{i.sku} · {t(i.kind==='kit'?'Project kit':i.kind==='bom'?'Build Assist demo item':'Component',language)}</span></span></div><div className="quantity" aria-label={`${t('Quantity',language)} ${t(i.name,language)}`}><button aria-label={t('Decrease quantity',language)} onClick={()=>update(i.id,i.qty-1)} data-testid={`button-decrease-${i.id}`}><Minus size={12}/></button><input aria-label={`${t('Quantity',language)} ${t(i.name,language)}`} type="number" min="1" value={i.qty} onChange={e=>update(i.id,Math.max(1,Number(e.target.value)||1))} data-testid={`input-quantity-${i.id}`}/><button aria-label={t('Increase quantity',language)} onClick={()=>update(i.id,i.qty+1)} data-testid={`button-increase-${i.id}`}><Plus size={12}/></button></div><span className="price">{fmt(i.price*i.qty)}</span><button className="remove" aria-label={`${t('Remove',language)} ${t(i.name,language)}`} onClick={()=>remove(i.id)} data-testid={`button-remove-${i.id}`}><Trash2 size={16}/></button></article>)}</section>
-          <aside className="summary-card surface"><div className="eyebrow">{t('CART SUMMARY',language)}</div><div className="summary-line"><span>{t('Items',language)}</span><strong>{items.reduce((n,i)=>n+i.qty,0)}</strong></div><div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono">{fmt(subtotal)}</strong></div><div className="summary-line"><span>{t('Delivery',language)}</span><span>{t('Not connected',language)}</span></div><div className="summary-line summary-total"><span>{t('Estimated total',language)}</span><span className="mono">{fmt(subtotal)}</span></div><p style={{fontSize:10,lineHeight:1.5,color:'#6c7880'}}>{t('Demo order only. No payment or fulfillment.',language)}</p><Link className="button button-primary" style={{width:'100%'}} href="/checkout" onClick={()=>trackCheckoutStarted(items.length,subtotal)} data-testid="link-checkout"><ArrowRight size={14}/> {t('Continue to checkout',language)}</Link><Link className="button button-outline" style={{width:'100%',marginTop:8}} href="/components" data-testid="link-continue-shopping"><ArrowDown size={14}/> {t('Continue shopping',language)}</Link><button className="button button-quiet" style={{width:'100%',marginTop:8}} onClick={clearCart} data-testid="button-clear-cart"><Trash2 size={14}/> {t('Clear cart',language)}</button></aside>
+      <div className="cart-layout"><section className="cart-list surface" aria-label={t('Cart items',language)}>{items.map(i=><article className="cart-row" key={i.id} data-testid={`row-cart-${i.id}`}><div className="cart-product"><span className="cart-thumb">{i.kind==='kit'?<PackageCheck size={22}/>:i.kind==='bom'?<CircuitBoard size={22}/>:<Cpu size={22}/>}</span><span><strong>{t(i.name,language)}</strong><span>{i.sku} · {t(i.kind==='kit'?'Project kit':i.kind==='bom'?'Build Assist demo item':'Component',language)}</span></span></div><div className="quantity" aria-label={`${t('Quantity',language)} ${t(i.name,language)}`}><button aria-label={t('Decrease quantity',language)} onClick={()=>update(i.id,i.qty-1)} data-testid={`button-decrease-${i.id}`}><Minus size={12}/></button><input aria-label={`${t('Quantity',language)} ${t(i.name,language)}`} type="number" min="1" value={i.qty} onChange={e=>update(i.id,Math.max(1,Number(e.target.value)||1))} data-testid={`input-quantity-${i.id}`}/><button aria-label={t('Increase quantity',language)} onClick={()=>update(i.id,i.qty+1)} data-testid={`button-increase-${i.id}`}><Plus size={12}/></button></div><span className="price">{fmtUsd(convertKwdToCurrency(i.price,'USD')*i.qty)}</span><button className="remove" aria-label={`${t('Remove',language)} ${t(i.name,language)}`} onClick={()=>remove(i.id)} data-testid={`button-remove-${i.id}`}><Trash2 size={16}/></button></article>)}</section>
+          <aside className="summary-card surface"><div className="eyebrow">{t('CART SUMMARY',language)}</div><div className="summary-line"><span>{t('Items',language)}</span><strong>{items.reduce((n,i)=>n+i.qty,0)}</strong></div><div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono">{fmtUsd(subtotalUsd)}</strong></div><div className="summary-line"><span>{t('Delivery',language)}</span><span>{t('Not connected',language)}</span></div><div className="summary-line summary-total"><span>{t('Estimated total',language)}</span><span className="mono">{fmtUsd(subtotalUsd)}</span></div><p style={{fontSize:10,lineHeight:1.5,color:'#6c7880'}}>{t('Demo order only. No payment or fulfillment.',language)}</p><Link className="button button-primary" style={{width:'100%'}} href="/checkout" onClick={()=>trackCheckoutStarted(items.length,subtotal)} data-testid="link-checkout"><ArrowRight size={14}/> {t('Continue to checkout',language)}</Link><Link className="button button-outline" style={{width:'100%',marginTop:8}} href="/components" data-testid="link-continue-shopping"><ArrowDown size={14}/> {t('Continue shopping',language)}</Link><button className="button button-quiet" style={{width:'100%',marginTop:8}} onClick={clearCart} data-testid="button-clear-cart"><Trash2 size={14}/> {t('Clear cart',language)}</button></aside>
       </div>}
   </div>;
 }
@@ -921,7 +926,6 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
   const [stripePaymentPending,setStripePaymentPending]=useState(false);
   const [paymentVerifying,setPaymentVerifying]=useState(false);
   const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
-  const [selectedCurrency,setSelectedCurrency]=useState<MoneyCurrency>('KWD');
   useEffect(()=>{
     if(!placedOrder) return;
     const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -973,8 +977,8 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
     return ()=>{active=false;};
   },[clearCart,language]);
   const subtotal=roundMoneyAmount(
-    items.reduce((total,item)=>total+convertKwdToCurrency(item.price,selectedCurrency)*item.qty,0),
-    selectedCurrency,
+    items.reduce((total,item)=>total+convertKwdToCurrency(item.price,'USD')*item.qty,0),
+    'USD',
   );
   const openReceiptForPrint=()=>{
     if(!placedOrder) return;
@@ -1034,7 +1038,7 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
     if(!payload) return;
     orderSubmissionInFlight.current=true;
     createOrder.mutate({
-      data:{...payload,currency:selectedCurrency},
+      data:{...payload,currency:'USD'},
     },{
       onSuccess:saved=>{
         orderSubmissionInFlight.current=false;
@@ -1103,7 +1107,7 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
       const response=await fetch(`${basePath}/api/stripe/checkout`,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({...payload,currency:selectedCurrency}),
+        body:JSON.stringify({...payload,currency:'USD'}),
       });
       const result=await response.json().catch(()=>null);
       if(!response.ok){
@@ -1132,8 +1136,8 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
       <h1>{t(placedOrder.isDemo?'Order placed.':'Payment confirmed.',language)}</h1>
        <p className="lead" style={{fontSize:13,margin:'0 auto 18px'}} data-testid="text-order-storage-status">{t(placedOrder.isDemo?'Saved for demo order management. No payment or fulfillment is connected.':'Stripe confirmed your payment. Your order is saved for management.',language)}</p>
       <div className="demo-order-number"><span>{t(placedOrder.isDemo?'DEMO ORDER NUMBER':'ORDER NUMBER',language)}</span><strong data-testid="text-demo-order-number">{placedOrder.orderNumber}</strong><small>{new Date(placedOrder.placedAt).toLocaleString(language==='ar'?'ar-KW':'en-KW')}</small></div>
-      <div className="demo-order-items">{placedOrder.items.map(item=><div key={item.id} data-testid={`row-confirmation-${item.id}`}><span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span><strong>{fmtMoney(item.price*item.qty,placedOrder.currency)}</strong></div>)}</div>
-      <div className="summary-line summary-total"><span>{t(placedOrder.isDemo?'Demo total':'Paid total',language)}</span><span className="mono" data-testid="text-demo-order-subtotal">{fmtMoney(placedOrder.subtotal,placedOrder.currency)}</span></div>
+      <div className="demo-order-items">{placedOrder.items.map(item=><div key={item.id} data-testid={`row-confirmation-${item.id}`}><span>{t(item.name,language)} · {t('Qty',language)} {item.qty}</span><strong>{fmtOrderUsd(item.price*item.qty,placedOrder.currency)}</strong></div>)}</div>
+      <div className="summary-line summary-total"><span>{t(placedOrder.isDemo?'Demo total':'Paid total',language)}</span><span className="mono" data-testid="text-demo-order-subtotal">{fmtOrderUsd(placedOrder.subtotal,placedOrder.currency)}</span></div>
         <p className="checkout-order-disclaimer">{t(placedOrder.isDemo?'Order contact and delivery details are saved for admin review. Payment and fulfillment are not connected.':'Order contact and delivery details are saved. Delivery and fulfillment are managed separately.',language)}</p>
       <div className="checkout-receipt-actions">
         <button className="button button-outline" type="button" onClick={openReceiptForPrint} data-testid="button-print-demo-receipt"><Printer size={15}/>{t('Print receipt',language)}</button>
@@ -1211,19 +1215,12 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
       </div>
       <aside className="surface checkout-summary">
         <div className="eyebrow">{t('YOUR PARTS LIST',language)}</div><h2>{t('Order summary',language)}</h2>
-        <div className="checkout-currency-row">
-          <span>{t('Checkout currency',language)}</span>
-          <div className="checkout-currency-switch" role="group" aria-label={t('Checkout currency',language)}>
-            <button type="button" aria-pressed={selectedCurrency==='KWD'} onClick={()=>setSelectedCurrency('KWD')} data-testid="button-checkout-currency-kwd">KWD</button>
-            <button type="button" aria-pressed={selectedCurrency==='USD'} onClick={()=>setSelectedCurrency('USD')} data-testid="button-checkout-currency-usd">USD</button>
-          </div>
-        </div>
-        {selectedCurrency==='USD'&&<p className="checkout-currency-rate" data-testid="text-checkout-currency-rate">{t('Fixed exchange rate',language)} · 1 KWD = {USD_PER_KWD} USD</p>}
-        <div className="checkout-items">{items.map(item=><div className="checkout-item" key={item.id} data-testid={`row-checkout-${item.id}`}><div><strong>{t(item.name,language)}</strong><span>{item.sku} · {t('Qty',language)} {item.qty}</span></div><b>{fmtMoney(convertKwdToCurrency(item.price,selectedCurrency)*item.qty,selectedCurrency)}</b></div>)}</div>
-        <div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono" data-testid="text-checkout-subtotal">{fmtMoney(subtotal,selectedCurrency)}</strong></div>
+        <p className="checkout-currency-rate" data-testid="text-checkout-currency-rate">{t('USD prices use the fixed rate',language)} · 1 KWD = {USD_PER_KWD} USD</p>
+        <div className="checkout-items">{items.map(item=><div className="checkout-item" key={item.id} data-testid={`row-checkout-${item.id}`}><div><strong>{t(item.name,language)}</strong><span>{item.sku} · {t('Qty',language)} {item.qty}</span></div><b>{fmtUsd(convertKwdToCurrency(item.price,'USD')*item.qty)}</b></div>)}</div>
+        <div className="summary-line"><span>{t('Subtotal',language)}</span><strong className="mono" data-testid="text-checkout-subtotal">{fmtUsd(subtotal)}</strong></div>
         <div className="summary-line"><span>{t('Delivery',language)}</span><span>{t('Not connected',language)}</span></div>
-        <div className="summary-line summary-total"><span>{t('Estimated total',language)}</span><span className="mono">{fmtMoney(subtotal,selectedCurrency)}</span></div>
-        <p className="checkout-total-note">{t('Sample KWD prices; delivery fees excluded.',language)}</p>
+        <div className="summary-line summary-total"><span>{t('Estimated total',language)}</span><span className="mono">{fmtUsd(subtotal)}</span></div>
+        <p className="checkout-total-note">{t('Sample USD prices; delivery fees excluded.',language)}</p>
         <Link className="checkout-edit-link" href="/cart">← {t('Edit cart',language)}</Link>
       </aside>
     </form>
@@ -1340,11 +1337,11 @@ function AccountPage() {
                   </div>
                   <div className="account-order-items">
                     {order.items.map((item,index)=><div key={`${item.id}-${index}`}>
-                      <span>{t(item.name,language)} · {t('Qty',language)} {item.qty} · {t('Unit price',language)} {fmtMoney(item.price,order.currency)}</span>
-                      <strong>{fmtMoney(item.price*item.qty,order.currency)}</strong>
+                      <span>{t(item.name,language)} · {t('Qty',language)} {item.qty} · {t('Unit price',language)} {fmtOrderUsd(item.price,order.currency)}</span>
+                      <strong>{fmtOrderUsd(item.price*item.qty,order.currency)}</strong>
                     </div>)}
                   </div>
-                  <div className="account-order-total"><span>{t(order.isDemo?'Demo total':'Order total',language)}</span><strong>{fmtMoney(order.subtotal,order.currency)}</strong></div>
+                  <div className="account-order-total"><span>{t(order.isDemo?'Demo total':'Order total',language)}</span><strong>{fmtOrderUsd(order.subtotal,order.currency)}</strong></div>
                   {order.isDemo&&<div className="account-order-receipt-actions">
                     <button className="button button-outline small-button" type="button" onClick={()=>printDemoReceipt(order,language)} data-testid={`button-print-account-demo-receipt-${order.id}`}><Printer size={14}/>{t('Print receipt',language)}</button>
                     <button className="button button-outline small-button" type="button" onClick={()=>downloadDemoReceipt(order,language)} data-testid={`button-download-account-demo-receipt-${order.id}`}><Download size={14}/>{t('Download receipt',language)}</button>

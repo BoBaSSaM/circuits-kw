@@ -236,30 +236,6 @@ test("saved order history keeps product and kit snapshots after catalog edits an
     getDatabase,
   );
 
-  const usdOrder = await storeOrder(
-    {
-      customer: { name: "USD Buyer", email: "usd@example.com", phone: "+965 5555 5556" },
-      shipping: {
-        governorate: "Capital",
-        area: "Kuwait City",
-        block: "1",
-        street: "Main Street",
-        building: "10",
-      },
-      currency: "USD",
-      items: [
-        { id: "component-1", kind: "component", sku: "COMP-1", qty: 2 },
-        { id: "kit-1", kind: "kit", sku: "KIT-1", qty: 1 },
-      ],
-    },
-    { userId: "buyer-usd", createdBy: null },
-    getDatabase,
-  );
-  assert.equal(usdOrder.currency, "USD");
-  assert.equal(usdOrder.exchangeRateKwdToUsd, 3.3);
-  assert.deepEqual(usdOrder.items.map((item) => item.price), [4.13, 15.68]);
-  assert.equal(usdOrder.subtotal, 23.94);
-
   product.name = "Renamed component";
   product.price = 99;
   product.isActive = false;
@@ -283,7 +259,7 @@ test("saved order history keeps product and kit snapshots after catalog edits an
         kind: "component",
         sku: "COMP-1",
         name: "Original component",
-        price: 1.25,
+        price: 4.13,
         qty: 2,
       },
       {
@@ -291,13 +267,16 @@ test("saved order history keeps product and kit snapshots after catalog edits an
         kind: "kit",
         sku: "KIT-1",
         name: "Original project kit",
-        price: 4.75,
+        price: 15.68,
         qty: 1,
       },
     ],
   );
   assert.equal(
     (result.body as { orders: { subtotal: number }[] }).orders[0].subtotal,
-    7.25,
+    23.94,
   );
+  const savedOrder = (result.body as { orders: { currency: string; exchangeRateKwdToUsd: number | null }[] }).orders[0];
+  assert.equal(savedOrder.currency, "USD");
+  assert.equal(savedOrder.exchangeRateKwdToUsd, 3.3);
 });

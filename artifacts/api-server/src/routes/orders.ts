@@ -147,7 +147,7 @@ export async function storeOrder(
   getDatabase: typeof getMongoDatabase = getMongoDatabase,
 ): Promise<AdminOrder> {
   const database = await getDatabase();
-  const currency: OrderCurrency = input.currency ?? "KWD";
+  const currency: OrderCurrency = "USD";
   const items = (await resolveOrderItems(input.items, database)).map((item) => ({
     ...item,
     price: convertKwdToCurrency(item.price, currency),

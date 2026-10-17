@@ -161,7 +161,7 @@ router.post("/stripe/checkout", async (req, res) => {
   try {
     const origin = getPublicOrigin(req);
     const database = await getMongoDatabase();
-    const currency: OrderCurrency = parsed.data.currency ?? "KWD";
+    const currency: OrderCurrency = "USD";
     const items = (await resolveOrderItems(parsed.data.items, database)).map((item) => ({
       ...item,
       price: convertKwdToCurrency(item.price, currency),

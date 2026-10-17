@@ -226,11 +226,8 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
     const checkoutRow = page.getByTestId('row-checkout-auth-flow-item');
     await checkoutRow.waitFor();
     assert.match(await checkoutRow.innerText(), /Qty 2/);
-    await page.getByTestId('button-checkout-currency-usd').click();
     assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '18.82 USD');
     assert.match(await page.getByTestId('text-checkout-currency-rate').innerText(), /1 KWD = 3.3 USD/);
-    await page.getByTestId('button-checkout-currency-kwd').click();
-    assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '5.700 KWD');
     await page.evaluate(() => localStorage.removeItem('circuits-kw-cart'));
     await page.reload();
     await page.getByTestId('row-checkout-auth-flow-item').waitFor();
@@ -246,8 +243,8 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
     const savedOrderText = await savedOrderCard.innerText();
     assert.match(savedOrderText, /Original archived component/);
     assert.match(savedOrderText, /Qty 2/);
-    assert.match(savedOrderText, /Unit price 1\.250 KWD/);
-    assert.match(savedOrderText, /2\.500 KWD/);
+    assert.match(savedOrderText, /Unit price 1\.25 USD/);
+    assert.match(savedOrderText, /2\.50 USD/);
     const receiptPopupPromise = page.waitForEvent('popup');
     await page.getByTestId('button-print-account-demo-receipt-saved-order-snapshot').click();
     const receiptPopup = await receiptPopupPromise;
@@ -257,7 +254,7 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
     assert.match(receiptPopupText, /CKW-SNAPSHOT-001/);
     assert.match(receiptPopupText, /Original archived component/);
     assert.match(receiptPopupText, /Qty 2/);
-    assert.match(receiptPopupText, /2\.500 KWD/);
+    assert.match(receiptPopupText, /2\.50 USD/);
     const savedReceiptDownloadPromise = page.waitForEvent('download');
     await page.getByTestId('button-download-account-demo-receipt-saved-order-snapshot').click();
     const savedReceiptDownload = await savedReceiptDownloadPromise;
@@ -268,7 +265,7 @@ test('guest checkout, account creation, and sign-in preserve checkout and dashbo
     assert.match(savedReceiptHtml, /DEMO ORDER · NO PAYMENT TAKEN/);
     assert.match(savedReceiptHtml, /Original archived component/);
     assert.match(savedReceiptHtml, /Qty 2/);
-    assert.match(savedReceiptHtml, /2\.500 KWD/);
+    assert.match(savedReceiptHtml, /2\.50 USD/);
     const signOutLink = page.getByTestId('link-sign-out');
     assert.equal(await signOutLink.getAttribute('href'), `${basePath}/sign-out`);
     await signOutLink.click();

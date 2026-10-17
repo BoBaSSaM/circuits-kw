@@ -6,4 +6,4 @@
 - [Vercel npm registry compatibility](npm-lockfile-registry.md) — Replit-generated lockfile URLs need host replacement for Vercel while retaining the Replit registry locally.
 - [Next.js Replit preview checks](next-preview-css-bundling.md) — Webpack avoids Turbopack CSS failures; the actual Replit host must also be allowed for HMR.
 - [GitHub push authentication](github-push-auth.md) — A present token or healthy OAuth status does not prove Git CLI push access; never expose tokens or force-push to work around auth.
-- [Stripe connection and currency](stripe-connection.md) — Use Replit’s authenticated Stripe proxy; don’t assume the connected account can charge KWD.
+- [Stripe connection and USD pricing](stripe-connection.md) — Use Replit’s authenticated Stripe proxy; show USD only at a fixed 3.3 rate while keeping KWD catalog data.

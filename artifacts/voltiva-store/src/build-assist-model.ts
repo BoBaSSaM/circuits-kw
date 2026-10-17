@@ -93,7 +93,7 @@ export function parseAuthorizedPriceCsv(csv: string): ImportedPriceList {
     if (!sku || !rawPrice) throw new Error(`CSV row ${line} is missing an SKU or price.`);
     const price = Number(rawPrice);
     if (!Number.isFinite(price) || price < 0 || !/^\d+(?:\.\d{1,3})?$/.test(rawPrice)) {
-      throw new Error(`CSV row ${line} must have a non-negative KWD price with up to 3 decimals.`);
+      throw new Error(`CSV row ${line} must have a non-negative KWD supplier price with up to 3 decimals.`);
     }
     if (currencyIndex >= 0 && (cells[currencyIndex] ?? '').trim().toUpperCase() !== 'KWD') {
       throw new Error(`CSV row ${line} currency must be KWD.`);

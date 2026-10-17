@@ -1,16 +1,16 @@
 ---
-name: Replit Stripe connection and currency
-description: How this app should access the Replit Stripe connection and handle the current KWD limitation.
+name: Replit Stripe connection and USD pricing
+description: How this app accesses Stripe and converts KWD catalog prices to USD-only customer pricing.
 ---
 
 When running in Replit without `STRIPE_SECRET_KEY`, use `@replit/connectors-sdk` to proxy Stripe API calls. The connection may be usable through the proxy even when no Stripe secret is present in Replit Secrets or returned by the connection-settings endpoint. Separate deployments such as Vercel still need a server-side `STRIPE_SECRET_KEY`; webhook processing also needs `STRIPE_WEBHOOK_SECRET`.
 
-The storefront should offer both KWD and USD checkout. Keep catalog prices in KWD and use the user-selected fixed rate of 3.3 USD per 1 KWD for USD checkout.
+The storefront and new checkout orders are USD-only. Keep product and supplier source prices in KWD internally, and convert customer-facing unit prices at the fixed rate of 3.3 USD per 1 KWD. Round each converted unit to USD cents before multiplying by quantity.
 
 **Why:** The Replit-connected Stripe account returned successful test-mode API requests through the SDK proxy, while the direct credential lookup returned no secret key.
 
-**How to apply:** Keep keys out of logs and use the authenticated proxy in Replit. The connected test account did not support KWD, and Stripe rejected a KWD Checkout Session. Let buyers select USD as an available alternative; the Stripe account must enable KWD before KWD charges can succeed. Record the exchange rate used on each converted order.
+**How to apply:** Keep keys out of logs and use the authenticated proxy in Replit. The connected test account did not support KWD, so Stripe Checkout uses USD. Convert prices entered in the USD admin forms back to KWD before saving catalog data; record the fixed rate on each new order. Do not bulk-rewrite existing catalog records.
 
-**Why:** The user requested both KWD and USD, then specified a fixed conversion rate of 3.3.
+**Why:** The user requested a USD-only storefront and specified converting all KWD prices by 3.3.
 
-**How to apply:** Apply the fixed rate only at checkout; do not rewrite catalog prices or silently switch to a live market rate.
+**How to apply:** Display USD throughout the storefront and dashboard. Keep KWD only for supplier imports and canonical catalog storage; never silently switch to a live market rate.

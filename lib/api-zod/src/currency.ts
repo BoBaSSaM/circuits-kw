@@ -17,6 +17,10 @@ export function convertKwdToCurrency(amountKwd: number, currency: MoneyCurrency)
   return roundMoneyAmount(currency === "USD" ? amountKwd * USD_PER_KWD : amountKwd, currency);
 }
 
+export function convertUsdToKwd(amountUsd: number): number {
+  return roundMoneyAmount(amountUsd / USD_PER_KWD, "KWD");
+}
+
 export function toStripeMinorUnits(amount: number, currency: MoneyCurrency): number {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error(`A positive ${currency} amount is required.`);

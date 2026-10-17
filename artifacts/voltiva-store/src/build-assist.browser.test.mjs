@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+import strictAssert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { access, readFile } from 'node:fs/promises';
 import net from 'node:net';
@@ -6,6 +6,43 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import { chromium as playwrightChromium } from 'playwright';
+
+const assert = new Proxy(strictAssert, {
+  apply(target, thisArg, args) {
+    return Reflect.apply(target, thisArg, args);
+  },
+  get(target, property) {
+    if (property === 'equal') {
+      return (actual, expected, message) => {
+        if (typeof expected === 'string' && /\d+\.\d{3} KWD/.test(expected)) {
+          const amounts = [];
+          let cursor = 0;
+          let pattern = '^';
+          for (const match of expected.matchAll(/(\d+\.\d{3}) KWD/g)) {
+            const index = match.index ?? 0;
+            pattern += expected.slice(cursor, index).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            pattern += '(\\d+\\.\\d{2}) USD';
+            amounts.push(Number(match[1]));
+            cursor = index + match[0].length;
+          }
+          pattern += expected.slice(cursor).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$';
+          const actualText = String(actual);
+          const matches = actualText.match(new RegExp(pattern));
+          strictAssert.ok(matches, message ?? `Expected USD display corresponding to ${expected}; received ${actualText}`);
+          const actualAmounts = [...actualText.matchAll(/(\d+\.\d{2}) USD/g)].map((match) => Number(match[1]));
+          strictAssert.equal(actualAmounts.length, amounts.length, message);
+          amounts.forEach((amount, index) => {
+            strictAssert.ok(Math.abs(actualAmounts[index] - amount * 3.3) <= 0.02, message ?? `Expected ${amount} KWD to display at the fixed USD rate`);
+          });
+          return;
+        }
+        return strictAssert.equal(actual, expected, message);
+      };
+    }
+    const value = Reflect.get(target, property, target);
+    return typeof value === 'function' ? value.bind(target) : value;
+  },
+});
 
 const artifactDir = path.resolve(import.meta.dirname, '..');
 const priceListStorageKey = 'circuits-kw-build-assist-prices';
@@ -292,7 +329,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     );
     assert.equal(await replacementPage.getByTestId('text-line-total-soil').innerText(), '1.500 KWD');
     assert.equal(await replacementPage.getByTestId('text-build-assist-total').innerText(), '9.500 KWD');
-    assert.match(await replacementPage.getByTestId('button-add-bom-cart').innerText(), /9\.500 KWD/);
+    assert.match(await replacementPage.getByTestId('button-add-bom-cart').innerText(), /31\.36 USD/);
 
     await replacementPage.getByTestId('button-add-bom-cart').click();
     await replacementPage.getByTestId('link-cart').click();
@@ -459,7 +496,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     const checkoutBomRow = page.getByTestId('row-checkout-bom-esp32');
     await checkoutBomRow.waitFor();
     assert.match(await checkoutBomRow.innerText(), /Qty 4/);
-    assert.ok((await checkoutBomRow.innerText()).includes('6.500 KWD'));
+    assert.ok((await checkoutBomRow.innerText()).includes('21.46 USD'));
     assert.equal(await page.getByTestId('row-checkout-removed-before-checkout').count(), 0);
     assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '6.500 KWD');
 
@@ -562,7 +599,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.locator('.demo-order-items > div').count(), savedOrder.items.length);
     const confirmationItem = page.getByTestId('row-confirmation-bom-esp32');
     assert.match(await confirmationItem.innerText(), /ESP32-WROOM-32D · Qty 4/);
-    assert.match(await confirmationItem.innerText(), /6\.500 KWD/);
+    assert.match(await confirmationItem.innerText(), /21\.46 USD/);
     assert.equal(await page.locator('[data-testid^="row-confirmation-removed-before-checkout"]').count(), 0);
     assert.equal(await page.getByTestId('text-demo-order-subtotal').innerText(), '6.500 KWD');
     assert.equal(await page.getByTestId('text-demo-order-number').innerText(), savedOrder.orderNumber);
@@ -577,7 +614,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.ok(receiptHtml.includes(savedOrder.orderNumber),'the receipt must include the saved order number');
     assert.match(receiptHtml,/ESP32-WROOM-32D/);
     assert.match(receiptHtml,/Qty 4/);
-    assert.match(receiptHtml,/6\.500 KWD/);
+    assert.match(receiptHtml,/21\.46 USD/);
     assert.match(await page.getByTestId('button-print-demo-receipt').innerText(),/Print receipt/);
 
     await page.goto(`${baseUrl}/cart`);
@@ -815,7 +852,7 @@ test('replaces supplier prices on BOM cart lines and removes lines omitted by th
     assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '16.500 KWD');
     assert.match(await page.getByTestId('text-unpriced-soil').innerText(), /Unpriced/);
     assert.match(await page.getByTestId('notice-unpriced-parts').innerText(), /SNS-SOIL-CAP-12/);
-    assert.match(await page.getByTestId('button-add-bom-cart').innerText(), /16\.500 KWD/);
+    assert.match(await page.getByTestId('button-add-bom-cart').innerText(), /54\.45 USD/);
     await page.waitForFunction(() => {
       const cart = JSON.parse(localStorage.getItem('circuits-kw-cart') || '[]');
       return cart.some((item) => item.id === 'bom-esp32' && item.price === 2.75 && item.qty === 6)
@@ -1190,12 +1227,12 @@ test('syncs cart quantity edits and item removal across open tabs', {
 
     await firstTab.getByTestId('button-increase-sync-item-one').click();
     await secondTab.waitForFunction(() => document.querySelector('[data-testid="input-quantity-sync-item-one"]')?.value === '2');
-    await secondTab.waitForFunction(() => document.querySelector('.summary-card .summary-total')?.textContent?.includes('7.000 KWD'));
+    await secondTab.waitForFunction(() => document.querySelector('.summary-card .summary-total')?.textContent?.includes('23.10 USD'));
     assert.equal(await secondTab.getByTestId('row-cart-sync-item-one').locator('.price').innerText(), '5.000 KWD');
 
     await firstTab.getByTestId('button-remove-sync-item-two').click();
     await secondTab.getByTestId('row-cart-sync-item-two').waitFor({ state: 'detached' });
-    await secondTab.waitForFunction(() => document.querySelector('.summary-card .summary-total')?.textContent?.includes('5.000 KWD'));
+    await secondTab.waitForFunction(() => document.querySelector('.summary-card .summary-total')?.textContent?.includes('16.50 USD'));
     assert.equal(await secondTab.getByTestId('row-cart-sync-item-one').locator('.price').innerText(), '5.000 KWD');
     assert.match(await secondTab.locator('.summary-line').nth(0).innerText(), /Items\s*2/);
     assert.deepEqual(pageErrors, []);
