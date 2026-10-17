@@ -504,6 +504,18 @@ export interface CheckoutOrderInput {
   currency?: OrderCurrency;
 }
 
+export interface CheckoutOrderRequest {
+  checkoutAttemptId: string;
+  customer: OrderCustomer;
+  shipping: OrderShipping;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  items: OrderItemInput[];
+  currency?: OrderCurrency;
+}
+
 export interface CheckoutOrderResponse {
   id: string;
   orderNumber: string;

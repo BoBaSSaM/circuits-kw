@@ -27,6 +27,14 @@ export async function getMongoDatabase(): Promise<Db> {
       database.collection("products").createIndex({ sku: 1 }, { unique: true }),
       database.collection("project_kits").createIndex({ code: 1 }, { unique: true }),
       database.collection("orders").createIndex({ orderNumber: 1 }, { unique: true }),
+      database.collection("orders").createIndex(
+        { checkoutAttemptId: 1 },
+        {
+          unique: true,
+          name: "unique_checkout_attempt",
+          partialFilterExpression: { checkoutAttemptId: { $type: "string" } },
+        },
+      ),
       database.collection("orders").createIndex({ placedAt: -1 }),
       database.collection("orders").createIndex(
         { stripeCheckoutSessionId: 1 },

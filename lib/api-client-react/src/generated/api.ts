@@ -35,6 +35,7 @@ import type {
   CatalogProduct,
   CatalogResponse,
   CheckoutOrderInput,
+  CheckoutOrderRequest,
   CheckoutOrderResponse,
   CurrentUserResponse,
   DeleteResponse,
@@ -655,9 +656,9 @@ export const getCreateCheckoutOrderUrl = () => {
 }
 
 /**
- * @summary Place a demo order
+ * @summary Place or retry a demo order
  */
-export const createCheckoutOrder = async (checkoutOrderInput: CheckoutOrderInput, options?: Parameters<typeof customFetch>[1]): Promise<CheckoutOrderResponse> => {
+export const createCheckoutOrder = async (checkoutOrderRequest: CheckoutOrderRequest, options?: Parameters<typeof customFetch>[1]): Promise<CheckoutOrderResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -678,7 +679,7 @@ return customFetch<CheckoutOrderResponse>(getCreateCheckoutOrderUrl(),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(checkoutOrderInput)
+    body: JSON.stringify(checkoutOrderRequest)
   }
 );}
 
@@ -716,12 +717,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type CreateCheckoutOrderMutationResult = NonNullable<Awaited<ReturnType<typeof createCheckoutOrder>>>
-    export type CreateCheckoutOrderMutationBody = BodyType<CheckoutOrderInput>
+    export type CreateCheckoutOrderMutationBody = BodyType<CheckoutOrderRequest>
     export type CreateCheckoutOrderMutationError = ErrorType<ErrorResponse>
-    export type CreateCheckoutOrderMutationVariables = {data: BodyType<CheckoutOrderInput>}
+    export type CreateCheckoutOrderMutationVariables = {data: BodyType<CheckoutOrderRequest>}
 
     /**
- * @summary Place a demo order
+ * @summary Place or retry a demo order
  */
 export const useCreateCheckoutOrder = <TError = ErrorType<ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCheckoutOrder>>, TError,CreateCheckoutOrderMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

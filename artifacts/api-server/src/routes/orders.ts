@@ -40,6 +40,7 @@ type ProjectKitDocument = ProjectKitInput & {
 export type OrderDocument = {
   _id: ObjectId;
   orderNumber: string;
+  checkoutAttemptId?: string;
   placedAt: Date;
   items: OrderItem[];
   subtotal: number;
@@ -143,10 +144,25 @@ export async function resolveOrderItems(
 
 export async function storeOrder(
   input: CheckoutOrderInput,
-  options: { userId: string | null; createdBy: string | null },
+  options: {
+    userId: string | null;
+    createdBy: string | null;
+    checkoutAttemptId?: string;
+  },
   getDatabase: typeof getMongoDatabase = getMongoDatabase,
-): Promise<AdminOrder> {
+): Promise<{ order: AdminOrder; replayed: boolean }> {
   const database = await getDatabase();
+  const orders = database.collection<OrderDocument>("orders");
+  const existingOrder = options.checkoutAttemptId
+    ? await orders.findOne({ checkoutAttemptId: options.checkoutAttemptId })
+    : null;
+  if (existingOrder) {
+    if (existingOrder.userId !== options.userId) {
+      throw new OrderInputError("checkout_attempt_conflict", 409);
+    }
+    return { order: toAdminOrder(existingOrder), replayed: true };
+  }
+
   const currency: OrderCurrency = "USD";
   const items = (await resolveOrderItems(input.items, database)).map((item) => ({
     ...item,
@@ -161,6 +177,9 @@ export async function storeOrder(
   const document: OrderDocument = {
     _id: new ObjectId(),
     orderNumber,
+    ...(options.checkoutAttemptId
+      ? { checkoutAttemptId: options.checkoutAttemptId }
+      : {}),
     placedAt,
     items,
     subtotal,
@@ -176,23 +195,21 @@ export async function storeOrder(
     paymentStatus: "not_required",
   };
 
-  await database.collection<OrderDocument>("orders").insertOne(document);
-  return {
-    id: document._id.toHexString(),
-    orderNumber: document.orderNumber,
-    placedAt: document.placedAt,
-    items: document.items,
-    subtotal: document.subtotal,
-    currency: document.currency ?? "KWD",
-    exchangeRateKwdToUsd: document.exchangeRateKwdToUsd ?? null,
-    status: document.status,
-    customer: document.customer,
-    shipping: document.shipping,
-    userId: document.userId,
-    adminNotes: document.adminNotes,
-    isDemo: document.isDemo ?? true,
-    paymentStatus: document.paymentStatus ?? "not_required",
-  };
+  try {
+    await orders.insertOne(document);
+  } catch (error) {
+    if (!isDuplicateKeyError(error) || !options.checkoutAttemptId) throw error;
+    const concurrentlySavedOrder = await orders.findOne({
+      checkoutAttemptId: options.checkoutAttemptId,
+    });
+    if (!concurrentlySavedOrder) throw error;
+    if (concurrentlySavedOrder.userId !== options.userId) {
+      throw new OrderInputError("checkout_attempt_conflict", 409);
+    }
+    return { order: toAdminOrder(concurrentlySavedOrder), replayed: true };
+  }
+
+  return { order: toAdminOrder(document), replayed: false };
 }
 
 function respondToOrderError(error: unknown, res: Response): void {
@@ -291,34 +308,59 @@ router.get(
   }),
 );
 
-router.post("/orders", async (req, res) => {
-  const parsed = CreateCheckoutOrderBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_order", details: parsed.error.issues });
-    return;
-  }
+type CheckoutOrderHandlerDependencies = {
+  getUserId: (req: Request) => string | null | undefined;
+  getMongoDatabase: typeof getMongoDatabase;
+};
 
-  try {
-    const { userId } = getAuth(req);
-    const order = await storeOrder(parsed.data, { userId: userId ?? null, createdBy: null });
-    res.status(201).json(
-      CreateCheckoutOrderResponse.parse({
-        id: order.id,
-        orderNumber: order.orderNumber,
-        placedAt: order.placedAt,
-        items: order.items,
-        subtotal: order.subtotal,
-        currency: order.currency ?? "KWD",
-        exchangeRateKwdToUsd: order.exchangeRateKwdToUsd ?? null,
-        status: order.status,
-        isDemo: order.isDemo,
-        paymentStatus: order.paymentStatus,
-      }),
-    );
-  } catch (error) {
-    respondToOrderError(error, res);
-  }
-});
+export function createCheckoutOrderHandler({
+  getUserId,
+  getMongoDatabase: getDatabase,
+}: CheckoutOrderHandlerDependencies) {
+  return async (req: Request, res: Response): Promise<void> => {
+    const parsed = CreateCheckoutOrderBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid_order", details: parsed.error.issues });
+      return;
+    }
+
+    try {
+      const { order, replayed } = await storeOrder(
+        parsed.data,
+        {
+          userId: getUserId(req) ?? null,
+          createdBy: null,
+          checkoutAttemptId: parsed.data.checkoutAttemptId,
+        },
+        getDatabase,
+      );
+      res.status(replayed ? 200 : 201).json(
+        CreateCheckoutOrderResponse.parse({
+          id: order.id,
+          orderNumber: order.orderNumber,
+          placedAt: order.placedAt,
+          items: order.items,
+          subtotal: order.subtotal,
+          currency: order.currency ?? "KWD",
+          exchangeRateKwdToUsd: order.exchangeRateKwdToUsd ?? null,
+          status: order.status,
+          isDemo: order.isDemo,
+          paymentStatus: order.paymentStatus,
+        }),
+      );
+    } catch (error) {
+      respondToOrderError(error, res);
+    }
+  };
+}
+
+router.post(
+  "/orders",
+  createCheckoutOrderHandler({
+    getUserId: (req) => getAuth(req).userId,
+    getMongoDatabase,
+  }),
+);
 
 router.get(
   "/admin/orders",
@@ -354,7 +396,7 @@ router.post(
 
     try {
       const { userId } = getAuth(req);
-      const order = await storeOrder(parsed.data, {
+      const { order } = await storeOrder(parsed.data, {
         userId: null,
         createdBy: userId ?? null,
       });

@@ -506,8 +506,12 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     assert.equal(await page.getByTestId('text-checkout-subtotal').innerText(), '6.500 KWD');
 
     let checkoutOrderRequests = 0;
+    let checkoutAttemptId;
     page.on('request', request => {
-      if (request.url().endsWith('/api/orders') && request.method() === 'POST') checkoutOrderRequests += 1;
+      if (request.url().endsWith('/api/orders') && request.method() === 'POST') {
+        checkoutOrderRequests += 1;
+        checkoutAttemptId ??= request.postDataJSON().checkoutAttemptId;
+      }
     });
     await page.getByTestId('button-place-demo-order').click();
     const missingNameError = page.getByTestId('error-checkout-name');
@@ -580,6 +584,7 @@ test('stale saved price lists warn on Build Assist, fresh lists clear the warnin
     const savedOrder = await orderResponse.json();
     await page.waitForLoadState('networkidle');
     assert.equal(checkoutSaveRequests, 1, 'repeated submissions while saving must send one order request');
+    assert.match(checkoutAttemptId, /^[0-9a-f-]{36}$/i, 'checkout requests must include an attempt UUID');
     assert.equal(checkoutSavedOrderResponses, 1, 'one order request must produce one saved order result');
     assert.deepEqual(orderResponse.request().postDataJSON().items, [{
       id: 'bom-esp32',
@@ -1939,6 +1944,7 @@ test('saves demo orders through the order API when browser order-history storage
     });
     const failedOrderPage = await failedOrderContext.newPage();
     let failedOrderAttempts = 0;
+    const failedOrderAttemptIds = [];
     await failedOrderPage.route('**/api/orders', route => {
       failedOrderAttempts += 1;
       return route.fulfill({
@@ -1969,6 +1975,7 @@ test('saves demo orders through the order API when browser order-history storage
     let successfulOrderResponses = 0;
     await failedOrderPage.route('**/api/orders', route => {
       failedOrderAttempts += 1;
+      failedOrderAttemptIds.push(route.request().postDataJSON().checkoutAttemptId);
       if (failedOrderAttempts === 1) {
         return route.fulfill({
           status: 503,
@@ -2041,6 +2048,8 @@ test('saves demo orders through the order API when browser order-history storage
     assert.equal(await failedOrderPage.getByTestId('text-demo-order-number').innerText(), savedRetryOrder.orderNumber);
     assert.equal(savedRetryOrder.orderNumber, 'CKW-MOCK-RETRY-0001');
     assert.equal(failedOrderAttempts, 2, 'a failed save must allow the buyer to submit one retry');
+    assert.match(failedOrderAttemptIds[0], /^[0-9a-f-]{36}$/i, 'the first checkout save must use a UUID identity');
+    assert.equal(failedOrderAttemptIds[0], failedOrderAttemptIds[1], 'retrying an unchanged cart must reuse its checkout attempt identity');
     assert.equal(successfulOrderSaves, 1, 'only the successful retry must create a saved order');
     assert.equal(successfulOrderResponses, 1, 'the retry must produce one saved-order response');
     await failedOrderPage.waitForFunction(() => {

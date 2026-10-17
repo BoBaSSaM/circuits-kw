@@ -27,6 +27,7 @@ export * from './catalogProduct';
 export * from './catalogProductIcon';
 export * from './catalogResponse';
 export * from './checkoutOrderInput';
+export * from './checkoutOrderRequest';
 export * from './checkoutOrderResponse';
 export * from './currentUserResponse';
 export * from './dashboardRole';

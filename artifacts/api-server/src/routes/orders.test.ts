@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Request, Response } from "express";
 import type { getMongoDatabase } from "../lib/mongo";
-import { createAccountOrdersHandler, storeOrder } from "./orders";
+import {
+  createAccountOrdersHandler,
+  createCheckoutOrderHandler,
+  storeOrder,
+} from "./orders";
 
 type TestOrder = {
   _id: { toHexString: () => string };
@@ -199,6 +203,7 @@ test("saved order history keeps product and kit snapshots after catalog edits an
       }
       assert.equal(name, "orders");
       return {
+        findOne: async () => null,
         insertOne: async (document: Record<string, unknown>) => {
           savedOrders.push(document);
         },
@@ -232,7 +237,11 @@ test("saved order history keeps product and kit snapshots after catalog edits an
         { id: "kit-1", kind: "kit", sku: "KIT-1", qty: 1 },
       ],
     },
-    { userId: "buyer-a", createdBy: null },
+    {
+      userId: "buyer-a",
+      createdBy: null,
+      checkoutAttemptId: "04fcee28-0d58-4d94-9b6f-f383f25d0071",
+    },
     getDatabase,
   );
 
@@ -279,4 +288,92 @@ test("saved order history keeps product and kit snapshots after catalog edits an
   const savedOrder = (result.body as { orders: { currency: string; exchangeRateKwdToUsd: number | null }[] }).orders[0];
   assert.equal(savedOrder.currency, "USD");
   assert.equal(savedOrder.exchangeRateKwdToUsd, 3.3);
+});
+
+test("checkout API returns the saved order for repeated attempt IDs and saves a new attempt separately", async () => {
+  const product = {
+    _id: "component-1",
+    id: "component-1",
+    sku: "COMP-1",
+    name: "Component 1",
+    price: 1.25,
+    isActive: true,
+  };
+  const savedOrders = new Map<string, Record<string, unknown>>();
+  const database = {
+    collection(name: string) {
+      if (name === "products") {
+        return { findOne: async () => product };
+      }
+      if (name === "project_kits") {
+        return { findOne: async () => null };
+      }
+      assert.equal(name, "orders");
+      return {
+        findOne: async (filter: { checkoutAttemptId: string }) =>
+          savedOrders.get(filter.checkoutAttemptId) ?? null,
+        insertOne: async (document: Record<string, unknown>) => {
+          const attemptId = document.checkoutAttemptId as string;
+          if (savedOrders.has(attemptId)) {
+            throw Object.assign(new Error("duplicate checkout attempt"), { code: 11000 });
+          }
+          savedOrders.set(attemptId, document);
+        },
+      };
+    },
+  };
+  const getDatabase = async () =>
+    database as unknown as Awaited<ReturnType<typeof getMongoDatabase>>;
+  const handler = createCheckoutOrderHandler({
+    getUserId: (req) => (req as Request & { testUserId?: string }).testUserId,
+    getMongoDatabase: getDatabase,
+  });
+  const input = (checkoutAttemptId: string) => ({
+    checkoutAttemptId,
+    customer: { name: "Buyer", email: "buyer@example.com", phone: "+965 5555 5555" },
+    shipping: {
+      governorate: "Capital",
+      area: "Kuwait City",
+      block: "1",
+      street: "Main Street",
+      building: "10",
+    },
+    items: [{ id: "component-1", kind: "component", sku: "COMP-1", qty: 1 }],
+    currency: "USD",
+  });
+  const send = async (body: ReturnType<typeof input>) => {
+    const { response, result } = responseRecorder();
+    await handler(
+      {
+        body,
+        testUserId: "buyer-a",
+        log: { error() {} },
+      } as unknown as Request,
+      response,
+    );
+    return result;
+  };
+
+  const firstAttemptId = "04fcee28-0d58-4d94-9b6f-f383f25d0071";
+  const firstResults = await Promise.all([
+    send(input(firstAttemptId)),
+    send(input(firstAttemptId)),
+  ]);
+  assert.deepEqual(firstResults.map(({ statusCode }) => statusCode).sort(), [200, 201]);
+  assert.deepEqual(firstResults[0].body, firstResults[1].body);
+  assert.equal(savedOrders.size, 1, "simultaneous retries must insert only one order");
+
+  const replay = await send(input(firstAttemptId));
+  assert.equal(replay.statusCode, 200);
+  assert.deepEqual(replay.body, firstResults[0].body);
+  assert.equal(savedOrders.size, 1, "a later retry must return the existing order");
+
+  const newAttempt = await send(input("04fcee28-0d58-4d94-9b6f-f383f25d0072"));
+  assert.equal(newAttempt.statusCode, 201);
+  assert.notEqual(
+    (newAttempt.body as { id: string }).id,
+    (replay.body as { id: string }).id,
+    "a new checkout identity must create a separate order",
+  );
+  assert.equal(savedOrders.size, 2);
 });

@@ -179,7 +179,7 @@ export const GetMyOrdersResponse = zod.object({
 
 
 /**
- * @summary Place a demo order
+ * @summary Place or retry a demo order
  */
 export const createCheckoutOrderBodyCustomerNameMin = 2;
 export const createCheckoutOrderBodyCustomerNameMax = 120;
@@ -218,6 +218,7 @@ export const createCheckoutOrderBodyItemsMax = 100;
 
 
 export const CreateCheckoutOrderBody = zod.object({
+  "checkoutAttemptId": zod.string().uuid(),
   "customer": zod.object({
   "name": zod.string().min(createCheckoutOrderBodyCustomerNameMin).max(createCheckoutOrderBodyCustomerNameMax),
   "email": zod.string().email().max(createCheckoutOrderBodyCustomerEmailMax),

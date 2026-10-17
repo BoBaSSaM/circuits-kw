@@ -919,6 +919,7 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
   const createOrder=useCreateCheckoutOrder();
   const checkoutFormRef=useRef<HTMLFormElement|null>(null);
   const orderSubmissionInFlight=useRef(false);
+  const checkoutAttemptRef=useRef<{fingerprint:string;id:string}|null>(null);
   const stripeSubmissionInFlight=useRef(false);
   const stripeReturnHandled=useRef(false);
   const [placedOrder,setPlacedOrder]=useState<DemoOrder|null>(null);
@@ -1045,18 +1046,61 @@ function CheckoutPage({items,clearCart,getLatestCartItems}:{items:Item[];clearCa
       })),
     };
   };
+  const getCheckoutAttemptId=(checkoutItems:NonNullable<ReturnType<typeof collectCheckoutInput>>['items'])=>{
+    const fingerprint=JSON.stringify({
+      userId:user?.id??null,
+      items:checkoutItems.map(item=>[item.id,item.kind,item.sku,item.qty,item.estimateUnitPrice??null]),
+    });
+    const storageKey='circuits-kw-checkout-attempt';
+    let attempt=checkoutAttemptRef.current;
+    if(!attempt){
+      try{
+        const stored=JSON.parse(window.sessionStorage.getItem(storageKey)??'null');
+        if(stored&&stored.fingerprint===fingerprint&&typeof stored.id==='string'&&/^[0-9a-f-]{36}$/i.test(stored.id)){
+          attempt=stored;
+          checkoutAttemptRef.current=stored;
+        }
+      }catch{
+        // Use the in-memory identity when session storage is unavailable.
+      }
+    }
+    if(!attempt||attempt.fingerprint!==fingerprint){
+      attempt={fingerprint,id:window.crypto.randomUUID()};
+      checkoutAttemptRef.current=attempt;
+      try{
+        window.sessionStorage.setItem(storageKey,JSON.stringify(attempt));
+      }catch{
+        // The checkout can still retry in this page using the in-memory identity.
+      }
+    }
+    return attempt.id;
+  };
+  const clearCheckoutAttempt=()=>{
+    const attempt=checkoutAttemptRef.current;
+    checkoutAttemptRef.current=null;
+    if(!attempt) return;
+    try{
+      const storageKey='circuits-kw-checkout-attempt';
+      const stored=JSON.parse(window.sessionStorage.getItem(storageKey)??'null');
+      if(stored?.id===attempt.id) window.sessionStorage.removeItem(storageKey);
+    }catch{
+      // A successful save must not depend on browser storage being available.
+    }
+  };
   const submitDemoOrder=()=>{
     if(orderSubmissionInFlight.current||placedOrder) return;
     const latestItems=getLatestCartItems();
     if(!latestItems.length) return;
     const payload=checkoutFormRef.current?collectCheckoutInput(checkoutFormRef.current,latestItems):null;
     if(!payload) return;
+    const checkoutAttemptId=getCheckoutAttemptId(payload.items);
     orderSubmissionInFlight.current=true;
     createOrder.mutate({
-      data:{...payload,currency:'USD'},
+      data:{...payload,checkoutAttemptId,currency:'USD'},
     },{
       onSuccess:saved=>{
         orderSubmissionInFlight.current=false;
+        clearCheckoutAttempt();
         trackEvent('demo_order_completed',{
           line_count:saved.items.length,
           subtotal:saved.subtotal,

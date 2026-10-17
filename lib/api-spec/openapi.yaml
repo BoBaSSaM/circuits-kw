@@ -146,14 +146,20 @@ paths:
     post:
       operationId: createCheckoutOrder
       tags: [orders]
-      summary: Place a demo order
+      summary: Place or retry a demo order
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CheckoutOrderInput"
+              $ref: "#/components/schemas/CheckoutOrderRequest"
       responses:
+        "200":
+          description: The previously saved result for this checkout attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutOrderResponse"
         "201":
           description: Order saved
           content:
@@ -162,6 +168,12 @@ paths:
                 $ref: "#/components/schemas/CheckoutOrderResponse"
         "400":
           description: Invalid checkout details or items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Checkout attempt identity conflicts with another saved order
           content:
             application/json:
               schema:
@@ -792,6 +804,15 @@ components:
         items: { type: array, items: { $ref: "#/components/schemas/OrderItemInput" }, minItems: 1, maxItems: 100 }
         currency: { $ref: "#/components/schemas/OrderCurrency" }
       required: [customer, shipping, items]
+    CheckoutOrderRequest:
+      type: object
+      properties:
+        checkoutAttemptId: { type: string, format: uuid }
+        customer: { $ref: "#/components/schemas/OrderCustomer" }
+        shipping: { $ref: "#/components/schemas/OrderShipping" }
+        items: { type: array, items: { $ref: "#/components/schemas/OrderItemInput" }, minItems: 1, maxItems: 100 }
+        currency: { $ref: "#/components/schemas/OrderCurrency" }
+      required: [checkoutAttemptId, customer, shipping, items]
     CheckoutOrderResponse:
       type: object
       properties:
