@@ -42,6 +42,7 @@ const nextConfig: NextConfig = {
     "pino",
     "pino-http",
     "serverless-http",
+    "stripe",
   ],
 };
 

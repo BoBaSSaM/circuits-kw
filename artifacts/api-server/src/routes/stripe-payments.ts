@@ -18,10 +18,10 @@ import Stripe from "stripe";
 import { getMongoDatabase } from "../lib/mongo";
 import {
   createStripeCheckoutSession,
+  getStripeClient,
   getStripeWebhookSettings,
   retrieveStripeCheckoutSession,
   StripeConfigurationError,
-  StripeProxyError,
 } from "../lib/stripe";
 import { logger } from "../lib/logger";
 import { OrderInputError, resolveOrderItems, type OrderDocument } from "./orders";
@@ -268,21 +268,18 @@ router.post("/stripe/checkout", async (req, res) => {
       return;
     }
     const stripeStatus =
-      error instanceof StripeProxyError
-        ? error.status
-        : error instanceof Stripe.errors.StripeError
-          ? error.statusCode ?? null
-          : null;
+      error instanceof Stripe.errors.StripeError ? error.statusCode ?? null : null;
     const stripeRejectedRequest =
       stripeStatus !== null && stripeStatus >= 400 && stripeStatus < 500;
     logger.error(
       {
         errorName: error instanceof Error ? error.name : "UnknownError",
         ...(error instanceof Stripe.errors.StripeError
-          ? { stripeType: error.type, stripeCode: error.code ?? null }
-          : {}),
-        ...(error instanceof StripeProxyError
-          ? { stripeType: error.stripeType, stripeCode: error.stripeCode, stripeStatus: error.status }
+          ? {
+              stripeType: error.type,
+              stripeCode: error.code ?? null,
+              stripeStatus: error.statusCode ?? null,
+            }
           : {}),
         ...(safeDevelopmentErrorDetail(error)
           ? { developmentDetails: safeDevelopmentErrorDetail(error) }
@@ -322,9 +319,6 @@ router.get("/stripe/verify", async (req, res) => {
     logger.error(
       {
         errorName: error instanceof Error ? error.name : "UnknownError",
-        ...(error instanceof StripeProxyError
-          ? { stripeType: error.stripeType, stripeCode: error.stripeCode, stripeStatus: error.status }
-          : {}),
         ...(safeDevelopmentErrorDetail(error)
           ? { developmentDetails: safeDevelopmentErrorDetail(error) }
           : {}),
@@ -349,13 +343,13 @@ export async function stripeWebhookHandler(
   }
 
   try {
-    const { secretKey, webhookSecret } = getStripeWebhookSettings();
-    if (!webhookSecret || !secretKey) {
+    const { webhookSecret } = getStripeWebhookSettings();
+    if (!webhookSecret) {
       res.status(503).json({ error: "stripe_webhook_not_configured" });
       return;
     }
 
-    const stripe = new Stripe(secretKey, { maxNetworkRetries: 2, timeout: 15_000 });
+    const stripe = getStripeClient();
     const event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
     const session = event.data.object as Stripe.Checkout.Session;
 

@@ -19,10 +19,6 @@
     "typecheck": "npm run typecheck:libs && npm run typecheck --workspaces --if-present"
   },
   "private": true,
-  "dependencies": {
-    "@replit/connectors-sdk": "^0.4.3",
-    "stripe": "^23.0.0"
-  },
   "devDependencies": {
     "prettier": "^3.9.6",
     "typescript": "~5.9.3"

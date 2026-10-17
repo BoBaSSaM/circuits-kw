@@ -1,0 +1,4 @@
+{
+  "installCommand": "npm install --workspace=@workspace/voltiva-store",
+  "buildCommand": "npm run build"
+}
