@@ -1604,7 +1604,7 @@ function Router({items,add,removeSupplierPricedItems,replaceSupplierPricedItems,
   const [location]=useLocation();
   const count=items.reduce((n,i)=>n+i.qty,0);
   const catalogEnabled=['/components','/project-kits','/build-assist'].includes(location);
-  const catalogQuery=useGetCatalog({query:{enabled:catalogEnabled,queryKey:getGetCatalogQueryKey()}});
+   const catalogQuery=useGetCatalog({query:{enabled:catalogEnabled,queryKey:getGetCatalogQueryKey(),retry:1}});
   const products=catalogQuery.data?.products??[];
   const kits=catalogQuery.data?.kits??[];
   const catalogLoading=catalogEnabled&&catalogQuery.isLoading;

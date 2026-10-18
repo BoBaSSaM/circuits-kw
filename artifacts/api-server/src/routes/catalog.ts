@@ -19,7 +19,7 @@ import {
   type ProjectKitInput,
 } from "@workspace/api-zod";
 import { randomUUID } from "node:crypto";
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import { logger } from "../lib/logger";
 import { requireDashboardRoles } from "../lib/dashboard-auth";
 import { getMongoDatabase } from "../lib/mongo";
@@ -47,6 +47,7 @@ type ProjectKitDocument = ProjectKitInput & {
 };
 
 const router: IRouter = Router();
+export const publicCatalogRouter: IRouter = Router();
 
 function normalizeProduct(document: ProductDocument) {
   return {
@@ -173,6 +174,12 @@ function getCatalogFailureDetails(error: unknown) {
   const message = rawMessage
     .replace(/(mongodb(?:\+srv)?:\/\/)[^\s@]+@/gi, "$1[redacted]@")
     .replace(/((?:password|passwd|pwd|token|secret)\s*[=:]\s*)[^\s&]+/gi, "$1[redacted]");
+  const rawStack =
+    error instanceof Error
+      ? error.stack
+      : typeof record.stack === "string"
+        ? record.stack
+        : undefined;
   const code =
     typeof record.code === "string" || typeof record.code === "number"
       ? record.code
@@ -182,10 +189,13 @@ function getCatalogFailureDetails(error: unknown) {
     errorName: error instanceof Error ? error.name : "UnknownError",
     errorCode: code,
     errorMessage: message,
+    errorStack: rawStack
+      ?.replace(/(mongodb(?:\+srv)?:\/\/)[^\s@]+@/gi, "$1[redacted]@")
+      .replace(/((?:password|passwd|pwd|token|secret)\s*[=:]\s*)[^\s&]+/gi, "$1[redacted]"),
   };
 }
 
-router.get("/catalog", async (_req, res) => {
+const getPublicCatalog: RequestHandler = async (_req, res) => {
   try {
     const database = await getMongoDatabase();
     const [products, kits] = await Promise.all([
@@ -222,20 +232,21 @@ router.get("/catalog", async (_req, res) => {
         : {}),
     };
 
-    logger.error(
-      {
-        method: _req.method,
-        url: _req.originalUrl,
-        statusCode: 503,
-        responseBody,
-        requestId,
-        ...details,
-      },
-      "Could not load public catalog from MongoDB",
-    );
+    const logFields = {
+      method: _req.method,
+      url: _req.originalUrl.split("?")[0],
+      statusCode: 503,
+      responseBody,
+      requestId,
+      ...details,
+    };
+    console.error("[API] Could not load public catalog from MongoDB", logFields);
+    logger.error(logFields, "Could not load public catalog from MongoDB");
     res.status(503).json(responseBody);
   }
-});
+};
+
+publicCatalogRouter.get("/", getPublicCatalog);
 
 router.get(
   "/admin/catalog",

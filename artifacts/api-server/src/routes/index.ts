@@ -1,5 +1,4 @@
 import { Router, type IRouter } from "express";
-import healthRouter from "./health";
 import usersRouter from "./users";
 import catalogRouter from "./catalog";
 import ordersRouter from "./orders";
@@ -9,7 +8,6 @@ import stripePaymentsRouter from "./stripe-payments";
 
 const router: IRouter = Router();
 
-router.use(healthRouter);
 router.use(usersRouter);
 router.use(userCartsRouter);
 router.use(catalogRouter);

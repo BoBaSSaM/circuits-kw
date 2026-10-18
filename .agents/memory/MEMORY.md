@@ -2,7 +2,7 @@
 - [Supplier CSV browser tests](supplier-csv-browser-tests.md) — Wait for visible state after file imports and reopen the price-list disclosure before subsequent uploads.
 - [Cart sync browser tests](browser-cart-sync-tests.md) — Cart-seeding init scripts run on each navigation; avoid unintended storage resets while exercising tab-sync flows.
 - [Checkout auth redirect preservation](checkout-auth-redirects.md) — Preserve checkout return intent across Clerk's internal sign-in and verification routes.
-- [Next.js deployment build environment](next-build-env.md) — Keep PORT/BASE_PATH optional and declare TypeScript in each separately deployed Next.js workspace.
+- [Next.js deployment build environment](next-build-env.md) — Keep build settings optional; Vercel runtime credentials must also be configured in Vercel, not assumed from Replit.
 - [Vercel npm registry compatibility](npm-lockfile-registry.md) — Replit-generated lockfile URLs need host replacement for Vercel while retaining the Replit registry locally.
 - [Next.js Replit preview checks](next-preview-css-bundling.md) — Webpack avoids Turbopack CSS failures; the actual Replit host must also be allowed for HMR.
 - [GitHub push authentication](github-push-auth.md) — A present token or healthy OAuth status does not prove Git CLI push access; never expose tokens or force-push to work around auth.

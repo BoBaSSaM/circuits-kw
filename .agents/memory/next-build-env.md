@@ -20,3 +20,9 @@ When a storefront build depends on TypeScript project-reference declarations, ru
 **Why:** A clean deployment test reproduced TS6305 because cached `.tsbuildinfo` caused the library build to skip regenerating missing declarations.
 
 **How to apply:** In clean deployment and CI builds, run the repository's generator, then `tsc --build --force` for the referenced projects before Next.js type-checks the app.
+
+The storefront is deployed independently on Vercel; Replit secrets are not automatically available to that deployment.
+
+**Why:** Local catalog requests can succeed with Replit's MongoDB secret while the Vercel deployment still fails if its own environment is missing or misconfigured.
+
+**How to apply:** When diagnosing production auth, catalog, or checkout failures, verify the required environment variables in the matching Vercel Production or Preview environment rather than assuming Replit secrets carry over.
