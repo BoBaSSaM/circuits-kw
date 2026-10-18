@@ -1,0 +1,24 @@
+My app "Circuits KW" (components catalog, EN/AR, USD) works in Replit but after deploying to Vercel the Components page shows "Catalog unavailable — The saved catalog could not be reached. Try again." with a Retry button. Please diagnose and fix this so it works on Vercel.
+
+Investigate and fix the following, in order:
+
+1. Find the code that fetches the catalog (the request that triggers the "Catalog unavailable" error state). Add proper error logging (status code, URL, response body) so the real cause is visible in the Vercel function logs and the browser console.
+
+2. API base URL: remove any hardcoded localhost / *.replit.dev / *.repl.co URLs. Use relative paths (e.g. /api/catalog) or an env variable (VITE_API_URL / NEXT_PUBLIC_API_URL) with a sensible fallback.
+
+3. Backend on Vercel: if the backend is an Express/Node server, make it Vercel-compatible by converting the routes into serverless functions under /api (or exporting the Express app from api/index.js) and adding a correct vercel.json with rewrites so /api/* routes to the function and all other routes serve the frontend (SPA fallback).
+
+4. Data source: if the catalog is stored in a local file, JSON, or SQLite, that will NOT persist or be writable on Vercel. Either:
+   - bundle the catalog as a static JSON file that's read-only and imported at build time, or
+   - move it to a hosted database (Postgres/Neon/Supabase) using a DATABASE_URL env variable, with a seed script.
+   Use whichever is simplest for my current setup.
+
+5. Environment variables: list every env variable the app uses (database URL, API keys, etc.) and give me the exact names/values to add in Vercel → Project Settings → Environment Variables. Make the app fail with a clear message if one is missing.
+
+6. CORS: make sure the API allows requests from my Vercel domain.
+
+7. Make the "Retry" button actually re-fetch the catalog, and show a more helpful error message in development mode.
+
+8. Verify with a production build (npm run build) and confirm the /api/catalog endpoint returns data, then tell me exactly what to commit/push and what to set in Vercel before redeploying.
+
+At the end, summarize what the root cause was and what you changed.
