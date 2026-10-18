@@ -1,0 +1,30 @@
+My deployed app "Circuits KW" (https://circuits-kw-a7vb.vercel.app) is broken in production. The Components page shows "Catalog unavailable. The saved catalog could not be reached." Please diagnose and fix both issues below, then tell me exactly what you changed and anything I must do manually (env vars, dashboard settings).
+
+## Problem 1 (main): GET /api/catalog returns 500 Internal Server Error
+- The response body is a generic HTML "Internal Server Error", so the real error is being swallowed.
+- Steps:
+  1. Open the /api/catalog handler and wrap it in try/catch. Log the real error (message + stack) with console.error so it shows up in Vercel function logs, and return a JSON error ({ error: "..." }) with the proper status instead of generic HTML.
+  2. Find the root cause. Check the most likely culprits on Vercel:
+     - Missing or misnamed environment variables in Vercel (DATABASE_URL, Supabase/Postgres/Redis/Blob keys, etc.). Variables set in Replit Secrets do NOT carry over to Vercel. List every env var the code reads, and tell me which ones I must add in Vercel > Project Settings > Environment Variables (for Production, then redeploy).
+     - The database not being reachable from Vercel (local/Replit-only DB, SSL required, wrong connection string, no pooling for serverless). If using Postgres, use the pooled/serverless connection string and enable SSL.
+     - The "saved catalog" being read from a local file or Replit filesystem path (e.g. fs.readFileSync of a JSON file, or a path using process.cwd()) that doesn't exist or isn't bundled in the Vercel serverless function. Vercel's filesystem is read-only and only includes files that are imported or listed in includeFiles. Fix by importing the JSON directly, moving it into the repo and bundling it, or moving the data to a real database/storage.
+     - Tables or migrations not run on the production database, or empty/invalid data causing a thrown exception.
+     - Server-only code (Express listen(), Node-only APIs) not compatible with Vercel serverless/edge runtime. Make sure the route is exported as a proper Vercel handler and the runtime is set correctly.
+  3. Add a simple health check endpoint (/api/health) that reports whether the DB/storage connection works, so I can verify quickly.
+  4. Make the frontend resilient: if the catalog request fails, show a clear error with the Retry button (already exists) and do not retry endlessly. Limit react-query retries to 1-2.
+
+## Problem 2: Clerk JS fails to load
+Console error: "Failed to load script: https://clerk.circuits-kw-a7vb.vercel.app/npm/@clerk/clerk-js@6/dist/clerk.browser.js" (ERR_CONNECTION_CLOSED, code failed_to_load_clerk_js).
+- The app is pointing Clerk at a custom proxy/frontend-API domain "clerk.circuits-kw-a7vb.vercel.app", which doesn't exist (vercel.app subdomains can't host a Clerk CNAME).
+- Fix:
+  - Check VITE_CLERK_PUBLISHABLE_KEY / NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and any clerkJSUrl, proxyUrl, or domain props on ClerkProvider. Remove any custom proxy/domain config pointing to clerk.circuits-kw-a7vb.vercel.app.
+  - If I'm using a production Clerk key (pk_live_...), it requires a custom domain I own with DNS records. Since the app is on a vercel.app domain, switch to the development key (pk_test_...) for now, or tell me clearly that I need to attach a real custom domain and configure the Clerk DNS records.
+  - Make sure CLERK_SECRET_KEY is set in Vercel too.
+  - Make sure the app still renders the catalog for signed-out visitors even if Clerk fails to load (Clerk errors must not block the Components page).
+
+## Deliverables
+1. The code fixes.
+2. A short checklist of the exact env vars and dashboard settings I need to set in Vercel and Clerk.
+3. Confirmation that /api/catalog returns 200 with catalog data after redeploy, and the steps you used to verify.
+
+Do not guess: read the actual code and the actual Vercel build/function logs before changing anything.
