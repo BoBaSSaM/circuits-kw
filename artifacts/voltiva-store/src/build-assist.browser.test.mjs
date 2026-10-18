@@ -927,6 +927,123 @@ test('restores edited Build Assist quantities per project after switching, navig
   }
 });
 
+test('repeated supplier CSV replacements preserve edited BOM quantities and use the latest prices', {
+  timeout: 180_000,
+}, async () => {
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverProcess = startNextDevServer(port);
+  let serverOutput = '';
+  serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+  serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+
+  let browser;
+  try {
+    await waitForServer(serverProcess, baseUrl);
+    const executablePath = await findChromiumPath();
+    assert.ok(executablePath, 'Set CHROMIUM_PATH or install Chromium to run browser tests.');
+    browser = await chromium.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    const page = await browser.newPage();
+    const pageErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.goto(`${baseUrl}/build-assist`);
+    await page.getByTestId('row-bom-esp32').waitFor();
+    await page.getByTestId('button-generate-bom').click();
+    await page.getByTestId('input-assembly-count').fill('2');
+    await page.getByTestId('input-assembly-count').press('Tab');
+    await page.getByTestId('input-part-quantity-esp32').fill('3');
+    await page.getByTestId('input-part-quantity-esp32').press('Tab');
+    await page.getByTestId('input-part-quantity-soil').fill('4');
+    await page.getByTestId('input-part-quantity-soil').press('Tab');
+
+    const importPriceList = async (source, filename, csv) => {
+      const details = page.getByTestId('details-price-list');
+      if (!(await details.evaluate(element => element.open))) {
+        await page.getByTestId('summary-price-list').click();
+      }
+      await page.getByTestId('input-price-list-source').fill(source);
+      await page.getByTestId('input-price-list-updated').fill(dateDaysAgo(0));
+      await page.getByTestId('input-price-list-file').setInputFiles({
+        name: filename,
+        mimeType: 'text/csv',
+        buffer: Buffer.from(csv),
+      });
+      await page.getByTestId('button-import-price-csv').click();
+      await page.waitForFunction((expectedSource) =>
+        document.querySelector('[data-testid="text-price-source"]')?.textContent?.includes(expectedSource),
+      source);
+      assert.match(await page.getByTestId('text-price-source').innerText(), new RegExp(source));
+      assert.equal(await page.getByTestId('input-assembly-count').inputValue(), '2');
+      assert.equal(await page.getByTestId('input-part-quantity-esp32').inputValue(), '3');
+      assert.equal(await page.getByTestId('input-part-quantity-soil').inputValue(), '4');
+      assert.equal(await page.getByTestId('row-bom-esp32').locator('.bom-line-count').innerText(), '6 total units');
+      assert.equal(await page.getByTestId('row-bom-soil').locator('.bom-line-count').innerText(), '8 total units');
+    };
+
+    await importPriceList(
+      'Original supplier',
+      'original-supplier-prices.csv',
+      'sku,unit_price,currency\nESP32-WRM-32D,1.000,KWD\nSNS-BME280-I2C,2.000,KWD\nSNS-SOIL-CAP-12,0.500,KWD\n',
+    );
+    assert.equal(await page.getByTestId('text-line-total-esp32').innerText(), '19.80 USD');
+    assert.equal(await page.getByTestId('text-line-total-bme280').innerText(), '13.20 USD');
+    assert.equal(await page.getByTestId('text-line-total-soil').innerText(), '13.20 USD');
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '46.20 USD');
+
+    await importPriceList(
+      'Replacement supplier',
+      'replacement-supplier-prices.csv',
+      'sku,unit_price,currency\nESP32-WRM-32D,1.500,KWD\nSNS-BME280-I2C,2.500,KWD\nSNS-SOIL-CAP-12,0.750,KWD\n',
+    );
+    assert.equal(await page.getByTestId('text-line-total-esp32').innerText(), '29.70 USD');
+    assert.equal(await page.getByTestId('text-line-total-bme280').innerText(), '16.50 USD');
+    assert.equal(await page.getByTestId('text-line-total-soil').innerText(), '19.84 USD');
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '66.04 USD');
+
+    await importPriceList(
+      'Second replacement supplier',
+      'second-replacement-supplier-prices.csv',
+      'sku,unit_price,currency\nESP32-WRM-32D,2.250,KWD\nSNS-BME280-I2C,3.250,KWD\nSNS-SOIL-CAP-12,1.250,KWD\n',
+    );
+    assert.equal(await page.getByTestId('text-line-total-esp32').innerText(), '44.58 USD');
+    assert.equal(await page.getByTestId('text-line-total-bme280').innerText(), '21.46 USD');
+    assert.equal(await page.getByTestId('text-line-total-soil').innerText(), '33.04 USD');
+    assert.equal(await page.getByTestId('text-build-assist-total').innerText(), '99.08 USD');
+    assert.match(await page.getByTestId('button-add-bom-cart').innerText(), /99\.08 USD/);
+
+    await page.getByTestId('button-add-bom-cart').click();
+    await page.getByTestId('link-cart').click();
+    for (const [part, price, quantity] of [
+      ['esp32', '44.58 USD', '6'],
+      ['bme280', '21.46 USD', '2'],
+      ['soil', '33.04 USD', '8'],
+    ]) {
+      const cartRow = page.getByTestId(`row-cart-bom-${part}`);
+      await cartRow.waitFor();
+      assert.equal(await cartRow.locator('.price').innerText(), price);
+      assert.equal(await page.getByTestId(`input-quantity-bom-${part}`).inputValue(), quantity);
+    }
+    assert.equal(await page.locator('.summary-card .summary-total .mono').innerText(), '99.08 USD');
+    assert.deepEqual(pageErrors, []);
+  } catch (error) {
+    error.message += `\nNext.js output:\n${serverOutput}`;
+    throw error;
+  } finally {
+    await browser?.close();
+    stopNextDevServer(serverProcess);
+    if (serverProcess.exitCode === null) {
+      await Promise.race([
+        new Promise((resolve) => serverProcess.once('exit', resolve)),
+        delay(2_000),
+      ]);
+    }
+  }
+});
+
 test('replaces supplier prices on BOM cart lines and removes lines omitted by the new list', {
   timeout: 180_000,
 }, async () => {
