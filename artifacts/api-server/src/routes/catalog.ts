@@ -159,6 +159,32 @@ function respondToCatalogError(
   res.status(500).json({ error: "catalog_operation_failed" });
 }
 
+function getCatalogFailureDetails(error: unknown) {
+  const record =
+    typeof error === "object" && error !== null
+      ? (error as Record<string, unknown>)
+      : {};
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "Unknown catalog error";
+  const message = rawMessage
+    .replace(/(mongodb(?:\+srv)?:\/\/)[^\s@]+@/gi, "$1[redacted]@")
+    .replace(/((?:password|passwd|pwd|token|secret)\s*[=:]\s*)[^\s&]+/gi, "$1[redacted]");
+  const code =
+    typeof record.code === "string" || typeof record.code === "number"
+      ? record.code
+      : undefined;
+
+  return {
+    errorName: error instanceof Error ? error.name : "UnknownError",
+    errorCode: code,
+    errorMessage: message,
+  };
+}
+
 router.get("/catalog", async (_req, res) => {
   try {
     const database = await getMongoDatabase();
@@ -181,11 +207,33 @@ router.get("/catalog", async (_req, res) => {
       }),
     );
   } catch (error) {
+    const details = getCatalogFailureDetails(error);
+    const requestId =
+      _req.header("x-vercel-id") ?? _req.header("x-request-id") ?? undefined;
+    const missingMongoUri = /MONGODB_URI.*required/i.test(details.errorMessage);
+    const responseBody = {
+      error: "catalog_unavailable",
+      message: missingMongoUri
+        ? "The catalog database is not configured. Set MONGODB_URI for this deployment."
+        : "The catalog database could not be reached. Check the MongoDB connection and deployment logs.",
+      ...(requestId ? { requestId } : {}),
+      ...(process.env.NODE_ENV !== "production"
+        ? { diagnostic: details.errorMessage }
+        : {}),
+    };
+
     logger.error(
-      { errorName: error instanceof Error ? error.name : "UnknownError" },
+      {
+        method: _req.method,
+        url: _req.originalUrl,
+        statusCode: 503,
+        responseBody,
+        requestId,
+        ...details,
+      },
       "Could not load public catalog from MongoDB",
     );
-    res.status(503).json({ error: "catalog_unavailable" });
+    res.status(503).json(responseBody);
   }
 });
 

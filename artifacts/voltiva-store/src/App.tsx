@@ -498,12 +498,45 @@ function HomePage() {
   </>;
 }
 
-function CatalogLoadState({ loading, retry }:{loading:boolean;retry:()=>void}) {
-  const {language}=useLanguage();
-  return <div className="container page-top"><div className="surface empty-state" role={loading?'status':'alert'} data-testid="catalog-load-state"><div className="empty-icon"><PackageCheck size={23}/></div><h3>{t(loading?'Loading catalog':'Catalog unavailable',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t(loading?'Products and kits are being loaded.':'The saved catalog could not be reached. Try again.',language)}</p>{!loading&&<button className="button button-outline" onClick={retry} data-testid="button-retry-catalog">{t('Retry',language)}</button>}</div></div>;
+function getCatalogErrorDiagnostics(error: unknown) {
+  const record =
+    typeof error === 'object' && error !== null
+      ? error as {
+          status?: unknown;
+          statusText?: unknown;
+          url?: unknown;
+          data?: unknown;
+          rawBody?: unknown;
+          message?: unknown;
+        }
+      : {};
+  const responseBody = record.data ?? record.rawBody ?? null;
+
+  return {
+    status: typeof record.status === 'number' ? record.status : null,
+    url: typeof record.url === 'string' ? record.url : `${basePath}/api/catalog`,
+    responseBody,
+    message: error instanceof Error ? error.message : String(error),
+  };
 }
 
-function CatalogPage({ add, globalSearch, products, loading, error, retry }:{add:(item:AddItem)=>void;globalSearch:string;products:Product[];loading:boolean;error:boolean;retry:()=>void}) {
+function getCatalogDevelopmentMessage(error: unknown): string {
+  const diagnostics = getCatalogErrorDiagnostics(error);
+  if (diagnostics.responseBody && typeof diagnostics.responseBody === 'object') {
+    const diagnostic = (diagnostics.responseBody as Record<string, unknown>).diagnostic;
+    if (typeof diagnostic === 'string' && diagnostic.trim()) return diagnostic;
+    const message = (diagnostics.responseBody as Record<string, unknown>).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return diagnostics.message;
+}
+
+function CatalogLoadState({ loading, retry, errorMessage }:{loading:boolean;retry:()=>void;errorMessage?:string}) {
+  const {language}=useLanguage();
+  return <div className="container page-top"><div className="surface empty-state" role={loading?'status':'alert'} data-testid="catalog-load-state"><div className="empty-icon"><PackageCheck size={23}/></div><h3>{t(loading?'Loading catalog':'Catalog unavailable',language)}</h3><p className="lead" style={{fontSize:13,margin:'0 auto 18px'}}>{t(loading?'Products and kits are being loaded.':'The saved catalog could not be reached. Try again.',language)}</p>{!loading&&errorMessage&&<p className="lead" data-testid="catalog-error-detail" style={{fontSize:12,margin:'0 auto 18px',maxWidth:620,overflowWrap:'anywhere'}}>{errorMessage}</p>}{!loading&&<button className="button button-outline" type="button" onClick={retry} data-testid="button-retry-catalog">{t('Retry',language)}</button>}</div></div>;
+}
+
+function CatalogPage({ add, globalSearch, products, loading, error, retry, errorMessage }:{add:(item:AddItem)=>void;globalSearch:string;products:Product[];loading:boolean;error:boolean;retry:()=>void;errorMessage?:string}) {
   const {language}=useLanguage();
    useDocument(t('Components catalog',language),t('Browse components with key specs and sample USD prices.',language));
   const [query,setQuery]=useState(globalSearch); const [category,setCategory]=useState('All components'); const [stockOnly,setStockOnly]=useState(false); const [voltage,setVoltage]=useState<string[]>([]); const [mount,setMount]=useState<string[]>([]); const [sort,setSort]=useState('verified');
@@ -517,7 +550,7 @@ function CatalogPage({ add, globalSearch, products, loading, error, retry }:{add
     }),[products,category,stockOnly,query,voltage,mount]);
   const sorted=[...filtered].sort((a,b)=>sort==='low'?a.price-b.price:sort==='high'?b.price-a.price:sort==='stock'?b.stock-a.stock:products.indexOf(a)-products.indexOf(b));
   function reset(){setCategory('All components');setStockOnly(false);setVoltage([]);setMount([]);setQuery('');}
-   if(loading||error) return <CatalogLoadState loading={loading} retry={retry}/>;
+   if(loading||error) return <CatalogLoadState loading={loading} retry={retry} errorMessage={errorMessage}/>;
    return <div className="container page-top">
      <div className="catalog-breadcrumb"><Link href="/">{t('Home',language)}</Link><span>/</span><span>{t('Components',language)}</span><span>/</span><b>{t('Catalog',language)}</b><span className="sample-sync"><i/> {t('SAMPLE CATALOG DATA',language)}</span></div>
       <div className="page-heading-row"><div><div className="eyebrow">{t('LOCAL INVENTORY · KUWAIT REFERENCE',language)}</div><h1>{t('Electronic components.',language)}</h1><p className="lead" style={{fontSize:14,marginBottom:20}}>{t('Search parts and compare specs. Prices and stock are samples.',language)}</p></div><span className="tag"><MapPin size={12}/> {t('USD · Kuwait-focused',language)}</span></div>
@@ -558,7 +591,7 @@ function kitDescriptionPreview(description:string) {
   return words.length>11?`${words.slice(0,11).join(' ')}…`:description;
 }
 
-function KitsPage({add,kits,loading,error,retry}:{add:(item:AddItem)=>void;kits:Kit[];loading:boolean;error:boolean;retry:()=>void}) {
+function KitsPage({add,kits,loading,error,retry,errorMessage}:{add:(item:AddItem)=>void;kits:Kit[];loading:boolean;error:boolean;retry:()=>void;errorMessage?:string}) {
   const {language}=useLanguage();
    useDocument(t('Project kits',language),t('Sample kits for robotics, IoT, automation and university labs.',language));
    const [level,setLevel]=useState('All levels');const [domain,setDomain]=useState('All domains');const [query,setQuery]=useState('');const [selectedKit,setSelectedKit]=useState<Kit|null>(null);const [expandedKitId,setExpandedKitId]=useState<string|null>(null);const [animatedKitId,setAnimatedKitId]=useState<string|null>(null);
@@ -566,7 +599,7 @@ function KitsPage({add,kits,loading,error,retry}:{add:(item:AddItem)=>void;kits:
      const searchValues=[k.title,k.desc,k.category,k.level,k.parts.join(' '),t(k.title,'ar'),t(k.desc,'ar'),t(k.category,'ar'),t(k.level,'ar')];
      return (level==='All levels'||k.level===level||k.level==='All levels')&&(domain==='All domains'||k.category===domain)&&(!query||searchValues.some(value=>value.toLowerCase().includes(query.toLowerCase())));
    });
-   if(loading||error) return <CatalogLoadState loading={loading} retry={retry}/>;
+    if(loading||error) return <CatalogLoadState loading={loading} retry={retry} errorMessage={errorMessage}/>;
   return <>
         <section className="kit-hero"><div className="container"><div className="eyebrow" style={{color:'#55d7e9'}}>{t('CURATED PROJECT STARTERS · KUWAIT',language)}</div><div className="page-heading-row" style={{alignItems:'center'}}><div><h1>{t('Curated Project Kits.',language)}</h1><p>{t('Sample kits with BOMs and schematic references. Availability is not live.',language)}</p></div><div className="kit-stats"><div className="kit-stat"><strong>{String(kits.length).padStart(2,'0')}</strong><span>{t('Saved kits',language)}</span></div><div className="kit-stat"><strong>1–6+ hrs</strong><span>{t('Example build duration',language)}</span></div></div></div></div></section>
      <div className="container"><div className="kit-toolbar surface"><div className="chip-row"><span className="eyebrow" style={{marginRight:4}}>{t('Filter kits',language)}</span>{['All levels','Beginner','Intermediate','Advanced'].map(l=><button key={l} className={`filter-chip ${level===l?'active':''}`} onClick={()=>setLevel(l)} data-testid={`filter-kit-level-${l.toLowerCase()}`}>{t(l,language)}</button>)}</div><div className="chip-row">{kitDomains.map(d=><button key={d} className={`filter-chip ${domain===d?'active':''}`} onClick={()=>setDomain(d)} data-testid={`filter-kit-domain-${d.toLowerCase().replaceAll(' ','-').replace('&-','')}`}>{t(d,language)}</button>)}</div></div>
@@ -592,7 +625,7 @@ function getPriceCsvImportError(error: unknown, language: Language) {
     : t('CSV could not be imported. Check supplier columns, KWD source prices, and duplicate SKUs.', language);
 }
 
-function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedItems,products,loading,error,retry}:{add:(item:AddItem)=>void;removeSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>)=>number;replaceSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>,supplierDetails?:{supplierName:string;supplierUpdatedAt:string})=>{updatedCount:number;removedCount:number};products:Product[];loading:boolean;error:boolean;retry:()=>void}) {
+function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedItems,products,loading,error,retry,errorMessage}:{add:(item:AddItem)=>void;removeSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>)=>number;replaceSupplierPricedItems:(pricesBySku:Readonly<Record<string,number>>,previousPricesBySku?:Readonly<Record<string,number>>,supplierDetails?:{supplierName:string;supplierUpdatedAt:string})=>{updatedCount:number;removedCount:number};products:Product[];loading:boolean;error:boolean;retry:()=>void;errorMessage?:string}) {
   const {language}=useLanguage();
    useDocument(t('Build Assist',language),t('Choose a project and preview its parts and saved prices.',language));
   const [selectedProjectId,setSelectedProjectId]=useState(buildOptions[0].id);
@@ -662,7 +695,7 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
     pricedBom.reduce((sum,part)=>sum+convertKwdToCurrency(part.price,'USD')*quantityFor(part)*assemblies,0),
     'USD',
   );
-  if(loading||error) return <CatalogLoadState loading={loading} retry={retry}/>;
+  if(loading||error) return <CatalogLoadState loading={loading} retry={retry} errorMessage={errorMessage}/>;
   const controller=bom.find(part=>['esp32','nucleo','pico'].includes(part.id));
   const bomName=(product:{name:string})=>product.name;
   const generate=()=>{
@@ -1512,7 +1545,15 @@ function Router({items,add,removeSupplierPricedItems,replaceSupplierPricedItems,
   const kits=catalogQuery.data?.kits??[];
   const catalogLoading=catalogEnabled&&catalogQuery.isLoading;
   const catalogError=catalogEnabled&&catalogQuery.isError;
+  const catalogErrorMessage=
+    process.env.NODE_ENV !== 'production' && catalogQuery.error
+      ? getCatalogDevelopmentMessage(catalogQuery.error)
+      : undefined;
   const retryCatalog=()=>{void catalogQuery.refetch();};
+  useEffect(()=>{
+    if(!catalogError||!catalogQuery.error) return;
+    console.error('[Circuits KW] Catalog request failed',getCatalogErrorDiagnostics(catalogQuery.error));
+  },[catalogError,catalogQuery.error]);
   useEffect(()=>{
     const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({top:0,left:0,behavior:reducedMotion?'auto':'smooth'});
@@ -1535,9 +1576,9 @@ function Router({items,add,removeSupplierPricedItems,replaceSupplierPricedItems,
   },[location]);
   return <RoutedErrorBoundary><Shell count={count} globalSearch={search} setGlobalSearch={setSearch} cartStorageUnavailable={cartStorageUnavailable} cartSyncUnavailable={cartSyncUnavailable} retryCartSync={retryCartSync}><div className="page-transition" key={location}><Switch>
     <Route path="/" component={HomePage}/>
-    <Route path="/components"><CatalogPage add={add} globalSearch={search} products={products} loading={catalogLoading} error={catalogError} retry={retryCatalog}/></Route>
-    <Route path="/project-kits"><KitsPage add={add} kits={kits} loading={catalogLoading} error={catalogError} retry={retryCatalog}/></Route>
-    <Route path="/build-assist"><BuildAssistPage add={add} removeSupplierPricedItems={removeSupplierPricedItems} replaceSupplierPricedItems={replaceSupplierPricedItems} products={products} loading={catalogLoading} error={catalogError} retry={retryCatalog}/></Route>
+    <Route path="/components"><CatalogPage add={add} globalSearch={search} products={products} loading={catalogLoading} error={catalogError} retry={retryCatalog} errorMessage={catalogErrorMessage}/></Route>
+    <Route path="/project-kits"><KitsPage add={add} kits={kits} loading={catalogLoading} error={catalogError} retry={retryCatalog} errorMessage={catalogErrorMessage}/></Route>
+    <Route path="/build-assist"><BuildAssistPage add={add} removeSupplierPricedItems={removeSupplierPricedItems} replaceSupplierPricedItems={replaceSupplierPricedItems} products={products} loading={catalogLoading} error={catalogError} retry={retryCatalog} errorMessage={catalogErrorMessage}/></Route>
     <Route path="/dashboard" component={AdminDashboardPage}/>
     <Route path="/about"><AboutPage/></Route>
     <Route path="/cart"><CartPage items={items} update={update} remove={remove} clearCart={clearCart}/></Route>
