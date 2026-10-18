@@ -293,6 +293,43 @@ const buildOptions: BuildOption[] = [
   { id:'stm32-weather-node', title:'STM32 Weather Node', description:'Build an STM32-based station for temperature, humidity, and pressure.', prompt:'STM32 Nucleo weather monitor measuring temperature humidity and pressure with BME280.', partIds:['nucleo','bme280'] },
 ];
 
+const BUILD_ASSIST_QUANTITIES_STORAGE_KEY = 'circuits-kw-build-assist-quantities';
+type BuildAssistProjectQuantities = { assemblyOverride:number|null; partQuantities:Record<string,number> };
+type BuildAssistQuantities = Record<string,BuildAssistProjectQuantities>;
+
+function readSavedBuildAssistQuantities():BuildAssistQuantities {
+  if(typeof window==='undefined') return {};
+  try {
+    const value:unknown=JSON.parse(readBrowserStorage(BUILD_ASSIST_QUANTITIES_STORAGE_KEY)??'null');
+    if(!value||typeof value!=='object'||Array.isArray(value)) return {};
+    const saved=value as Record<string,unknown>;
+    const quantitiesByProject:BuildAssistQuantities={};
+    for(const option of buildOptions) {
+      const project=saved[option.id];
+      if(!project||typeof project!=='object'||Array.isArray(project)) continue;
+      const storedProject=project as Record<string,unknown>;
+      const storedAssembly=storedProject.assemblyOverride;
+      const assemblyOverride=typeof storedAssembly==='number'&&Number.isFinite(storedAssembly)&&storedAssembly>0
+        ?clampBuildQuantity(storedAssembly)
+        :null;
+      const storedPartQuantities=storedProject.partQuantities;
+      const partQuantities:Record<string,number>={};
+      if(storedPartQuantities&&typeof storedPartQuantities==='object'&&!Array.isArray(storedPartQuantities)) {
+        for(const partId of option.partIds) {
+          const quantity=(storedPartQuantities as Record<string,unknown>)[partId];
+          if(typeof quantity==='number'&&Number.isFinite(quantity)&&quantity>0) {
+            partQuantities[partId]=clampBuildQuantity(quantity);
+          }
+        }
+      }
+      quantitiesByProject[option.id]={assemblyOverride,partQuantities};
+    }
+    return quantitiesByProject;
+  } catch {
+    return {};
+  }
+}
+
 const kitDomains = ['All domains','Robotics','IoT & Smart Home','IoT & Automation','University Labs','Automation'];
 const fmt = (value:number) => formatMoney(convertKwdToCurrency(value,'USD'),'USD');
 const fmtUsd = (value:number) => formatMoney(roundMoneyAmount(value,'USD'),'USD');
@@ -634,8 +671,10 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
   const [voltage,setVoltage]=useState('3.3V');
   const [level,setLevel]=useState('Hobbyist');
   const [budget,setBudget]=useState(15);
-  const [assemblyOverride,setAssemblyOverride]=useState<number|null>(null);
-  const [partQuantities,setPartQuantities]=useState<Record<string,number>>({});
+  const [quantitiesByProject,setQuantitiesByProject]=useState<BuildAssistQuantities>({});
+  const [quantitiesLoaded,setQuantitiesLoaded]=useState(false);
+  const projectQuantities=quantitiesByProject[selectedProjectId]??{assemblyOverride:null,partQuantities:{}};
+  const {assemblyOverride,partQuantities}=projectQuantities;
   const [generated,setGenerated]=useState(false);
   const [notice,setNotice]=useState('');
   const [preview,setPreview]=useState<'wiring'|'code'|null>(null);
@@ -648,7 +687,9 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
   const [priceImportError,setPriceImportError]=useState('');
   const priceFileInputRef=useRef<HTMLInputElement>(null);
   const priceListIsStale=priceList!==null&&isPriceListStale(priceList.updatedAt);
-  useEffect(()=>{setAssemblyOverride(null);setPartQuantities({});setGenerated(false);setPriceListRemoved(false);setNotice('');setPreview(null)},[selectedProjectId]);
+   useEffect(()=>{setGenerated(false);setPriceListRemoved(false);setNotice('');setPreview(null)},[selectedProjectId]);
+   useEffect(()=>{setQuantitiesByProject(readSavedBuildAssistQuantities());setQuantitiesLoaded(true)},[]);
+   useEffect(()=>{if(quantitiesLoaded) writeBrowserStorage(BUILD_ASSIST_QUANTITIES_STORAGE_KEY,JSON.stringify(quantitiesByProject))},[quantitiesByProject,quantitiesLoaded]);
   useEffect(()=>{
     const syncPriceListFromOtherTab=(event:StorageEvent)=>{
       if(event.key!==PRICE_LIST_STORAGE_KEY&&event.key!==null) return;
@@ -847,7 +888,7 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
           </div>
           <div className="assist-section">
             <label htmlFor="assembly-count">{t('Number of assemblies',language)}</label>
-            <input className="assist-number-input" id="assembly-count" type="number" min="1" max="99" step="1" value={assemblies} onChange={e=>setAssemblyOverride(clampBuildQuantity(Number(e.target.value)))} aria-label={t('Number of assemblies',language)} data-testid="input-assembly-count"/>
+            <input className="assist-number-input" id="assembly-count" type="number" min="1" max="99" step="1" value={assemblies} onChange={e=>setQuantitiesByProject(current=>({...current,[selectedProjectId]:{assemblyOverride:clampBuildQuantity(Number(e.target.value)),partQuantities:current[selectedProjectId]?.partQuantities??{}}}))} aria-label={t('Number of assemblies',language)} data-testid="input-assembly-count"/>
             <p className="assist-input-hint">{t('Set the number of copies here; adjust part quantities per copy in the estimate.',language)}</p>
           </div>
           <div className="assist-section">
@@ -888,7 +929,30 @@ function BuildAssistPage({add,removeSupplierPricedItems,replaceSupplierPricedIte
             <div><div className="bom-name">{t(bomName(part),language)}</div><div className="bom-spec">{part.voltage} · {part.interface} · SKU {part.sku}</div><div className="bom-unit-price">{t('Unit cost',language)}: {part.price===null?<strong data-testid={`text-unpriced-${part.id}`}>{t('Unpriced',language)}</strong>:fmt(part.price)}</div></div>
             <div className="bom-line-controls">
               <label className="bom-quantity-label" htmlFor={`quantity-${part.id}`}>{t('Qty / assembly',language)}</label>
-              <input id={`quantity-${part.id}`} className="bom-quantity-input" type="number" min="1" max="99" step="1" value={quantity} onChange={e=>setPartQuantities(current=>({...current,[part.id]:clampBuildQuantity(Number(e.target.value))}))} aria-label={`${t('Qty / assembly',language)} ${t(part.name,language)}`} data-testid={`input-part-quantity-${part.id}`}/>
+              <input
+                id={`quantity-${part.id}`}
+                className="bom-quantity-input"
+                type="number"
+                min="1"
+                max="99"
+                step="1"
+                value={quantity}
+                onChange={event=>setQuantitiesByProject(current=>{
+                  const project=current[selectedProjectId]??{assemblyOverride:null,partQuantities:{}};
+                  return {
+                    ...current,
+                    [selectedProjectId]:{
+                      ...project,
+                      partQuantities:{
+                        ...project.partQuantities,
+                        [part.id]:clampBuildQuantity(Number(event.target.value)),
+                      },
+                    },
+                  };
+                })}
+                aria-label={`${t('Qty / assembly',language)} ${t(part.name,language)}`}
+                data-testid={`input-part-quantity-${part.id}`}
+              />
                <strong className="bom-line-total" data-testid={`text-line-total-${part.id}`}>{lineTotal===null?'—':fmtUsd(lineTotal)}</strong>
               <span className="bom-line-count">{quantity*assemblies} {t('total units',language)}</span>
             </div>

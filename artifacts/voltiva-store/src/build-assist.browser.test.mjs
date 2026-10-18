@@ -47,6 +47,7 @@ const assert = new Proxy(strictAssert, {
 
 const artifactDir = path.resolve(import.meta.dirname, '..');
 const priceListStorageKey = 'circuits-kw-build-assist-prices';
+const buildAssistQuantitiesStorageKey = 'circuits-kw-build-assist-quantities';
 const freshnessPeriodDays = 90;
 
 function dateDaysAgo(days) {
@@ -825,6 +826,91 @@ test('reports rejected supplier price imports without replacing saved prices', {
       savedPriceList,
       'missing update date must not replace saved prices',
     );
+    assert.deepEqual(pageErrors, []);
+  } catch (error) {
+    error.message += `\nNext.js output:\n${serverOutput}`;
+    throw error;
+  } finally {
+    await browser?.close();
+    stopNextDevServer(serverProcess);
+    if (serverProcess.exitCode === null) {
+      await Promise.race([
+        new Promise((resolve) => serverProcess.once('exit', resolve)),
+        delay(2_000),
+      ]);
+    }
+  }
+});
+
+test('restores edited Build Assist quantities per project after switching, navigating away, and refreshing', {
+  timeout: 180_000,
+}, async () => {
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverProcess = startNextDevServer(port);
+  let serverOutput = '';
+  serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+  serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk; });
+
+  let browser;
+  try {
+    await waitForServer(serverProcess, baseUrl);
+    const executablePath = await findChromiumPath();
+    assert.ok(executablePath, 'Set CHROMIUM_PATH or install Chromium to run browser tests.');
+    browser = await chromium.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    const page = await browser.newPage();
+    const pageErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.goto(`${baseUrl}/build-assist`);
+    await page.getByTestId('row-bom-esp32').waitFor();
+
+    await page.getByTestId('input-assembly-count').fill('4');
+    await page.getByTestId('input-assembly-count').press('Tab');
+    await page.getByTestId('input-part-quantity-esp32').fill('3');
+    await page.getByTestId('input-part-quantity-esp32').press('Tab');
+    await page.getByTestId('input-part-quantity-soil').fill('2');
+    await page.getByTestId('input-part-quantity-soil').press('Tab');
+    await page.waitForFunction((key) => {
+      const saved = JSON.parse(localStorage.getItem(key) || '{}');
+      return saved.greenhouse?.assemblyOverride === 4
+        && saved.greenhouse?.partQuantities?.esp32 === 3
+        && saved.greenhouse?.partQuantities?.soil === 2;
+    }, buildAssistQuantitiesStorageKey);
+
+    await page.getByTestId('button-build-project-weather-station').click();
+    assert.equal(await page.getByTestId('input-assembly-count').inputValue(), '1');
+    assert.equal(await page.getByTestId('input-part-quantity-esp32').inputValue(), '1');
+    await page.getByTestId('input-assembly-count').fill('2');
+    await page.getByTestId('input-assembly-count').press('Tab');
+    await page.getByTestId('input-part-quantity-esp32').fill('5');
+    await page.getByTestId('input-part-quantity-esp32').press('Tab');
+
+    await page.getByTestId('button-build-project-greenhouse').click();
+    assert.equal(await page.getByTestId('input-assembly-count').inputValue(), '4');
+    assert.equal(await page.getByTestId('input-part-quantity-esp32').inputValue(), '3');
+    assert.equal(await page.getByTestId('input-part-quantity-soil').inputValue(), '2');
+
+    await page.goto(`${baseUrl}/components`);
+    await page.getByTestId('button-add-esp32').waitFor();
+    await page.goto(`${baseUrl}/build-assist`);
+    await page.getByTestId('row-bom-esp32').waitFor();
+    assert.equal(await page.getByTestId('input-assembly-count').inputValue(), '4');
+    assert.equal(await page.getByTestId('input-part-quantity-esp32').inputValue(), '3');
+    assert.equal(await page.getByTestId('input-part-quantity-soil').inputValue(), '2');
+
+    await page.reload();
+    await page.getByTestId('row-bom-esp32').waitFor();
+    await page.waitForFunction(() => document.querySelector('[data-testid="input-assembly-count"]')?.value === '4');
+    assert.equal(await page.getByTestId('input-part-quantity-esp32').inputValue(), '3');
+    assert.equal(await page.getByTestId('input-part-quantity-soil').inputValue(), '2');
+
+    await page.getByTestId('button-build-project-weather-station').click();
+    assert.equal(await page.getByTestId('input-assembly-count').inputValue(), '2');
+    assert.equal(await page.getByTestId('input-part-quantity-esp32').inputValue(), '5');
     assert.deepEqual(pageErrors, []);
   } catch (error) {
     error.message += `\nNext.js output:\n${serverOutput}`;
