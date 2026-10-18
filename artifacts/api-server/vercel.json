@@ -1,4 +1,4 @@
 {
-  "installCommand": "npm install --workspace=@workspace/api-server",
+  "installCommand": "npm ci --prefix ../..",
   "buildCommand": "npm run build"
 }
